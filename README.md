@@ -1,148 +1,287 @@
-##OpenCommerce Platform
+# OpenCommerce Platform
 
-OpenCommerce Platform is an open-source infrastructure for building AI Agent-ready commerce systems.
+> **Open-source infrastructure for building Agent-Ready business systems.**
 
-As AI Agents become a new interface between people and digital services, businesses need a standardized way for agents to discover, understand, and interact with their products, services, and capabilities.
+OpenCommerce Platform is an open-source infrastructure that enables businesses to become **AI Agent Ready**.
 
-OpenCommerce Platform provides the infrastructure required to bridge AI Agents with existing commerce systems through open protocols, modern architecture, and developer-friendly tooling.
+As AI Agents become a new interface between people and digital services, businesses need a standardized way for agents to discover, understand, and securely interact with their products, services, and capabilities.
 
-Our mission is to make every commerce platform, marketplace, ERP, CRM, and business application ready for the next generation of intelligent software.
+Today's software—including commerce platforms, marketplaces, ERP systems, CRM solutions, and custom business applications—was designed primarily for human users. OpenCommerce bridges the gap between these existing systems and the emerging world of AI Agents through open protocols, standardized interfaces, and developer-friendly tooling.
 
-Vision
+Our mission is to build the open infrastructure that powers the next generation of intelligent business software.
 
-The internet was built for humans.
+---
 
-The next generation of digital infrastructure will be built for both humans and AI Agents.
+## Vision
 
-Just as websites became mobile-ready and search-engine friendly, businesses must now become Agent Ready.
+The internet connected people to information.
 
-OpenCommerce Platform aims to become the open infrastructure that enables AI Agents to securely discover, understand, and execute business capabilities across modern commerce ecosystems.
+Cloud platforms connected businesses to services.
 
-The Problem
+The next evolution is connecting **AI Agents** to business capabilities.
 
-Today's commerce systems are designed around human interfaces.
+Just as every business became **mobile-ready** and **search-engine friendly**, the next generation of digital businesses must become **Agent Ready**.
 
-Although APIs exist, they were not designed for autonomous AI Agents that need to:
+OpenCommerce Platform aims to become the open infrastructure that enables AI Agents to securely discover, understand, and execute business capabilities across modern business ecosystems.
 
-Discover available capabilities
-Understand business semantics
-Execute actions safely
-Work across multiple platforms consistently
+---
 
-Every commerce platform exposes different APIs, different data models, and different business logic.
+## Why OpenCommerce?
 
-This fragmentation makes it difficult for AI Agents to interact with businesses in a reliable and standardized way.
+Modern business software is fragmented.
 
-Our Solution
+Every platform exposes different APIs, authentication methods, data structures, and business rules. While APIs already exist, they were never designed for autonomous AI Agents capable of reasoning and performing complex workflows.
 
-OpenCommerce Platform introduces a standardized infrastructure layer between AI Agents and business systems.
+AI Agents need to:
 
-Instead of integrating every AI Agent with every commerce platform individually, OpenCommerce provides a unified architecture based on open standards.
+- Discover available capabilities
+- Understand business semantics
+- Execute actions securely
+- Navigate permissions
+- Work consistently across different platforms
 
-The platform enables businesses to become Agent Ready by exposing their capabilities through standardized interfaces while keeping their existing systems unchanged.
+Today, every AI integration is typically built from scratch.
 
-Core Components
+This creates duplicated work, inconsistent implementations, and poor scalability.
 
-The platform consists of several independent but connected layers:
+OpenCommerce solves this by introducing a unified infrastructure layer between AI Agents and business systems.
 
-OpenCommerce Core
-Agent Registry
-Capability Registry
-MCP Gateway
-Universal Commerce Protocol (UCP)
-SDK Platform
-Commerce Connectors
-Event System
-Security & Identity
-Multi-tenant Infrastructure
+---
 
-Each component has a single responsibility and can evolve independently without affecting the rest of the platform.
+## Our Solution
 
-First Domain: Commerce
+OpenCommerce provides a common language between AI Agents and business software.
+
+Instead of creating custom integrations for every platform, businesses expose their capabilities once through OpenCommerce.
+
+AI Agents can then securely discover, understand, and execute those capabilities using standardized protocols.
+
+The result is a scalable ecosystem where businesses become **Agent Ready** without replacing their existing systems.
+
+---
+
+## Core Architecture
+
+OpenCommerce Platform is built around a modular architecture where every layer has a single responsibility.
+
+### OpenCommerce Core
+
+The foundation of the platform.
+
+Responsible for:
+
+- Identity & Authentication
+- Organizations
+- Multi-tenancy
+- Permissions
+- API Keys
+- Configuration
+- Connections
+- Event Bus
+- Audit Logs
+
+---
+
+### Agent Registry
+
+Maintains information about registered AI Agents, their identities, permissions, supported protocols, and available connections.
+
+---
+
+### Capability Registry
+
+The Capability Registry acts as the discovery layer of the platform.
+
+Every connected business system exposes its capabilities in a standardized format.
+
+Examples include:
+
+- Search Products
+- Check Inventory
+- Create Orders
+- Retrieve Customer Information
+- Generate Reports
+- Create Invoices
+
+AI Agents discover these capabilities dynamically instead of relying on hardcoded integrations.
+
+---
+
+### MCP Gateway
+
+The **Model Context Protocol (MCP)** Gateway provides the communication layer between AI Agents and OpenCommerce.
+
+Responsibilities include:
+
+- Authentication
+- Authorization
+- Capability Discovery
+- Tool Execution
+- Structured Responses
+
+Business logic is never implemented inside the MCP Gateway.
+
+---
+
+### Universal Commerce Protocol (UCP)
+
+The Universal Commerce Protocol (UCP) provides a normalized commerce model.
+
+Different commerce systems—including Shopify, WooCommerce, Magento, Laravel applications, and custom platforms—are transformed into a common structure that AI Agents can understand consistently.
+
+---
+
+### SDK Platform
+
+OpenCommerce provides official SDKs that enable developers to make their applications Agent Ready with minimal effort.
+
+Planned SDKs include:
+
+- PHP SDK
+- Laravel SDK
+- TypeScript SDK
+- Node.js SDK
+- Python SDK
+- Go SDK
+
+---
+
+### Connectors
+
+Connectors integrate existing business systems without requiring major architectural changes.
+
+Examples include:
+
+- Shopify
+- WooCommerce
+- Magento
+- Laravel Commerce
+- ERP Systems
+- CRM Systems
+- POS Systems
+- Custom APIs
+
+---
+
+## First Domain: Commerce
 
 Commerce is the first domain implemented on top of OpenCommerce Platform.
 
-The initial goal is to allow AI Agents to securely:
+The initial objective is to allow AI Agents to:
 
-Discover products
-Understand product information
-Search inventory
-Compare products
-Create shopping carts
-Place orders
-Access customer information
-Execute commerce workflows
+- Discover products
+- Understand product information
+- Search inventory
+- Compare products
+- Create shopping carts
+- Place orders
+- Track orders
+- Access customer information
+- Execute complete commerce workflows
 
-The architecture is intentionally domain-driven, allowing future expansion into additional business domains.
+This establishes the foundation for **Agentic Commerce**.
 
-Future Domains
+---
 
-Although Commerce is the initial focus, the platform is designed to support any business capability.
+## Beyond Commerce
+
+Although Commerce is the first supported domain, OpenCommerce is designed as a general-purpose Agent infrastructure.
 
 Future domains may include:
 
-CRM
-ERP
-Finance
-Human Resources
-Healthcare
-Logistics
-Manufacturing
-Customer Support
-Technology Stack
+- CRM
+- ERP
+- Finance
+- Human Resources
+- Healthcare
+- Logistics
+- Manufacturing
+- Customer Support
+- Marketing Automation
+- Analytics
 
-OpenCommerce Platform is built using modern technologies:
+The Core Platform remains domain-independent, allowing new modules to be added without changing the underlying architecture.
 
-Laravel 13
-PHP 8.3+
-MySQL
-Redis
-Queue Workers
-Event-Driven Architecture
-Domain-Driven Design (DDD)
-Clean Architecture
-MCP (Model Context Protocol)
-Open SDKs
-Development Principles
+---
 
-OpenCommerce follows several architectural principles:
+## Technology Stack
 
-Modular Architecture
-Domain Isolation
-Capability-Driven Design
-API-First Development
-Event-Driven Communication
-Secure by Default
-Developer Experience First
-Extensible Plugin System
+OpenCommerce Platform is built using modern technologies and architectural principles.
 
-The Core platform remains independent of business domains, allowing new capabilities to be added without changing the underlying infrastructure.
+### Backend
 
-Project Status
+- Laravel 13
+- PHP 8.3+
+- MySQL
+- Redis
+- Queue Workers
 
-🚧 Foundation Phase
+### Architecture
 
-The project is currently focused on designing and implementing the core platform.
+- Modular Monolith
+- Domain-Driven Design (DDD)
+- Clean Architecture
+- Event-Driven Architecture
+- API-First Design
+- Capability-Driven Design
+- Model Context Protocol (MCP)
 
-Current roadmap includes:
+---
 
-OpenCommerce Core
-Agent Registry
-Capability Registry
-MCP Gateway
-Universal Commerce Protocol (UCP)
-SDK Platform
-Commerce Connectors
-Authentication & Authorization
-Multi-tenant Infrastructure
-Contributing
+## Design Principles
+
+OpenCommerce follows a set of core architectural principles.
+
+- Core is independent of business domains.
+- Every capability should be discoverable.
+- MCP handles communication, not business logic.
+- UCP standardizes commerce data and workflows.
+- Components should remain modular and independently replaceable.
+- Developer Experience is a first-class priority.
+- Extensibility is preferred over customization.
+- Existing business systems should require minimal changes to become Agent Ready.
+
+---
+
+## Roadmap
+
+The current roadmap focuses on building the platform foundation.
+
+- [ ] OpenCommerce Core
+- [ ] Identity & Authentication
+- [ ] Organization Management
+- [ ] Agent Registry
+- [ ] Capability Registry
+- [ ] MCP Gateway
+- [ ] Universal Commerce Protocol (UCP)
+- [ ] SDK Platform
+- [ ] Commerce Connectors
+- [ ] Event System
+- [ ] Multi-tenant Infrastructure
+- [ ] Developer Documentation
+
+---
+
+## Project Status
+
+> 🚧 **Foundation Phase**
+
+OpenCommerce Platform is currently focused on designing and implementing the foundational infrastructure required to build the Agent Economy.
+
+The first milestone is enabling businesses to become **Agent Ready** while providing developers with an open, extensible platform for building AI-native business integrations.
+
+---
+
+## Contributing
 
 OpenCommerce Platform is an open-source project.
 
-We welcome developers, software architects, AI engineers, and contributors who are interested in building the future of Agentic Commerce.
+We welcome developers, software architects, AI engineers, protocol designers, and contributors who share the vision of building the future of **Agentic Commerce** and **Agent-Ready Business Infrastructure**.
 
-Whether you're fixing bugs, improving documentation, building SDKs, or designing new capabilities, your contributions are always welcome.
+Whether you're improving documentation, implementing SDKs, building connectors, proposing architecture, or contributing code, your participation is always welcome.
 
-License
+---
 
-OpenCommerce Platform is released under the MIT License.
+## License
+
+OpenCommerce Platform is released under the **MIT License**.
