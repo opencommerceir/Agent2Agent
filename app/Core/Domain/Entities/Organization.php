@@ -2,6 +2,7 @@
 
 namespace App\Core\Domain\Entities;
 
+use App\Core\Domain\ValueObjects\OrganizationStatus;
 use DateTimeImmutable;
 
 /**
@@ -16,6 +17,7 @@ final class Organization
         private string $name,
         private string $slug,
         private ?int $ownerUserId,
+        private OrganizationStatus $status,
         private readonly DateTimeImmutable $createdAt,
     ) {
     }
@@ -28,6 +30,7 @@ final class Organization
             name: $name,
             slug: $slug,
             ownerUserId: $ownerUserId,
+            status: OrganizationStatus::Active,
             createdAt: new DateTimeImmutable(),
         );
     }
@@ -35,6 +38,26 @@ final class Organization
     public function assignOwner(int $userId): void
     {
         $this->ownerUserId = $userId;
+    }
+
+    public function activate(): void
+    {
+        $this->status = OrganizationStatus::Active;
+    }
+
+    public function deactivate(): void
+    {
+        $this->status = OrganizationStatus::Inactive;
+    }
+
+    public function suspend(): void
+    {
+        $this->status = OrganizationStatus::Suspended;
+    }
+
+    public function isActive(): bool
+    {
+        return $this->status === OrganizationStatus::Active;
     }
 
     public function id(): ?int
@@ -60,6 +83,11 @@ final class Organization
     public function ownerUserId(): ?int
     {
         return $this->ownerUserId;
+    }
+
+    public function status(): OrganizationStatus
+    {
+        return $this->status;
     }
 
     public function createdAt(): DateTimeImmutable
