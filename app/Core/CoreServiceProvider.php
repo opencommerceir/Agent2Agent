@@ -2,7 +2,11 @@
 
 namespace App\Core;
 
+use App\Core\Domain\Repositories\AgentRepositoryInterface;
+use App\Core\Domain\Repositories\AgentTokenRepositoryInterface;
 use App\Core\Domain\Repositories\TenantRepositoryInterface;
+use App\Core\Infrastructure\Repositories\EloquentAgentRepository;
+use App\Core\Infrastructure\Repositories\EloquentAgentTokenRepository;
 use App\Core\Infrastructure\Repositories\EloquentTenantRepository;
 use Illuminate\Support\ServiceProvider;
 
@@ -15,6 +19,8 @@ class CoreServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->bind(TenantRepositoryInterface::class, EloquentTenantRepository::class);
+        $this->app->bind(AgentRepositoryInterface::class, EloquentAgentRepository::class);
+        $this->app->bind(AgentTokenRepositoryInterface::class, EloquentAgentTokenRepository::class);
     }
 
     public function boot(): void

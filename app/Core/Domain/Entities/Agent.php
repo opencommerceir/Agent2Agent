@@ -2,12 +2,18 @@
 
 namespace App\Core\Domain\Entities;
 
+use App\Core\Domain\ValueObjects\AgentStatus;
+use App\Core\Domain\ValueObjects\AgentType;
 use DateTimeImmutable;
 
 /**
  * Represents an AI Agent identity registered in the Agent Registry.
  * Permissions are stored as capability strings (e.g. "commerce.products.read")
  * resolved against the Permission Layer at authorization time.
+ *
+ * Tenant isolation is carried as data (tenantId) but never enforced here —
+ * enforcing it is an authorization decision that belongs to the Application
+ * layer, not the Domain entity or the Repository (Repository Conventions).
  */
 final class Agent
 {
@@ -19,9 +25,9 @@ final class Agent
         private readonly int $tenantId,
         private readonly int $organizationId,
         private string $name,
-        private string $type,
+        private AgentType $type,
         private array $permissions,
-        private bool $active,
+        private AgentStatus $status,
         private readonly DateTimeImmutable $createdAt,
     ) {
     }
@@ -33,7 +39,7 @@ final class Agent
         int $tenantId,
         int $organizationId,
         string $name,
-        string $type,
+        AgentType $type,
         array $permissions = [],
     ): self {
         return new self(
@@ -43,7 +49,7 @@ final class Agent
             name: $name,
             type: $type,
             permissions: $permissions,
-            active: true,
+            status: AgentStatus::Active,
             createdAt: new DateTimeImmutable(),
         );
     }
@@ -67,9 +73,19 @@ final class Agent
         return in_array($permission, $this->permissions, true);
     }
 
+    public function activate(): void
+    {
+        $this->status = AgentStatus::Active;
+    }
+
+    public function deactivate(): void
+    {
+        $this->status = AgentStatus::Inactive;
+    }
+
     public function suspend(): void
     {
-        $this->active = false;
+        $this->status = AgentStatus::Suspended;
     }
 
     public function id(): ?int
@@ -92,7 +108,7 @@ final class Agent
         return $this->name;
     }
 
-    public function type(): string
+    public function type(): AgentType
     {
         return $this->type;
     }
@@ -105,9 +121,14 @@ final class Agent
         return $this->permissions;
     }
 
+    public function status(): AgentStatus
+    {
+        return $this->status;
+    }
+
     public function isActive(): bool
     {
-        return $this->active;
+        return $this->status === AgentStatus::Active;
     }
 
     public function createdAt(): DateTimeImmutable
