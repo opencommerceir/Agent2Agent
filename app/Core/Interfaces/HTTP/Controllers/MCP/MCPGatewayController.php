@@ -52,7 +52,7 @@ final class MCPGatewayController extends Controller
             $this->checkPermission->authorize(MemberType::Agent, $agent->id, $agent->tenantId, $permissionKey);
         }
 
-        $execution = $this->capabilityExecution->execute($capability, $input);
+        $execution = $this->capabilityExecution->execute($capability, $input, $agent->tenantId);
 
         return $this->response->success($execution['result'], [
             'capability' => $capabilityName,

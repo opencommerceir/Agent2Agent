@@ -23,5 +23,6 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $this->call(DemoCapabilitiesSeeder::class);
+        $this->call(CommerceCapabilitiesSeeder::class);
     }
 }

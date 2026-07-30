@@ -24,14 +24,14 @@ final class CapabilityExecutionService
     /**
      * @return array{result: array, executionTimeMs: int}
      */
-    public function execute(CapabilityData $capability, array $input): array
+    public function execute(CapabilityData $capability, array $input, int $tenantId): array
     {
         $this->requestValidation->validate($capability, $input);
 
         $handler = $this->handlers->getHandler($capability->name);
 
         $startedAt = microtime(true);
-        $result = $handler($input);
+        $result = $handler($input, $tenantId);
         $executionTimeMs = (int) round((microtime(true) - $startedAt) * 1000);
 
         return [
