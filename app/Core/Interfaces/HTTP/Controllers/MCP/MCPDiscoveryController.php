@@ -6,19 +6,19 @@ use App\Core\Application\Actions\DiscoverCapabilitiesAction;
 use App\Core\Application\DTOs\CapabilityData;
 use App\Core\Application\Services\AgentAuthenticationService;
 use App\Core\Application\Services\MCPResponseFormatter;
-use App\Core\Domain\Exceptions\AgentNotActiveException;
-use App\Core\Domain\Exceptions\InvalidAgentTokenException;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
  * GET /mcp/v1/capabilities — lets an Agent discover every capability that
- * exists on the platform (Capability Registry as discovery layer,
- * architecture.md). Still requires a valid Agent token: every MCP request
- * must be authenticated, discovery included — it just doesn't filter the
- * list by what the calling Agent is individually permitted to do (see
- * DiscoverCapabilitiesAction docblock).
+ * exists on the platform. Still requires a valid Agent token: every MCP
+ * request must be authenticated, discovery included — it just doesn't
+ * filter the list by what the calling Agent is individually permitted to
+ * do (see DiscoverCapabilitiesAction docblock).
+ *
+ * No try/catch: an invalid/missing token throws, and MCPExceptionHandler
+ * (bootstrap/app.php) turns that into the 401 UNAUTHORIZED envelope.
  */
 final class MCPDiscoveryController extends Controller
 {
@@ -31,11 +31,7 @@ final class MCPDiscoveryController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        try {
-            $this->agentAuthentication->authenticateFromRequest($request);
-        } catch (InvalidAgentTokenException|AgentNotActiveException $e) {
-            return $this->response->error('UNAUTHORIZED', $e->getMessage(), 401);
-        }
+        $this->agentAuthentication->authenticateFromRequest($request);
 
         $capabilities = array_map(
             fn (CapabilityData $capability) => $capability->toArray(),

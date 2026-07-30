@@ -5,8 +5,10 @@ namespace App\Core\Application\Services;
 use Illuminate\Http\JsonResponse;
 
 /**
- * The single place that shapes every MCP HTTP response, so success/error
- * envelopes can never drift between the two controllers.
+ * Shapes the success envelope for every MCP HTTP response. Error envelopes
+ * used to be built here too (an error() method) — that moved to
+ * MCPExceptionHandler once a global handler existed, so there is exactly
+ * one place that formats MCP errors instead of two.
  */
 final class MCPResponseFormatter
 {
@@ -16,15 +18,5 @@ final class MCPResponseFormatter
             'data' => $data,
             'meta' => $meta,
         ]);
-    }
-
-    public function error(string $code, string $message, int $status = 400): JsonResponse
-    {
-        return response()->json([
-            'error' => [
-                'code' => $code,
-                'message' => $message,
-            ],
-        ], $status);
     }
 }

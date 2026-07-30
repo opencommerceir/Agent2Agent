@@ -12,72 +12,49 @@ use App\Core\Application\Actions\CreateTenantAction;
 use App\Core\Application\Actions\GenerateAgentTokenAction;
 use App\Core\Application\Actions\RegisterAgentAction;
 use App\Core\Application\Actions\RegisterCapabilityAction;
+use App\Core\Domain\Repositories\CapabilityRepositoryInterface;
 use App\Core\Domain\ValueObjects\MemberType;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Mockery;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
- * Real HTTP requests through Laravel's test client against routes/mcp.php
- * -- the same route registered via CoreServiceProvider::loadRoutesFrom(),
- * exercised end to end (routing, FormRequest validation, controller,
- * services, response envelope) without needing a live `artisan serve`.
+ * Dedicated pin-tests for MCPExceptionHandler's contract, one per mapped
+ * status code. MCPGatewayTest already exercises 401/403/404/422 as part of
+ * the broader controller flow — these exist separately so the handler's
+ * mapping table itself has an explicit, named regression guard per code,
+ * independent of which controller happens to trigger it.
  */
-class MCPGatewayTest extends TestCase
+class MCPExceptionHandlerTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_execute_withValidTokenAndPermission_returnsSuccessEnvelope(): void
+    public function test_invalidToken_isMappedToUnauthorized(): void
     {
-        $token = $this->registerAgentWithPermission('commerce.products.read');
-        $this->registerSearchCapability();
-
         $response = $this->postJson('/mcp/v1/execute', [
             'capability' => 'commerce.product.search',
-            'input' => ['query' => 'laptop'],
-        ], ['Authorization' => "Bearer {$token}"]);
-
-        $response->assertStatus(200);
-        $response->assertJsonStructure(['data', 'meta' => ['capability', 'execution_time']]);
-        $response->assertJsonPath('meta.capability', 'commerce.product.search');
-    }
-
-    public function test_execute_withoutToken_returnsUnauthorized(): void
-    {
-        $this->registerSearchCapability();
-
-        $response = $this->postJson('/mcp/v1/execute', ['capability' => 'commerce.product.search']);
+        ], ['Authorization' => 'Bearer oc_agent_does_not_exist']);
 
         $response->assertStatus(401);
+        $response->assertJsonStructure(['error' => ['code', 'message']]);
         $response->assertJsonPath('error.code', 'UNAUTHORIZED');
     }
 
-    public function test_execute_withGarbageToken_returnsUnauthorized(): void
-    {
-        $this->registerSearchCapability();
-
-        $response = $this->postJson('/mcp/v1/execute', [
-            'capability' => 'commerce.product.search',
-        ], ['Authorization' => 'Bearer oc_agent_totally_invalid']);
-
-        $response->assertStatus(401);
-        $response->assertJsonPath('error.code', 'UNAUTHORIZED');
-    }
-
-    public function test_execute_withValidTokenButMissingPermission_returnsForbidden(): void
+    public function test_missingPermission_isMappedToForbidden(): void
     {
         $token = $this->registerAgentWithPermission(null);
         $this->registerSearchCapability();
 
         $response = $this->postJson('/mcp/v1/execute', [
             'capability' => 'commerce.product.search',
-            'input' => ['query' => 'laptop'],
         ], ['Authorization' => "Bearer {$token}"]);
 
         $response->assertStatus(403);
         $response->assertJsonPath('error.code', 'FORBIDDEN');
     }
 
-    public function test_execute_withUnknownCapability_returnsNotFound(): void
+    public function test_unknownCapability_isMappedToNotFound(): void
     {
         $token = $this->registerAgentWithPermission('commerce.products.read');
 
@@ -89,28 +66,38 @@ class MCPGatewayTest extends TestCase
         $response->assertJsonPath('error.code', 'NOT_FOUND');
     }
 
-    public function test_execute_withMissingRequiredInputField_returnsValidationError(): void
+    /**
+     * Simulates a genuinely unexpected failure (e.g. a broken database
+     * connection) by making the Capability repository throw a plain
+     * RuntimeException — something no Core exception mapping recognizes —
+     * and checks both halves of the requirement: the Agent gets a generic
+     * message (nothing sensitive leaks when app.debug is off), and the
+     * real exception detail still lands in storage/logs via report().
+     */
+    public function test_unexpectedException_isMappedToInternalErrorHidesDetailsAndLogs(): void
     {
+        config(['app.debug' => false]);
+
         $token = $this->registerAgentWithPermission('commerce.products.read');
-        $this->registerSearchCapability();
+
+        $marker = 'MCP-TEST-SENSITIVE-DETAIL-'.uniqid();
+        $capabilities = Mockery::mock(CapabilityRepositoryInterface::class);
+        $capabilities->shouldReceive('findByName')->andThrow(new RuntimeException($marker));
+        $this->app->instance(CapabilityRepositoryInterface::class, $capabilities);
 
         $response = $this->postJson('/mcp/v1/execute', [
             'capability' => 'commerce.product.search',
-            'input' => [],
+            'input' => ['query' => 'laptop'],
         ], ['Authorization' => "Bearer {$token}"]);
 
-        $response->assertStatus(422);
-        $response->assertJsonPath('error.code', 'VALIDATION_ERROR');
-    }
+        $response->assertStatus(500);
+        $response->assertJsonPath('error.code', 'INTERNAL_ERROR');
+        $response->assertJsonPath('error.message', 'An unexpected error occurred.');
+        $response->assertJsonMissingPath('error.trace');
 
-    public function test_execute_withoutCapabilityField_returnsValidationError(): void
-    {
-        $token = $this->registerAgentWithPermission('commerce.products.read');
-
-        $response = $this->postJson('/mcp/v1/execute', [], ['Authorization' => "Bearer {$token}"]);
-
-        $response->assertStatus(422);
-        $response->assertJsonPath('error.code', 'VALIDATION_ERROR');
+        $logPath = storage_path('logs/laravel.log');
+        $this->assertFileExists($logPath);
+        $this->assertStringContainsString($marker, file_get_contents($logPath));
     }
 
     private function registerSearchCapability(): void
