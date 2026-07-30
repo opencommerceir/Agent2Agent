@@ -1,0 +1,3 @@
+# OpenCommerce Architecture
+
+Work in progress ...
