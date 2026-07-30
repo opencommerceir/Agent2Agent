@@ -94,6 +94,40 @@ final class CommerceCapabilities
                 'outputSchema' => ['customers' => 'array'],
                 'requiredPermissions' => ['commerce.customers.read'],
             ],
+            [
+                'name' => 'commerce.checkout.calculate',
+                'description' => 'Preview the pricing for a cart, optionally with a coupon, without charging anything',
+                // coupon_code is optional — same reasoning as
+                // commerce.order.place's notes field.
+                'inputSchema' => ['cart_id' => 'integer'],
+                'outputSchema' => ['pricing' => 'array'],
+                'requiredPermissions' => ['commerce.checkout.read'],
+            ],
+            [
+                'name' => 'commerce.checkout.process',
+                'description' => 'Charge payment for a cart and place the resulting Order',
+                // coupon_code is optional; payment_details is an
+                // arbitrary object whose shape depends on payment_method,
+                // so it is intentionally left untyped/unvalidated here.
+                'inputSchema' => ['cart_id' => 'integer', 'payment_method' => 'string'],
+                'outputSchema' => ['order' => 'array', 'payment' => 'array'],
+                'requiredPermissions' => ['commerce.checkout.create'],
+            ],
+            [
+                'name' => 'commerce.payment.refund',
+                'description' => 'Refund a completed Payment, restoring its Order\'s Inventory',
+                'inputSchema' => ['payment_id' => 'integer'],
+                'outputSchema' => ['payment' => 'array', 'message' => 'string'],
+                'requiredPermissions' => ['commerce.payments.refund'],
+            ],
+            [
+                'name' => 'commerce.coupon.create',
+                'description' => 'Create a new discount Coupon',
+                // expires_at and max_uses are optional.
+                'inputSchema' => ['code' => 'string', 'discount_type' => 'string', 'discount_value' => 'integer'],
+                'outputSchema' => ['coupon' => 'array'],
+                'requiredPermissions' => ['commerce.coupons.create'],
+            ],
         ];
     }
 }

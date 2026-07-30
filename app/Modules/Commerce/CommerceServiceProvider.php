@@ -6,6 +6,9 @@ use App\Core\Application\DTOs\AuthContext;
 use App\Core\Application\Services\CapabilityHandlerRegistry;
 use App\Core\Domain\ValueObjects\MemberType;
 use App\Modules\Commerce\Application\Actions\AddToCartAction;
+use App\Modules\Commerce\Application\Actions\ApplyCouponAction;
+use App\Modules\Commerce\Application\Actions\CalculatePricingAction;
+use App\Modules\Commerce\Application\Actions\CreateCouponAction;
 use App\Modules\Commerce\Application\Actions\CreateCustomerAction;
 use App\Modules\Commerce\Application\Actions\GetCartAction;
 use App\Modules\Commerce\Application\Actions\GetCustomerAction;
@@ -14,22 +17,35 @@ use App\Modules\Commerce\Application\Actions\ListCustomersAction;
 use App\Modules\Commerce\Application\Actions\ListOrdersAction;
 use App\Modules\Commerce\Application\Actions\ListProductsAction;
 use App\Modules\Commerce\Application\Actions\PlaceOrderAction;
+use App\Modules\Commerce\Application\Actions\ProcessPaymentAction;
+use App\Modules\Commerce\Application\Actions\RefundPaymentAction;
 use App\Modules\Commerce\Application\DTOs\CartData;
+use App\Modules\Commerce\Application\DTOs\CouponData;
 use App\Modules\Commerce\Application\DTOs\CustomerData;
 use App\Modules\Commerce\Application\DTOs\OrderData;
+use App\Modules\Commerce\Application\DTOs\PaymentData;
+use App\Modules\Commerce\Application\DTOs\PricingData;
 use App\Modules\Commerce\Application\Services\ConnectorRegistry;
+use App\Modules\Commerce\Application\Services\MockPaymentGateway;
+use App\Modules\Commerce\Application\Services\PaymentGatewayInterface;
 use App\Modules\Commerce\Domain\Repositories\CartRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\CategoryRepositoryInterface;
+use App\Modules\Commerce\Domain\Repositories\CouponRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\CustomerRepositoryInterface;
+use App\Modules\Commerce\Domain\Repositories\DiscountRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\InventoryRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\OrderRepositoryInterface;
+use App\Modules\Commerce\Domain\Repositories\PaymentRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\ProductRepositoryInterface;
 use App\Modules\Commerce\Infrastructure\Connectors\MockProductConnector;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentCartRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentCategoryRepository;
+use App\Modules\Commerce\Infrastructure\Repositories\EloquentCouponRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentCustomerRepository;
+use App\Modules\Commerce\Infrastructure\Repositories\EloquentDiscountRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentInventoryRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentOrderRepository;
+use App\Modules\Commerce\Infrastructure\Repositories\EloquentPaymentRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentProductRepository;
 use Illuminate\Support\ServiceProvider;
 
@@ -64,6 +80,10 @@ class CommerceServiceProvider extends ServiceProvider
         $this->app->bind(InventoryRepositoryInterface::class, EloquentInventoryRepository::class);
         $this->app->bind(OrderRepositoryInterface::class, EloquentOrderRepository::class);
         $this->app->bind(CustomerRepositoryInterface::class, EloquentCustomerRepository::class);
+        $this->app->bind(PaymentRepositoryInterface::class, EloquentPaymentRepository::class);
+        $this->app->bind(CouponRepositoryInterface::class, EloquentCouponRepository::class);
+        $this->app->bind(DiscountRepositoryInterface::class, EloquentDiscountRepository::class);
+        $this->app->bind(PaymentGatewayInterface::class, MockPaymentGateway::class);
     }
 
     public function boot(): void
@@ -147,5 +167,59 @@ class CommerceServiceProvider extends ServiceProvider
             'commerce.customer.list',
             fn (array $input, AuthContext $context) => $this->app->make(ListCustomersAction::class)->execute($input, $context->tenantId),
         );
+
+        $handlers->register('commerce.checkout.calculate', function (array $input, AuthContext $context) {
+            /** @var PricingData $pricing */
+            $pricing = $this->app->make(CalculatePricingAction::class)->execute(
+                tenantId: $context->tenantId,
+                agentId: $context->agentId,
+                cartId: (int) $input['cart_id'],
+                couponCode: $input['coupon_code'] ?? null,
+            );
+
+            return ['pricing' => $pricing->toArray()];
+        });
+
+        $handlers->register('commerce.checkout.process', function (array $input, AuthContext $context) {
+            /** @var array{order: OrderData, payment: PaymentData} $result */
+            $result = $this->app->make(ProcessPaymentAction::class)->execute(
+                tenantId: $context->tenantId,
+                agentId: $context->agentId,
+                cartId: (int) $input['cart_id'],
+                paymentMethod: $input['payment_method'],
+                paymentDetails: $input['payment_details'] ?? [],
+                couponCode: $input['coupon_code'] ?? null,
+                notes: $input['notes'] ?? null,
+                customerId: isset($input['customer_id']) ? (int) $input['customer_id'] : null,
+            );
+
+            return ['order' => $result['order']->toArray(), 'payment' => $result['payment']->toArray()];
+        });
+
+        $handlers->register('commerce.payment.refund', function (array $input, AuthContext $context) {
+            /** @var PaymentData $payment */
+            $payment = $this->app->make(RefundPaymentAction::class)->execute(
+                paymentId: (int) $input['payment_id'],
+                tenantId: $context->tenantId,
+                reason: $input['reason'] ?? null,
+            );
+
+            return ['payment' => $payment->toArray(), 'message' => 'Payment refunded.'];
+        });
+
+        $handlers->register('commerce.coupon.create', function (array $input, AuthContext $context) {
+            /** @var CouponData $coupon */
+            $coupon = $this->app->make(CreateCouponAction::class)->execute(
+                tenantId: $context->tenantId,
+                code: $input['code'],
+                discountType: $input['discount_type'],
+                discountValue: (int) $input['discount_value'],
+                minOrderAmount: isset($input['min_order_amount']) ? (int) $input['min_order_amount'] : null,
+                maxUses: isset($input['max_uses']) ? (int) $input['max_uses'] : null,
+                expiresAt: $input['expires_at'] ?? null,
+            );
+
+            return ['coupon' => $coupon->toArray()];
+        });
     }
 }

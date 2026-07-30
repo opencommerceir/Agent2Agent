@@ -23,6 +23,8 @@ class Order extends Model
         'status',
         'subtotal_amount',
         'subtotal_currency',
+        'tax_amount',
+        'discount_amount',
         'total_amount',
         'total_currency',
         'notes',

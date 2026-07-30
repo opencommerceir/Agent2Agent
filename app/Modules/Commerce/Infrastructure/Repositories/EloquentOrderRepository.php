@@ -78,6 +78,8 @@ class EloquentOrderRepository implements OrderRepositoryInterface
         $model->status = $order->status()->value;
         $model->subtotal_amount = $order->subtotal()->amount();
         $model->subtotal_currency = $order->subtotal()->currency();
+        $model->tax_amount = $order->tax()->amount();
+        $model->discount_amount = $order->discount()->amount();
         $model->total_amount = $order->total()->amount();
         $model->total_currency = $order->total()->currency();
         $model->notes = $order->notes();
@@ -116,6 +118,8 @@ class EloquentOrderRepository implements OrderRepositoryInterface
             status: OrderStatus::from($model->status),
             items: $items,
             subtotal: Money::fromAmount($model->subtotal_amount, $model->subtotal_currency),
+            tax: Money::fromAmount($model->tax_amount, $model->subtotal_currency),
+            discount: Money::fromAmount($model->discount_amount, $model->subtotal_currency),
             total: Money::fromAmount($model->total_amount, $model->total_currency),
             notes: $model->notes,
             createdAt: DateTimeImmutable::createFromInterface($model->created_at),

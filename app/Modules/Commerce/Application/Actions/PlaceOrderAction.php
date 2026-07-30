@@ -52,6 +52,15 @@ use RuntimeException;
  * Repository interface (Dependency Inversion), the same pattern
  * GetCustomerOrdersAction uses in the other direction — never a direct
  * object reference between Customer and Order.
+ *
+ * tax/discount/total are optional (Checkout & Payment stage, Stage 5) —
+ * left null, they default to exactly this Action's original Stage-3
+ * behavior (tax=0, discount=0, total=subtotal), so the plain
+ * `commerce.order.place` capability is completely unaffected.
+ * ProcessPaymentAction is the only caller that supplies real values,
+ * already computed by PricingService — this Action never computes the
+ * Subtotal+Tax-Discount=Total formula itself, only stores whatever it's
+ * given (PricingService stays the single formula owner).
  */
 final class PlaceOrderAction
 {
@@ -66,9 +75,17 @@ final class PlaceOrderAction
     ) {
     }
 
-    public function execute(int $tenantId, int $agentId, int $cartId, ?string $notes = null, ?int $customerId = null): OrderData
-    {
-        return DB::transaction(function () use ($tenantId, $agentId, $cartId, $notes, $customerId) {
+    public function execute(
+        int $tenantId,
+        int $agentId,
+        int $cartId,
+        ?string $notes = null,
+        ?int $customerId = null,
+        ?Money $tax = null,
+        ?Money $discount = null,
+        ?Money $total = null,
+    ): OrderData {
+        return DB::transaction(function () use ($tenantId, $agentId, $cartId, $notes, $customerId, $tax, $discount, $total) {
             $cart = $this->carts->findById($cartId, $tenantId);
 
             if (! $cart || $cart->ownerType() !== MemberType::Agent || $cart->ownerId() !== $agentId) {
@@ -99,11 +116,11 @@ final class PlaceOrderAction
             $currency = $orderItems[0]->unitPrice()->currency();
             $subtotalAmount = array_sum(array_map(fn (OrderItem $item) => $item->totalAmount(), $orderItems));
             $subtotal = Money::fromAmount($subtotalAmount, $currency);
-            $total = $subtotal; // no tax/shipping/discount logic this phase — deliberately out of scope
+            $total ??= $subtotal; // no pricing supplied (plain order.place) — total is just the subtotal, as before Stage 5
 
             $orderNumber = $this->generateUniqueOrderNumber($tenantId);
 
-            $order = Order::place($tenantId, $agentId, $orderNumber, $orderItems, $subtotal, $total, $notes, $customerId);
+            $order = Order::place($tenantId, $agentId, $orderNumber, $orderItems, $subtotal, $total, $notes, $customerId, $tax, $discount);
             $order = $this->orders->save($order);
 
             Event::dispatch(new OrderWasPlaced($order));

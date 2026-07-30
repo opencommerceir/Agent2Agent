@@ -8,6 +8,7 @@ use App\Modules\Commerce\Domain\ValueObjects\Money;
 use App\Modules\Commerce\Domain\ValueObjects\OrderNumber;
 use App\Modules\Commerce\Domain\ValueObjects\OrderStatus;
 use DateTimeImmutable;
+use InvalidArgumentException;
 
 /**
  * A placed Order. Items are frozen at construction (Immutable Order
@@ -39,6 +40,8 @@ final class Order
         private OrderStatus $status,
         private readonly array $items,
         private readonly Money $subtotal,
+        private readonly Money $tax,
+        private readonly Money $discount,
         private readonly Money $total,
         private readonly ?string $notes,
         private readonly DateTimeImmutable $createdAt,
@@ -46,6 +49,11 @@ final class Order
     }
 
     /**
+     * tax/discount default to zero (Checkout & Payment stage) — Orders
+     * placed without going through the checkout/payment flow (plain
+     * `commerce.order.place`, unchanged since Order Management) simply
+     * never apply tax or a discount, exactly as before this stage.
+     *
      * @param list<OrderItem> $items
      */
     public static function place(
@@ -57,6 +65,8 @@ final class Order
         Money $total,
         ?string $notes = null,
         ?int $customerId = null,
+        ?Money $tax = null,
+        ?Money $discount = null,
     ): self {
         return new self(
             id: null,
@@ -67,6 +77,8 @@ final class Order
             status: OrderStatus::Pending,
             items: $items,
             subtotal: $subtotal,
+            tax: $tax ?? Money::fromAmount(0, $subtotal->currency()),
+            discount: $discount ?? Money::fromAmount(0, $subtotal->currency()),
             total: $total,
             notes: $notes,
             createdAt: new DateTimeImmutable(),
@@ -96,6 +108,25 @@ final class Order
         }
 
         $this->status = OrderStatus::Cancelled;
+    }
+
+    /**
+     * The only path to Refunded, mirroring cancel()'s role for
+     * Cancelled — a plain InvalidArgumentException guard is enough here
+     * (not a dedicated exception class): refunding an already-cancelled
+     * order would double-restore its Inventory (RefundPaymentAction
+     * already restored it via CancelOrderAction, or vice versa), and
+     * refunding an already-refunded order is simply redundant.
+     */
+    public function refund(): void
+    {
+        if (in_array($this->status, [OrderStatus::Cancelled, OrderStatus::Refunded], true)) {
+            throw new InvalidArgumentException(
+                "Order [{$this->orderNumber}] cannot be refunded from status [{$this->status->value}]."
+            );
+        }
+
+        $this->status = OrderStatus::Refunded;
     }
 
     public function changeStatus(OrderStatus $newStatus): void
@@ -156,6 +187,16 @@ final class Order
     public function subtotal(): Money
     {
         return $this->subtotal;
+    }
+
+    public function tax(): Money
+    {
+        return $this->tax;
+    }
+
+    public function discount(): Money
+    {
+        return $this->discount;
     }
 
     public function total(): Money
