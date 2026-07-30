@@ -2,6 +2,7 @@
 
 namespace App\Core\Application\Services;
 
+use App\Core\Application\DTOs\AuthContext;
 use App\Core\Domain\Exceptions\CapabilityNotFoundException;
 
 /**
@@ -23,13 +24,16 @@ use App\Core\Domain\Exceptions\CapabilityNotFoundException;
  * Agent's point of view both cases are indistinguishable: "there is
  * nothing here to execute."
  *
- * Handlers receive the authenticated Agent's tenantId as a second
- * argument (Phase 2 decision): Commerce data is tenant-scoped, unlike
- * Demo's stateless capabilities, and CapabilityExecutionService has no
- * other way to tell a handler which tenant's data to touch. Passed as an
- * explicit parameter, not resolved from a request-scoped container
- * binding, to keep the dependency visible in every handler's signature
- * (Explicit Over Magic) rather than hidden global state.
+ * Handlers receive the authenticated caller's AuthContext (tenantId +
+ * agentId) as a second argument. This started as a single `int
+ * $tenantId` (Phase 2, Stage 1 — Commerce data is tenant-scoped, unlike
+ * Demo's stateless capabilities), then grew: Cart ownership needed the
+ * calling Agent's own id too, and growing this signature with another
+ * positional scalar every time a new module needs a new piece of
+ * identity did not scale. AuthContext groups everything the
+ * authenticated caller carries into one explicit parameter — still
+ * passed explicitly, never resolved from a request-scoped container
+ * binding or other ambient state (Explicit Over Magic).
  */
 final class CapabilityHandlerRegistry
 {
@@ -39,7 +43,7 @@ final class CapabilityHandlerRegistry
     private array $handlers = [];
 
     /**
-     * @param callable(array<string, mixed>, int): array<string, mixed> $handler
+     * @param callable(array<string, mixed>, AuthContext): array<string, mixed> $handler
      */
     public function register(string $capabilityName, callable $handler): void
     {
@@ -52,7 +56,7 @@ final class CapabilityHandlerRegistry
     }
 
     /**
-     * @return callable(array<string, mixed>, int): array<string, mixed>
+     * @return callable(array<string, mixed>, AuthContext): array<string, mixed>
      */
     public function getHandler(string $capabilityName): callable
     {

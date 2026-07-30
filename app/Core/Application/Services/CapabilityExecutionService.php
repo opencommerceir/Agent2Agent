@@ -2,6 +2,7 @@
 
 namespace App\Core\Application\Services;
 
+use App\Core\Application\DTOs\AuthContext;
 use App\Core\Application\DTOs\CapabilityData;
 
 /**
@@ -24,14 +25,14 @@ final class CapabilityExecutionService
     /**
      * @return array{result: array, executionTimeMs: int}
      */
-    public function execute(CapabilityData $capability, array $input, int $tenantId): array
+    public function execute(CapabilityData $capability, array $input, AuthContext $context): array
     {
         $this->requestValidation->validate($capability, $input);
 
         $handler = $this->handlers->getHandler($capability->name);
 
         $startedAt = microtime(true);
-        $result = $handler($input, $tenantId);
+        $result = $handler($input, $context);
         $executionTimeMs = (int) round((microtime(true) - $startedAt) * 1000);
 
         return [

@@ -31,6 +31,20 @@ final class CommerceCapabilities
                 'outputSchema' => ['products' => 'array'],
                 'requiredPermissions' => ['commerce.products.read'],
             ],
+            [
+                'name' => 'commerce.cart.add',
+                'description' => 'Add a product to the calling Agent\'s cart',
+                'inputSchema' => ['product_id' => 'integer', 'quantity' => 'integer'],
+                'outputSchema' => ['cart' => 'array', 'message' => 'string'],
+                'requiredPermissions' => ['commerce.cart.manage'],
+            ],
+            [
+                'name' => 'commerce.cart.get',
+                'description' => "Get the calling Agent's current cart",
+                'inputSchema' => [],
+                'outputSchema' => ['cart' => 'array'],
+                'requiredPermissions' => ['commerce.cart.read'],
+            ],
         ];
     }
 }

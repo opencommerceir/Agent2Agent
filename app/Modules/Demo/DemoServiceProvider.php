@@ -2,6 +2,7 @@
 
 namespace App\Modules\Demo;
 
+use App\Core\Application\DTOs\AuthContext;
 use App\Core\Application\Services\CapabilityHandlerRegistry;
 use App\Modules\Demo\Application\Actions\CalculateAction;
 use App\Modules\Demo\Application\Actions\EchoAction;
@@ -18,7 +19,7 @@ use Illuminate\Support\ServiceProvider;
  * plain closures, no persistence), so it's always safe to run on every
  * boot regardless of migration state.
  *
- * Handlers now receive the caller's tenantId as a second argument
+ * Handlers now receive the caller's AuthContext as a second argument
  * (Phase 2 decision, see CapabilityHandlerRegistry's docblock) — Demo's
  * Actions have no tenant-scoped data, so it's accepted here only to
  * satisfy the shared handler contract and otherwise ignored.
@@ -29,8 +30,8 @@ class DemoServiceProvider extends ServiceProvider
     {
         $registry = $this->app->make(CapabilityHandlerRegistry::class);
 
-        $registry->register('demo.tools.echo', fn (array $input, int $tenantId) => $this->app->make(EchoAction::class)->execute($input));
-        $registry->register('demo.tools.time', fn (array $input, int $tenantId) => $this->app->make(GetCurrentTimeAction::class)->execute($input));
-        $registry->register('demo.tools.calculator', fn (array $input, int $tenantId) => $this->app->make(CalculateAction::class)->execute($input));
+        $registry->register('demo.tools.echo', fn (array $input, AuthContext $context) => $this->app->make(EchoAction::class)->execute($input));
+        $registry->register('demo.tools.time', fn (array $input, AuthContext $context) => $this->app->make(GetCurrentTimeAction::class)->execute($input));
+        $registry->register('demo.tools.calculator', fn (array $input, AuthContext $context) => $this->app->make(CalculateAction::class)->execute($input));
     }
 }

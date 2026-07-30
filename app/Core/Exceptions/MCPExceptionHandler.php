@@ -4,6 +4,8 @@ namespace App\Core\Exceptions;
 
 use App\Core\Domain\Exceptions\AgentNotActiveException;
 use App\Core\Domain\Exceptions\CapabilityNotFoundException;
+use App\Core\Domain\Exceptions\Contracts\ConflictExceptionInterface;
+use App\Core\Domain\Exceptions\Contracts\NotFoundExceptionInterface;
 use App\Core\Domain\Exceptions\InvalidAgentTokenException;
 use App\Core\Domain\Exceptions\PermissionDeniedException;
 use Illuminate\Http\JsonResponse;
@@ -41,7 +43,16 @@ final class MCPExceptionHandler
 
             $e instanceof PermissionDeniedException => $this->respond('FORBIDDEN', $e->getMessage(), 403),
 
-            $e instanceof CapabilityNotFoundException => $this->respond('NOT_FOUND', $e->getMessage(), 404),
+            $e instanceof CapabilityNotFoundException,
+            $e instanceof NotFoundExceptionInterface => $this->respond('NOT_FOUND', $e->getMessage(), 404),
+
+            // A legitimate business-rule rejection (e.g. the requested
+            // quantity is genuinely unavailable), not a malformed request
+            // or a missing resource — CONFLICT/409 fits better than
+            // shoehorning it into VALIDATION_ERROR or NOT_FOUND. Any Domain
+            // Module's exception can opt into this by implementing the
+            // marker interface — Core never imports the Module's class.
+            $e instanceof ConflictExceptionInterface => $this->respond('CONFLICT', $e->getMessage(), 409),
 
             $e instanceof ValidationException => $this->respond(
                 'VALIDATION_ERROR',
