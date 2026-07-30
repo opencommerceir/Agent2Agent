@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "53b5d56b3b7e3cbac1713e68c8850f6c",
+    "content-hash": "cd64d848b98dec0e5c35c14f954a9c40",
     "packages": [
         {
             "name": "brick/math",
@@ -2534,6 +2534,40 @@
                 }
             ],
             "time": "2026-02-16T23:10:27+00:00"
+        },
+        {
+            "name": "opencommerce/sdk",
+            "version": "1.0.0",
+            "dist": {
+                "type": "path",
+                "url": "./packages/opencommerce-sdk",
+                "reference": "d3d5e3ffe6317694d3724a5e446a5e70a05cd4ee"
+            },
+            "require": {
+                "guzzlehttp/guzzle": "^7.8",
+                "php": "^8.2"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^11.0"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "OpenCommerce\\SDK\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "OpenCommerce\\SDK\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "description": "PHP SDK for the OpenCommerce Platform MCP Gateway — lets AI Agents discover and execute platform capabilities.",
+            "transport-options": {
+                "relative": true
+            }
         },
         {
             "name": "phpoption/phpoption",

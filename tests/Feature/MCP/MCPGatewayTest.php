@@ -13,6 +13,7 @@ use App\Core\Application\Actions\GenerateAgentTokenAction;
 use App\Core\Application\Actions\RegisterAgentAction;
 use App\Core\Application\Actions\RegisterCapabilityAction;
 use App\Core\Domain\ValueObjects\MemberType;
+use Database\Seeders\DemoCapabilitiesSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -26,19 +27,29 @@ class MCPGatewayTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * Uses demo.tools.echo (its description seeded by
+     * DemoCapabilitiesSeeder, its handler registered by
+     * DemoServiceProvider::boot()) rather than the fictional
+     * commerce.product.search this test used through Phase 7 —
+     * CapabilityExecutionService now actually calls a handler instead of
+     * returning a hardcoded mock, so this needs a capability that really
+     * has one.
+     */
     public function test_execute_withValidTokenAndPermission_returnsSuccessEnvelope(): void
     {
-        $token = $this->registerAgentWithPermission('commerce.products.read');
-        $this->registerSearchCapability();
+        $this->seed(DemoCapabilitiesSeeder::class);
+        $token = $this->registerAgentWithPermission('demo.echo.execute');
 
         $response = $this->postJson('/mcp/v1/execute', [
-            'capability' => 'commerce.product.search',
-            'input' => ['query' => 'laptop'],
+            'capability' => 'demo.tools.echo',
+            'input' => ['message' => 'Hello from a test'],
         ], ['Authorization' => "Bearer {$token}"]);
 
         $response->assertStatus(200);
-        $response->assertJsonStructure(['data', 'meta' => ['capability', 'execution_time']]);
-        $response->assertJsonPath('meta.capability', 'commerce.product.search');
+        $response->assertJsonStructure(['data' => ['echo', 'timestamp'], 'meta' => ['capability', 'execution_time']]);
+        $response->assertJsonPath('data.echo', 'Hello from a test');
+        $response->assertJsonPath('meta.capability', 'demo.tools.echo');
     }
 
     public function test_execute_withoutToken_returnsUnauthorized(): void
@@ -91,11 +102,11 @@ class MCPGatewayTest extends TestCase
 
     public function test_execute_withMissingRequiredInputField_returnsValidationError(): void
     {
-        $token = $this->registerAgentWithPermission('commerce.products.read');
-        $this->registerSearchCapability();
+        $this->seed(DemoCapabilitiesSeeder::class);
+        $token = $this->registerAgentWithPermission('demo.echo.execute');
 
         $response = $this->postJson('/mcp/v1/execute', [
-            'capability' => 'commerce.product.search',
+            'capability' => 'demo.tools.echo',
             'input' => [],
         ], ['Authorization' => "Bearer {$token}"]);
 

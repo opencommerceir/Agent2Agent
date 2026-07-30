@@ -50,12 +50,13 @@ final class MCPExceptionHandler
             ),
 
             // Covers MCPRequestValidationService rejecting a capability's
-            // `input` payload (missing/wrong-type field). Grouped under the
-            // same client-facing code as ValidationException above because
-            // both mean "the request body was wrong" to the calling Agent.
-            // Safe only because today's MCP-reachable Actions never throw
-            // InvalidArgumentException for any other reason — re-check this
-            // mapping if a future capability handler adds one that does.
+            // `input` payload, and also every Demo capability handler's own
+            // input checks (e.g. CalculateAction rejecting a non-numeric
+            // operand) — both mean "the request body was wrong" to the
+            // calling Agent, so both map to the same client-facing code.
+            // Still worth re-checking this mapping if a future handler ever
+            // throws InvalidArgumentException for something that *isn't*
+            // bad input (e.g. a genuine internal state error).
             $e instanceof InvalidArgumentException => $this->respond('VALIDATION_ERROR', $e->getMessage(), 422),
 
             default => $this->respondToUnexpected($e),

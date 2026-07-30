@@ -13,6 +13,7 @@ use App\Core\Domain\Repositories\OrganizationRepositoryInterface;
 use App\Core\Domain\Repositories\PermissionRepositoryInterface;
 use App\Core\Domain\Repositories\RoleRepositoryInterface;
 use App\Core\Domain\Repositories\TenantRepositoryInterface;
+use App\Core\Application\Services\CapabilityHandlerRegistry;
 use App\Core\Infrastructure\Repositories\EloquentAgentRepository;
 use App\Core\Infrastructure\Repositories\EloquentAgentTokenRepository;
 use App\Core\Infrastructure\Repositories\EloquentCapabilityRepository;
@@ -42,6 +43,12 @@ class CoreServiceProvider extends ServiceProvider
         $this->app->bind(RoleRepositoryInterface::class, EloquentRoleRepository::class);
         $this->app->bind(MemberRoleRepositoryInterface::class, EloquentMemberRoleRepository::class);
         $this->app->bind(CapabilityRepositoryInterface::class, EloquentCapabilityRepository::class);
+
+        // Singleton: every provider that registers a capability handler
+        // (see DemoServiceProvider) and CapabilityExecutionService must
+        // resolve the exact same instance for registrations to be visible
+        // at execution time.
+        $this->app->singleton(CapabilityHandlerRegistry::class);
     }
 
     public function boot(): void
