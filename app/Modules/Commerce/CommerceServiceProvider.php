@@ -6,22 +6,28 @@ use App\Core\Application\DTOs\AuthContext;
 use App\Core\Application\Services\CapabilityHandlerRegistry;
 use App\Core\Domain\ValueObjects\MemberType;
 use App\Modules\Commerce\Application\Actions\AddToCartAction;
+use App\Modules\Commerce\Application\Actions\CreateCustomerAction;
 use App\Modules\Commerce\Application\Actions\GetCartAction;
+use App\Modules\Commerce\Application\Actions\GetCustomerAction;
 use App\Modules\Commerce\Application\Actions\GetOrderAction;
+use App\Modules\Commerce\Application\Actions\ListCustomersAction;
 use App\Modules\Commerce\Application\Actions\ListOrdersAction;
 use App\Modules\Commerce\Application\Actions\ListProductsAction;
 use App\Modules\Commerce\Application\Actions\PlaceOrderAction;
 use App\Modules\Commerce\Application\DTOs\CartData;
+use App\Modules\Commerce\Application\DTOs\CustomerData;
 use App\Modules\Commerce\Application\DTOs\OrderData;
 use App\Modules\Commerce\Application\Services\ConnectorRegistry;
 use App\Modules\Commerce\Domain\Repositories\CartRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\CategoryRepositoryInterface;
+use App\Modules\Commerce\Domain\Repositories\CustomerRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\InventoryRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\OrderRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\ProductRepositoryInterface;
 use App\Modules\Commerce\Infrastructure\Connectors\MockProductConnector;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentCartRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentCategoryRepository;
+use App\Modules\Commerce\Infrastructure\Repositories\EloquentCustomerRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentInventoryRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentOrderRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentProductRepository;
@@ -57,6 +63,7 @@ class CommerceServiceProvider extends ServiceProvider
         $this->app->bind(CartRepositoryInterface::class, EloquentCartRepository::class);
         $this->app->bind(InventoryRepositoryInterface::class, EloquentInventoryRepository::class);
         $this->app->bind(OrderRepositoryInterface::class, EloquentOrderRepository::class);
+        $this->app->bind(CustomerRepositoryInterface::class, EloquentCustomerRepository::class);
     }
 
     public function boot(): void
@@ -97,6 +104,7 @@ class CommerceServiceProvider extends ServiceProvider
                 agentId: $context->agentId,
                 cartId: (int) $input['cart_id'],
                 notes: $input['notes'] ?? null,
+                customerId: isset($input['customer_id']) ? (int) $input['customer_id'] : null,
             );
 
             return ['order' => $order->toArray()];
@@ -112,6 +120,32 @@ class CommerceServiceProvider extends ServiceProvider
         $handlers->register(
             'commerce.order.list',
             fn (array $input, AuthContext $context) => $this->app->make(ListOrdersAction::class)->execute($input, $context->tenantId),
+        );
+
+        $handlers->register('commerce.customer.create', function (array $input, AuthContext $context) {
+            /** @var CustomerData $customer */
+            $customer = $this->app->make(CreateCustomerAction::class)->execute(
+                tenantId: $context->tenantId,
+                firstName: $input['first_name'],
+                lastName: $input['last_name'],
+                email: $input['email'],
+                phone: $input['phone'] ?? null,
+                address: $input['address'] ?? null,
+            );
+
+            return ['customer' => $customer->toArray()];
+        });
+
+        $handlers->register('commerce.customer.get', function (array $input, AuthContext $context) {
+            /** @var CustomerData $customer */
+            $customer = $this->app->make(GetCustomerAction::class)->execute((int) $input['customer_id'], $context->tenantId);
+
+            return ['customer' => $customer->toArray()];
+        });
+
+        $handlers->register(
+            'commerce.customer.list',
+            fn (array $input, AuthContext $context) => $this->app->make(ListCustomersAction::class)->execute($input, $context->tenantId),
         );
     }
 }

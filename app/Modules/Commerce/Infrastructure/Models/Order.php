@@ -18,6 +18,7 @@ class Order extends Model
     protected $fillable = [
         'tenant_id',
         'agent_id',
+        'customer_id',
         'order_number',
         'status',
         'subtotal_amount',

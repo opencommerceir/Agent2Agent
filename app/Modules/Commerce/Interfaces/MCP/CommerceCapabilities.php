@@ -71,6 +71,29 @@ final class CommerceCapabilities
                 'outputSchema' => ['orders' => 'array'],
                 'requiredPermissions' => ['commerce.orders.read'],
             ],
+            [
+                'name' => 'commerce.customer.create',
+                'description' => 'Register a new Customer',
+                // phone and address are optional — same reasoning as
+                // commerce.order.place's notes field.
+                'inputSchema' => ['first_name' => 'string', 'last_name' => 'string', 'email' => 'string'],
+                'outputSchema' => ['customer' => 'array'],
+                'requiredPermissions' => ['commerce.customers.create'],
+            ],
+            [
+                'name' => 'commerce.customer.get',
+                'description' => 'Get a Customer by id',
+                'inputSchema' => ['customer_id' => 'integer'],
+                'outputSchema' => ['customer' => 'array'],
+                'requiredPermissions' => ['commerce.customers.read'],
+            ],
+            [
+                'name' => 'commerce.customer.list',
+                'description' => "List the tenant's Customers, optionally filtered by status",
+                'inputSchema' => [],
+                'outputSchema' => ['customers' => 'array'],
+                'requiredPermissions' => ['commerce.customers.read'],
+            ],
         ];
     }
 }

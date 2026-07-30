@@ -34,6 +34,7 @@ final class Order
         private readonly ?int $id,
         private readonly int $tenantId,
         private readonly int $agentId,
+        private readonly ?int $customerId,
         private readonly OrderNumber $orderNumber,
         private OrderStatus $status,
         private readonly array $items,
@@ -55,11 +56,13 @@ final class Order
         Money $subtotal,
         Money $total,
         ?string $notes = null,
+        ?int $customerId = null,
     ): self {
         return new self(
             id: null,
             tenantId: $tenantId,
             agentId: $agentId,
+            customerId: $customerId,
             orderNumber: $orderNumber,
             status: OrderStatus::Pending,
             items: $items,
@@ -125,6 +128,11 @@ final class Order
     public function agentId(): int
     {
         return $this->agentId;
+    }
+
+    public function customerId(): ?int
+    {
+        return $this->customerId;
     }
 
     public function orderNumber(): OrderNumber

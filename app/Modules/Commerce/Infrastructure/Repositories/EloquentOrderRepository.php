@@ -51,6 +51,18 @@ class EloquentOrderRepository implements OrderRepositoryInterface
             ->all();
     }
 
+    public function listByCustomer(int $customerId, int $tenantId, int $limit): array
+    {
+        return OrderModel::query()
+            ->where('tenant_id', $tenantId)
+            ->where('customer_id', $customerId)
+            ->orderBy('id', 'desc')
+            ->limit($limit)
+            ->get()
+            ->map(fn (OrderModel $model) => $this->toEntity($model))
+            ->all();
+    }
+
     public function save(OrderEntity $order): OrderEntity
     {
         $isNew = $order->id() === null;
@@ -61,6 +73,7 @@ class EloquentOrderRepository implements OrderRepositoryInterface
 
         $model->tenant_id = $order->tenantId();
         $model->agent_id = $order->agentId();
+        $model->customer_id = $order->customerId();
         $model->order_number = $order->orderNumber()->value();
         $model->status = $order->status()->value;
         $model->subtotal_amount = $order->subtotal()->amount();
@@ -98,6 +111,7 @@ class EloquentOrderRepository implements OrderRepositoryInterface
             id: $model->id,
             tenantId: $model->tenant_id,
             agentId: $model->agent_id,
+            customerId: $model->customer_id,
             orderNumber: new OrderNumber($model->order_number),
             status: OrderStatus::from($model->status),
             items: $items,

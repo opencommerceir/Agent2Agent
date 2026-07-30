@@ -9,7 +9,9 @@ use App\Modules\Commerce\Domain\Entities\OrderItem;
 use App\Modules\Commerce\Domain\Events\OrderWasConfirmed;
 use App\Modules\Commerce\Domain\Events\OrderWasPlaced;
 use App\Modules\Commerce\Domain\Exceptions\CartNotFoundException;
+use App\Modules\Commerce\Domain\Exceptions\CustomerNotFoundException;
 use App\Modules\Commerce\Domain\Repositories\CartRepositoryInterface;
+use App\Modules\Commerce\Domain\Repositories\CustomerRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\InventoryRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\OrderRepositoryInterface;
 use App\Modules\Commerce\Domain\ValueObjects\Money;
@@ -41,6 +43,15 @@ use RuntimeException;
  *
  * The whole operation is one DB transaction: Cart, Inventory and Order
  * all change together or not at all.
+ *
+ * customerId is optional (Customer Management stage, Stage 4) — linking
+ * an Order to a Customer record is a separate concern from who placed it
+ * (the Agent), so it stays nullable rather than becoming a second
+ * required identity. Depending on CustomerRepositoryInterface here is
+ * Commerce's own two aggregates meeting through an explicit id + a
+ * Repository interface (Dependency Inversion), the same pattern
+ * GetCustomerOrdersAction uses in the other direction — never a direct
+ * object reference between Customer and Order.
  */
 final class PlaceOrderAction
 {
@@ -50,13 +61,14 @@ final class PlaceOrderAction
         private readonly CartRepositoryInterface $carts,
         private readonly OrderRepositoryInterface $orders,
         private readonly InventoryRepositoryInterface $inventories,
+        private readonly CustomerRepositoryInterface $customers,
         private readonly CheckInventoryAction $checkInventory,
     ) {
     }
 
-    public function execute(int $tenantId, int $agentId, int $cartId, ?string $notes = null): OrderData
+    public function execute(int $tenantId, int $agentId, int $cartId, ?string $notes = null, ?int $customerId = null): OrderData
     {
-        return DB::transaction(function () use ($tenantId, $agentId, $cartId, $notes) {
+        return DB::transaction(function () use ($tenantId, $agentId, $cartId, $notes, $customerId) {
             $cart = $this->carts->findById($cartId, $tenantId);
 
             if (! $cart || $cart->ownerType() !== MemberType::Agent || $cart->ownerId() !== $agentId) {
@@ -65,6 +77,10 @@ final class PlaceOrderAction
 
             if (! $cart->isActive() || $cart->items() === []) {
                 throw new InvalidArgumentException('Cart is empty or not active.');
+            }
+
+            if ($customerId !== null && ! $this->customers->findById($customerId, $tenantId)) {
+                throw new CustomerNotFoundException("Customer [{$customerId}] does not exist.");
             }
 
             $orderItems = [];
@@ -87,7 +103,7 @@ final class PlaceOrderAction
 
             $orderNumber = $this->generateUniqueOrderNumber($tenantId);
 
-            $order = Order::place($tenantId, $agentId, $orderNumber, $orderItems, $subtotal, $total, $notes);
+            $order = Order::place($tenantId, $agentId, $orderNumber, $orderItems, $subtotal, $total, $notes, $customerId);
             $order = $this->orders->save($order);
 
             Event::dispatch(new OrderWasPlaced($order));

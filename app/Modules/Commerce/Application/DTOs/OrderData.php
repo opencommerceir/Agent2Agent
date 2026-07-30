@@ -13,6 +13,7 @@ final class OrderData
         public readonly ?int $id,
         public readonly int $tenantId,
         public readonly int $agentId,
+        public readonly ?int $customerId,
         public readonly string $orderNumber,
         public readonly string $status,
         public readonly array $items,
@@ -30,6 +31,7 @@ final class OrderData
             id: $order->id(),
             tenantId: $order->tenantId(),
             agentId: $order->agentId(),
+            customerId: $order->customerId(),
             orderNumber: $order->orderNumber()->value(),
             status: $order->status()->value,
             items: array_map(
@@ -53,6 +55,7 @@ final class OrderData
             'id' => $this->id,
             'tenantId' => $this->tenantId,
             'agentId' => $this->agentId,
+            'customerId' => $this->customerId,
             'orderNumber' => $this->orderNumber,
             'status' => $this->status,
             'items' => $this->items,

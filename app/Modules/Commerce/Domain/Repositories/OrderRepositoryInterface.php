@@ -16,5 +16,10 @@ interface OrderRepositoryInterface
      */
     public function listByTenant(int $tenantId, ?OrderStatus $status, int $limit): array;
 
+    /**
+     * @return list<Order>
+     */
+    public function listByCustomer(int $customerId, int $tenantId, int $limit): array;
+
     public function save(Order $order): Order;
 }
