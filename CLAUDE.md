@@ -2,8 +2,9 @@
 
 # OpenCommerce Platform
 
-## Important Rule : 
-Never explain top much.
+# Code Output Rules
+- When modifying existing files, ONLY show the changed parts (use diffs or specific functions), DO NOT output the entire file unless asked.
+- Do not apologize for previous mistakes. Just fix the code and move on.
 
 ## Role
 

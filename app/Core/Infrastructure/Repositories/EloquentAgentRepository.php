@@ -28,7 +28,6 @@ class EloquentAgentRepository implements AgentRepositoryInterface
         $model->organization_id = $agent->organizationId();
         $model->name = $agent->name();
         $model->type = $agent->type()->value;
-        $model->permissions = $agent->permissions();
         $model->status = $agent->status()->value;
         $model->save();
 
@@ -43,7 +42,6 @@ class EloquentAgentRepository implements AgentRepositoryInterface
             organizationId: $model->organization_id,
             name: $model->name,
             type: AgentType::from($model->type),
-            permissions: $model->permissions ?? [],
             status: AgentStatus::from($model->status),
             createdAt: DateTimeImmutable::createFromInterface($model->created_at),
         );

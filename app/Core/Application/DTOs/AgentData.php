@@ -4,15 +4,8 @@ namespace App\Core\Application\DTOs;
 
 use App\Core\Domain\Entities\Agent;
 
-/**
- * Structured data transfer for Agent across layers.
- * Represents data only — no business logic (DTO Conventions).
- */
 final class AgentData
 {
-    /**
-     * @param list<string> $permissions
-     */
     public function __construct(
         public readonly ?int $id,
         public readonly int $tenantId,
@@ -20,7 +13,6 @@ final class AgentData
         public readonly string $name,
         public readonly string $type,
         public readonly string $status,
-        public readonly array $permissions,
     ) {
     }
 
@@ -33,13 +25,9 @@ final class AgentData
             name: $agent->name(),
             type: $agent->type()->value,
             status: $agent->status()->value,
-            permissions: $agent->permissions(),
         );
     }
 
-    /**
-     * @return array{id: ?int, tenantId: int, organizationId: int, name: string, type: string, status: string, permissions: list<string>}
-     */
     public function toArray(): array
     {
         return [
@@ -49,7 +37,6 @@ final class AgentData
             'name' => $this->name,
             'type' => $this->type,
             'status' => $this->status,
-            'permissions' => $this->permissions,
         ];
     }
 }

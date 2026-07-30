@@ -18,16 +18,8 @@ class Agent extends Model
         'organization_id',
         'name',
         'type',
-        'permissions',
         'status',
     ];
-
-    protected function casts(): array
-    {
-        return [
-            'permissions' => 'array',
-        ];
-    }
 
     public function tokens()
     {
