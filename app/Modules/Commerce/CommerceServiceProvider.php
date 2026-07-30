@@ -7,17 +7,23 @@ use App\Core\Application\Services\CapabilityHandlerRegistry;
 use App\Core\Domain\ValueObjects\MemberType;
 use App\Modules\Commerce\Application\Actions\AddToCartAction;
 use App\Modules\Commerce\Application\Actions\GetCartAction;
+use App\Modules\Commerce\Application\Actions\GetOrderAction;
+use App\Modules\Commerce\Application\Actions\ListOrdersAction;
 use App\Modules\Commerce\Application\Actions\ListProductsAction;
+use App\Modules\Commerce\Application\Actions\PlaceOrderAction;
 use App\Modules\Commerce\Application\DTOs\CartData;
+use App\Modules\Commerce\Application\DTOs\OrderData;
 use App\Modules\Commerce\Application\Services\ConnectorRegistry;
 use App\Modules\Commerce\Domain\Repositories\CartRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\CategoryRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\InventoryRepositoryInterface;
+use App\Modules\Commerce\Domain\Repositories\OrderRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\ProductRepositoryInterface;
 use App\Modules\Commerce\Infrastructure\Connectors\MockProductConnector;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentCartRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentCategoryRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentInventoryRepository;
+use App\Modules\Commerce\Infrastructure\Repositories\EloquentOrderRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentProductRepository;
 use Illuminate\Support\ServiceProvider;
 
@@ -50,6 +56,7 @@ class CommerceServiceProvider extends ServiceProvider
         $this->app->bind(CategoryRepositoryInterface::class, EloquentCategoryRepository::class);
         $this->app->bind(CartRepositoryInterface::class, EloquentCartRepository::class);
         $this->app->bind(InventoryRepositoryInterface::class, EloquentInventoryRepository::class);
+        $this->app->bind(OrderRepositoryInterface::class, EloquentOrderRepository::class);
     }
 
     public function boot(): void
@@ -82,5 +89,29 @@ class CommerceServiceProvider extends ServiceProvider
 
             return ['cart' => $cart->toArray()];
         });
+
+        $handlers->register('commerce.order.place', function (array $input, AuthContext $context) {
+            /** @var OrderData $order */
+            $order = $this->app->make(PlaceOrderAction::class)->execute(
+                tenantId: $context->tenantId,
+                agentId: $context->agentId,
+                cartId: (int) $input['cart_id'],
+                notes: $input['notes'] ?? null,
+            );
+
+            return ['order' => $order->toArray()];
+        });
+
+        $handlers->register('commerce.order.get', function (array $input, AuthContext $context) {
+            /** @var OrderData $order */
+            $order = $this->app->make(GetOrderAction::class)->execute((int) $input['order_id'], $context->tenantId);
+
+            return ['order' => $order->toArray()];
+        });
+
+        $handlers->register(
+            'commerce.order.list',
+            fn (array $input, AuthContext $context) => $this->app->make(ListOrdersAction::class)->execute($input, $context->tenantId),
+        );
     }
 }

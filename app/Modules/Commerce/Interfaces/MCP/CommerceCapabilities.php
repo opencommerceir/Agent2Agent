@@ -45,6 +45,32 @@ final class CommerceCapabilities
                 'outputSchema' => ['cart' => 'array'],
                 'requiredPermissions' => ['commerce.cart.read'],
             ],
+            [
+                'name' => 'commerce.order.place',
+                'description' => "Place an Order from the calling Agent's own cart",
+                // notes is optional — deliberately left out of inputSchema
+                // (MCPRequestValidationService treats every declared field
+                // as required; there is no "optional but typed" yet).
+                'inputSchema' => ['cart_id' => 'integer'],
+                'outputSchema' => ['order' => 'array'],
+                'requiredPermissions' => ['commerce.orders.create'],
+            ],
+            [
+                'name' => 'commerce.order.get',
+                'description' => 'Get an Order by id',
+                'inputSchema' => ['order_id' => 'integer'],
+                'outputSchema' => ['order' => 'array'],
+                'requiredPermissions' => ['commerce.orders.read'],
+            ],
+            [
+                'name' => 'commerce.order.list',
+                'description' => "List the tenant's Orders, optionally filtered by status",
+                // status and limit are both optional — same reasoning as
+                // commerce.order.place's notes field.
+                'inputSchema' => [],
+                'outputSchema' => ['orders' => 'array'],
+                'requiredPermissions' => ['commerce.orders.read'],
+            ],
         ];
     }
 }
