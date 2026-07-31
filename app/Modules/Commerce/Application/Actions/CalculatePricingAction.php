@@ -7,6 +7,7 @@ use App\Modules\Commerce\Application\DTOs\PricingData;
 use App\Modules\Commerce\Domain\Entities\CartItem;
 use App\Modules\Commerce\Domain\Exceptions\CartNotFoundException;
 use App\Modules\Commerce\Domain\Exceptions\InvalidCouponException;
+use App\Modules\Commerce\Application\Services\TaxRateProviderInterface;
 use App\Modules\Commerce\Domain\Repositories\CartRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\CouponRepositoryInterface;
 use App\Modules\Commerce\Domain\Services\CouponValidationService;
@@ -23,13 +24,16 @@ use InvalidArgumentException;
  * called only once payment actually succeeds). Backs
  * `commerce.checkout.calculate`.
  *
- * DEFAULT_TAX_RATE is a stand-in: no per-tenant tax-rate configuration
- * entity exists yet (this stage didn't request one), so every tenant
- * currently gets the same flat rate. A future stage adding real tax
- * configuration would replace this constant with a repository lookup —
- * ProcessPaymentAction carries the identical constant for the same
- * reason, since both need it and no shared config source exists to pull
- * it from yet.
+ * DEFAULT_TAX_RATE_PERCENT is now only the last-resort fallback, not the
+ * only rate: TaxRateProviderInterface is asked first (Phase 3.2 — Finance
+ * module), and its answer is used whenever it isn't null. A Commerce
+ * deployment with no Finance module installed gets NullTaxRateProvider
+ * bound by default (CommerceServiceProvider::register()), which always
+ * returns null — so this constant, and this Action's behavior for every
+ * existing caller that doesn't pass a `$region`, is completely unchanged
+ * from before Finance existed. See TaxRateProviderInterface's own
+ * docblock for the full reasoning behind this being an Interface Commerce
+ * owns, not a direct dependency on Finance's TaxCalculationService.
  */
 final class CalculatePricingAction
 {
@@ -40,10 +44,11 @@ final class CalculatePricingAction
         private readonly CouponRepositoryInterface $coupons,
         private readonly CouponValidationService $couponValidation,
         private readonly PricingService $pricingService,
+        private readonly TaxRateProviderInterface $taxRateProvider,
     ) {
     }
 
-    public function execute(int $tenantId, int $agentId, int $cartId, ?string $couponCode = null): PricingData
+    public function execute(int $tenantId, int $agentId, int $cartId, ?string $couponCode = null, ?string $region = null): PricingData
     {
         $cart = $this->carts->findById($cartId, $tenantId);
 
@@ -72,7 +77,9 @@ final class CalculatePricingAction
             $discount = $coupon->calculateDiscount($subtotal);
         }
 
-        $breakdown = $this->pricingService->calculate($subtotal, new TaxRate(self::DEFAULT_TAX_RATE_PERCENT), $discount);
+        $ratePercent = $this->taxRateProvider->getRatePercent($tenantId, $region) ?? self::DEFAULT_TAX_RATE_PERCENT;
+
+        $breakdown = $this->pricingService->calculate($subtotal, new TaxRate($ratePercent), $discount);
 
         return PricingData::fromBreakdown($breakdown);
     }

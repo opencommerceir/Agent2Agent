@@ -6,6 +6,7 @@ use App\Core\Domain\ValueObjects\MemberType;
 use App\Modules\Commerce\Application\DTOs\OrderData;
 use App\Modules\Commerce\Application\DTOs\PaymentData;
 use App\Modules\Commerce\Application\Services\PaymentGatewayInterface;
+use App\Modules\Commerce\Application\Services\TaxRateProviderInterface;
 use App\Modules\Commerce\Domain\Entities\CartItem;
 use App\Modules\Commerce\Domain\Entities\Payment;
 use App\Modules\Commerce\Domain\Events\PaymentWasProcessed;
@@ -48,6 +49,10 @@ use InvalidArgumentException;
  * only runs after the Order has been placed — never during pricing —
  * so a coupon's limited uses are only ever consumed by a checkout that
  * actually completed.
+ *
+ * DEFAULT_TAX_RATE_PERCENT is now only the last-resort fallback — see
+ * CalculatePricingAction's docblock for the full reasoning (both Actions
+ * gained the identical TaxRateProviderInterface dependency together).
  */
 final class ProcessPaymentAction
 {
@@ -62,6 +67,7 @@ final class ProcessPaymentAction
         private readonly PaymentGatewayInterface $gateway,
         private readonly PlaceOrderAction $placeOrder,
         private readonly ApplyCouponAction $applyCoupon,
+        private readonly TaxRateProviderInterface $taxRateProvider,
     ) {
     }
 
@@ -78,9 +84,10 @@ final class ProcessPaymentAction
         ?string $couponCode = null,
         ?string $notes = null,
         ?int $customerId = null,
+        ?string $region = null,
     ): array {
         return DB::transaction(function () use (
-            $tenantId, $agentId, $cartId, $paymentMethod, $paymentDetails, $couponCode, $notes, $customerId,
+            $tenantId, $agentId, $cartId, $paymentMethod, $paymentDetails, $couponCode, $notes, $customerId, $region,
         ) {
             $cart = $this->carts->findById($cartId, $tenantId);
 
@@ -110,7 +117,9 @@ final class ProcessPaymentAction
                 $discount = $coupon->calculateDiscount($subtotal);
             }
 
-            $pricing = $this->pricingService->calculate($subtotal, new TaxRate(self::DEFAULT_TAX_RATE_PERCENT), $discount);
+            $ratePercent = $this->taxRateProvider->getRatePercent($tenantId, $region) ?? self::DEFAULT_TAX_RATE_PERCENT;
+
+            $pricing = $this->pricingService->calculate($subtotal, new TaxRate($ratePercent), $discount);
 
             $method = PaymentMethod::from($paymentMethod);
             $result = $this->gateway->charge($pricing->total, $method, $paymentDetails);

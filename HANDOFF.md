@@ -1,13 +1,15 @@
 # OpenCommerce Platform — Session Handoff
 
 **Status: Phase 1 (Core + MCP Gateway) and Phase 2 (Commerce, all 6
-Stages) are complete. Phase 3 (Domain Expansion) has begun — Stage 1,
-CRM Foundation (Tickets, Ticket Comments, Customer Notes, Tags), is
-complete. 314 tests passing, zero known regressions. Next up: whatever
-Phase 3's next module turns out to be (Finance? AI Workflows?), or any
-deferred item in §8/§9 (a real Shopify Connector, per-tenant tax config,
-wiring CRM's remaining un-exposed Actions) if more polish is wanted
-first.**
+Stages) are complete. Phase 3 (Domain Expansion) is under way: Stage 1
+(CRM Foundation) and Stage 2 (Finance — per-tenant tax rates, Invoices)
+are both complete, and Finance now supplies Commerce's own checkout
+pricing with real tax rates through an Interface Commerce itself owns
+(§7.8) — the tax-rate tech debt flagged since Phase 2 §8.1 is resolved.
+353 tests passing, zero known regressions. Next up: whatever Phase 3's
+next module turns out to be (AI Workflows? more Finance — invoice PDF
+export, payment reconciliation?), or any deferred item in §8/§9 if more
+polish is wanted first.**
 
 This file is a working-state snapshot for picking up development in a new
 session. It assumes you've already read `CLAUDE.md` and `docs/*.md` (the
@@ -75,6 +77,28 @@ Commerce's `CustomerRepositoryInterface` (a Domain-layer Interface) to
 validate a `customer_id` exists, and never imports Commerce's
 Infrastructure/Model classes or even Commerce's own exception types (see
 CRM's own `CustomerNotFoundException` docblock).
+
+### `app/Modules/Finance/` — **new in Phase 3. Per-tenant tax rates and Invoices — Phase 3, Stage 2, and the first module to change Commerce itself (in a way that still keeps both modules decoupled — see §7.8).**
+
+See §7.8 for the full detail. 3 Domain Entities (`TaxRate`, `Invoice`,
+`InvoiceItem`), 4 Value Objects (`InvoiceNumber`, `InvoiceStatus`,
+`TaxRegion`, and Finance's own `Money` — deliberately a second, separate
+class from Commerce's, not a shared one), 3 domain events, 4 exceptions,
+2 Repository interfaces, 9 Application Actions (8 wired to MCP — see
+§6), 3 Eloquent models, 2 Eloquent repositories, 3 migrations. Unlike
+CRM (Module -> Module dependency in one direction only), Finance
+introduces the platform's first *two-way* integration between Domain
+Modules: Finance depends on Commerce's `OrderRepositoryInterface`/
+`ProductRepositoryInterface` to build Invoices, **and** Commerce's own
+checkout pricing (`CalculatePricingAction`/`ProcessPaymentAction`) now
+depends on a real tax rate lookup Finance supplies — without either
+module ever importing a concrete class from the other. The mechanism
+that makes the second direction safe is `Commerce\Application\Services\TaxRateProviderInterface`
+— an Interface Commerce itself defines and depends on, that Finance's
+`Infrastructure\Services\CommerceTaxRateProvider` implements and
+`FinanceServiceProvider` binds over Commerce's own harmless default
+(`NullTaxRateProvider`). Commerce still has zero references to
+`App\Modules\Finance\*` anywhere in its own code.
 
 ### `app/Modules/Demo/` — unchanged since Phase 1
 
@@ -165,6 +189,36 @@ app/Modules/CRM/                  new in Phase 3
 └── CRMServiceProvider.php        binds 3 Repository interfaces + registers
                                    5 capability handlers (see §6)
 
+app/Modules/Finance/               new in Phase 3
+├── Domain/
+│   ├── Entities/                 TaxRate, Invoice, InvoiceItem
+│   ├── ValueObjects/             InvoiceNumber, InvoiceStatus, TaxRegion, Money
+│   │                             (Finance's own — see §7.8 for why it's not
+│   │                              Commerce's Money reused)
+│   ├── Events/                   InvoiceWasCreated, InvoiceWasIssued, TaxRateWasUpdated
+│   ├── Services/                 TaxCalculationService (pure, framework-free)
+│   ├── Repositories/              TaxRateRepositoryInterface, InvoiceRepositoryInterface
+│   │                              (owns InvoiceItem persistence too, same shape
+│   │                               CRM's TicketRepositoryInterface has)
+│   └── Exceptions/                InvoiceNotFoundException, TaxRateNotFoundException,
+│                                  InvalidTaxRateException, OrderNotFoundException
+│                                  (Finance's own, not Commerce's — added
+│                                  unprompted, same reasoning CRM's
+│                                  TagNotFoundException was)
+├── Application/
+│   ├── Actions/                  9 Actions — 8 wired to MCP (§6/§7.8)
+│   └── DTOs/                     TaxRateData, InvoiceData, InvoiceItemData
+├── Infrastructure/
+│   ├── Models/                    3 Eloquent models — Invoice has no Eloquent
+│   │                              relation to Commerce's Order/Customer Models
+│   ├── Repositories/               2 Eloquent repository implementations
+│   └── Services/                  CommerceTaxRateProvider — the *only* class in
+│                                  this module that references `App\Modules\Commerce\*`,
+│                                  and only its published Interface (§7.8)
+└── FinanceServiceProvider.php    binds 2 Repository interfaces + Commerce's own
+                                   TaxRateProviderInterface + registers 8
+                                   capability handlers (see §6)
+
 app/Modules/Demo/                  unchanged since Phase 1
 
 packages/opencommerce-sdk/         unchanged since Phase 1
@@ -182,9 +236,10 @@ database/
 │   ├── 2026_07_31_000017-000020                  (Stage 5 — payments, coupons, discounts, +orders pricing cols)
 │   │                                  (Stage 6 added no migrations — WooCommerce products
 │   │                                   are stored in the existing `products` table, keyed by SKU)
-│   └── 2026_07_31_000021-000025                  (Phase 3.1 — tickets, ticket_comments,
-│                                                   customer_notes, tags, customer_tag pivot)
-└── seeders/{DemoCapabilitiesSeeder,CommerceCapabilitiesSeeder,CRMCapabilitiesSeeder}.php
+│   ├── 2026_07_31_000021-000025                  (Phase 3.1 — tickets, ticket_comments,
+│   │                                               customer_notes, tags, customer_tag pivot)
+│   └── 2026_07_31_000026-000028                  (Phase 3.2 — tax_rates, invoices, invoice_items)
+└── seeders/{DemoCapabilitiesSeeder,CommerceCapabilitiesSeeder,CRMCapabilitiesSeeder,FinanceCapabilitiesSeeder}.php
 
 tests/
 ├── Fixtures/            woocommerce-products-response.json (Stage 6 — reference payload)
@@ -194,8 +249,13 @@ tests/
 │                        CustomerNote, Tag, TagName, all framework-free PHPUnit
 ├── Feature/CRM/         4 files — full MCP scenario + tenant isolation +
 │                        the 4 un-wired Actions exercised directly
+├── Unit/Finance/        6 files — TaxRate, Invoice, InvoiceItem, InvoiceNumber,
+│                        TaxRegion, TaxCalculationService, all framework-free PHPUnit
+├── Feature/Finance/     4 files — full MCP scenario + tenant isolation +
+│                        the Commerce<->Finance tax integration (both fallback
+│                        directions) + CreateInvoiceAction's own fallback chain
 ├── Unit/Core/, Unit/MCP/, Feature/Core/, Feature/MCP/, Feature/Demo/, Unit/Demo/   unchanged since Phase 1
-└── 279 tests total, 634 assertions, ~5s runtime (`php artisan test`)
+└── 353 tests total, 792 assertions, ~7s runtime (`php artisan test`)
 ```
 
 ---
@@ -336,10 +396,10 @@ cd packages/opencommerce-sdk; composer install; cd ../..
 
 # Database
 php artisan migrate
-php artisan db:seed   # runs Demo-, Commerce-, and CRMCapabilitiesSeeder
+php artisan db:seed   # runs Demo-, Commerce-, CRM-, and FinanceCapabilitiesSeeder
 
 # Tests
-php artisan test                                                  # full app suite — 314 tests, ~8s
+php artisan test                                                  # full app suite — 353 tests, ~7s
 cd packages/opencommerce-sdk; vendor/bin/phpunit tests; cd ../..   # SDK's own suite (unaffected by Phase 2)
 
 # Manual/live verification
@@ -360,7 +420,7 @@ end to end.
 
 ---
 
-## 6. The 20 MCP capabilities that exist right now
+## 6. The 28 MCP capabilities that exist right now
 
 | Capability | Phase/Stage | Permission | Notes |
 |---|---|---|---|
@@ -373,8 +433,8 @@ end to end.
 | `commerce.customer.create` | P2.4 | `commerce.customers.create` | |
 | `commerce.customer.get` | P2.4 | `commerce.customers.read` | |
 | `commerce.customer.list` | P2.4 | `commerce.customers.read` | |
-| `commerce.checkout.calculate` | P2.5 | `commerce.checkout.read` | Pure preview, no side effects. |
-| `commerce.checkout.process` | P2.5 | `commerce.checkout.create` | The full Cart→Payment→Order flow. |
+| `commerce.checkout.calculate` | P2.5 | `commerce.checkout.read` | Pure preview, no side effects. Optional `region` since P3.2 — real TaxRate lookup via Finance (§7.8). |
+| `commerce.checkout.process` | P2.5 | `commerce.checkout.create` | The full Cart→Payment→Order flow. Optional `region` since P3.2, same as above. |
 | `commerce.payment.refund` | P2.5 | `commerce.payments.refund` | Restores Inventory. |
 | `commerce.coupon.create` | P2.5 | `commerce.coupons.create` | |
 | `commerce.woocommerce.sync` | P2.6 | `commerce.connectors.sync` | Upserts a page of WooCommerce products into the catalog by SKU. |
@@ -384,6 +444,14 @@ end to end.
 | `crm.ticket.list` | P3.1 | `crm.tickets.read` | Optional `status`/`customer_id`. |
 | `crm.comment.create` | P3.1 | `crm.tickets.update` | Renamed from the requested `crm.ticket.comment.add` — 4 segments, see §7.7. |
 | `crm.note.create` | P3.1 | `crm.customers.update` | Renamed from the requested `crm.customer.note.add` — same reason. |
+| `finance.tax.create` | P3.2 | `finance.tax.manage` | `region: "DEFAULT"` registers the tenant's own fallback rate. |
+| `finance.tax.get` | P3.2 | `finance.tax.read` | Looked up by region, not id. |
+| `finance.tax.list` | P3.2 | `finance.tax.read` | Optional `is_active`. |
+| `finance.invoice.create` | P3.2 | `finance.invoices.create` | From an existing Order; optional `region` (2-tier fallback, §7.8 — not the same chain Commerce's own checkout uses). |
+| `finance.invoice.issue` | P3.2 | `finance.invoices.manage` | Draft -> Issued only. |
+| `finance.invoice.get` | P3.2 | `finance.invoices.read` | Tenant-scoped by `findById()`, same shape as `crm.ticket.get`. |
+| `finance.invoice.list` | P3.2 | `finance.invoices.read` | Optional `status`/`customer_id`. |
+| `finance.tax.calculate` | P3.2 | `finance.tax.read` | Strict — an unconfigured region 404s, no fallback (contrast with `finance.invoice.create`'s region handling). |
 
 **Deliberately NOT wired to MCP** despite the underlying Action existing and
 being fully tested (see §8.2 for why, and the same reasoning each time):
@@ -391,8 +459,8 @@ being fully tested (see §8.2 for why, and the same reasoning each time):
 `ClearCartAction`, `CancelOrderAction` (no `commerce.order.cancel`),
 `UpdateOrderStatusAction`, `GetCustomerOrdersAction` (no
 `commerce.customer.orders`), `GetPaymentAction` (no `commerce.payment.get`),
-and CRM's `UpdateTicketAction`, `GetCustomerNotesAction`, `CreateTagAction`,
-`AssignTagToCustomerAction` (§7.7).
+CRM's `UpdateTicketAction`, `GetCustomerNotesAction`, `CreateTagAction`,
+`AssignTagToCustomerAction` (§7.7), and Finance's `UpdateTaxRateAction` (§7.8).
 Every one of these is a one-capability-definition-plus-one-handler-closure
 addition if a future stage actually needs it through MCP — nothing about
 them is unfinished, they were just never asked for at the MCP layer.
@@ -620,16 +688,111 @@ CRM test caught itself making that exact mistake (a bare `1` instead of
 a real registered Agent id) during this stage — see
 `GetCustomerNotesActionTest`'s docblock.
 
+### 7.8 Phase 3, Stage 2 — Finance (per-tenant tax + Invoices)
+
+Entities: `TaxRate` (tenant + `TaxRegion` + `ratePercentage` int,
+percentage×100 — distinct from Commerce's own `ValueObjects\TaxRate`,
+which is a transient 0-100 float calculation input, not a persisted
+per-region row; the shared name is coincidental, the two are never
+interchangeable), `Invoice` (frozen `InvoiceItem[]`, mirrors Order/
+OrderItem's Immutable Order Items shape), `InvoiceItem` (no `id`/
+`invoiceId` property on the Domain Entity, same HANDOFF gotcha #10
+shape OrderItem/Discount/CRM's TicketComment already have, even though
+the `invoice_items` table itself has an `id` primary key like every
+table does). VOs: `InvoiceNumber` (`INV-YYYYMMDD-XXXXX`, mirrors
+OrderNumber's random-suffix-plus-collision-retry generation exactly),
+`InvoiceStatus` (draft/issued/paid/cancelled — only Draft->Issued is
+reachable so far, `IssueInvoiceAction`'s only transition), `TaxRegion`
+(`XX-YYYY` format, e.g. `US-CA`, plus the reserved `DEFAULT` value —
+see below), and Finance's **own** `Money` — a deliberate duplicate of
+Commerce's `Money`, not a shared/reused class. Domain Service:
+`TaxCalculationService` — pure, no Repository dependency, the same
+shape Commerce's `PricingService` has (only knows how to combine
+numbers it's given; never decides *which* TaxRate applies).
+
+**Why Finance has its own `Money` instead of importing Commerce's**:
+depending on Commerce's Repository *Interfaces* is fine (Dependency
+Inversion, per this stage's explicit rule, same as CRM), but importing
+Commerce's concrete `Money` VO would be a direct Domain-layer
+dependency on another module's class — the identical coupling CRM's own
+`CustomerNotFoundException` docblock explains why to avoid. Neither
+Core nor any module hosts a shared kernel for something as small and
+stable as `Money`, so duplicating roughly 40 lines per module was judged
+cheaper than creating one — this is a explicit, considered tradeoff, not
+an oversight.
+
+**`TaxRegion::default()` (the literal string `"DEFAULT"`) is a
+first-class, documented concept**, not a magic string: it's a tenant's
+fallback tax rate when no rate is configured for whatever more specific
+region a caller asks about. `finance.tax.create` with `region: "DEFAULT"`
+registers it like any other region.
+
+**The platform's first *two-way* Module -> Module integration.** Finance
+depends on Commerce's `OrderRepositoryInterface`/`ProductRepositoryInterface`
+to build an Invoice from an Order (`CreateInvoiceAction`) — ordinary
+CRM-style Dependency Inversion, one direction. The new direction:
+Commerce's own checkout pricing now needs a real tax rate from Finance.
+Making that safe without Commerce ever importing `App\Modules\Finance\*`
+required Commerce to define its own outbound port —
+`Commerce\Application\Services\TaxRateProviderInterface` — mirroring
+exactly how `PaymentGatewayInterface` already let Commerce depend on
+"a thing that can charge a card" without knowing which gateway.
+`Commerce\Application\Services\NullTaxRateProvider` is Commerce's own
+default (`CommerceServiceProvider::register()` binds it) — always
+returns null, so Commerce works completely standalone with its old
+hardcoded-9%-fallback behavior if Finance is ever removed.
+`Finance\Infrastructure\Services\CommerceTaxRateProvider` implements
+that same Interface using Finance's own `TaxRateRepositoryInterface`,
+and `FinanceServiceProvider::register()` rebinds the Interface to it —
+this is the *only* class anywhere in Finance that references
+`App\Modules\Commerce\*` at all, and it references only Commerce's
+published Interface, never a Commerce Entity, Model, or Exception.
+This only works because `bootstrap/providers.php` registers
+`FinanceServiceProvider` after `CommerceServiceProvider` — Laravel runs
+every provider's `register()` before any `boot()`, so Finance's rebind
+is guaranteed to win regardless of boot order.
+
+**Two different, deliberately non-unified fallback chains exist** — do
+not try to merge them:
+1. `CommerceTaxRateProvider::getRatePercent()` (used by Commerce's own
+   `CalculatePricingAction`/`ProcessPaymentAction`): try the given
+   region, then `TaxRegion::default()`, then return null — which those
+   two Actions interpret as "use the hardcoded 9%." Never throws.
+2. `CreateInvoiceAction`'s own inline fallback: try the given region,
+   then `TaxRegion::default()`, then charge **zero** tax — no hardcoded
+   percentage, because that 9% constant belongs to Commerce's pricing
+   policy, not Finance's invoicing policy.
+3. `CalculateTaxAction` (backs `finance.tax.calculate`) has no fallback
+   at all — an unconfigured region is `TaxRateNotFoundException` (404),
+   full stop. This is the strict, explicit sibling to the other two's
+   graceful degradation, for a caller that named a specific region and
+   wants a real answer or an explicit failure.
+
+`OrderNotFoundException` (Finance's own, not Commerce's) wasn't in the
+original request — added unprompted for the same reason CRM's
+`TagNotFoundException` was: `CreateInvoiceAction` needs a real 404 for
+an unknown/cross-tenant `order_id`, and it must be Finance's own
+exception type per the module-independence rule above.
+
+**`UpdateTaxRateAction` is the one Finance Action not wired to MCP** this
+stage — region is intentionally not updatable through it (mirrors
+Product's SKU/Category's slug being immutable-after-creation), only
+`ratePercentage`/`isActive`. Exercised directly in
+`tests/Feature/Finance/UpdateTaxRateActionTest.php`.
+
 ---
 
 ## 8. Known technical debt (ranked, carried over + Phase 2 additions)
 
-1. **No per-tenant tax-rate configuration exists.** `CalculatePricingAction`
-   and `ProcessPaymentAction` both hardcode a `9.0`% default
-   (`DEFAULT_TAX_RATE_PERCENT`, duplicated as a plain float constant in
-   both files — can't be a shared `TaxRate` object constant until PHP 8.3).
-   A real implementation needs a `TenantTaxSettings`-shaped entity and a
-   repository lookup replacing that constant in exactly those two places.
+1. ~~**No per-tenant tax-rate configuration exists.**~~ **Resolved in
+   Phase 3.2 (Finance module, §7.8).** `CalculatePricingAction`/
+   `ProcessPaymentAction` still carry the `DEFAULT_TAX_RATE_PERCENT = 9.0`
+   constant, but only as the last-resort fallback when neither a
+   region-specific nor a tenant-default `TaxRate` is configured — real
+   per-tenant configuration now exists via Finance's `TaxRate` entity and
+   `TaxRateProviderInterface`. The constant still can't be a shared
+   `TaxRate` object const until PHP 8.3 (HANDOFF gotcha #6) — that specific
+   sub-issue is unchanged, just no longer the whole story.
 2. **Seven fully-built, fully-tested Actions have no MCP capability wired
    to them** — see the table in §6 for the full list and why. Each is a
    ~10-line addition (one `CommerceCapabilities::definitions()` entry + one
@@ -704,32 +867,51 @@ a real registered Agent id) during this stage — see
     (HANDOFF gotcha #10), inherited by CRM's own child entities. If a
     future feature needs to reference/edit one specific comment or note,
     this is the thing that will need to change.
+18. **Invoice has no PDF/HTML export and no email-delivery concept.** It's
+    a billing *record* (status, amounts, line items) with an MCP surface —
+    nothing renders or sends it anywhere yet.
+19. **No `MarkInvoicePaidAction`/`CancelInvoiceAction` exist.** `InvoiceStatus`
+    models Paid/Cancelled as real states (§7.8), but `Invoice::issue()` is
+    the only transition method that exists — Draft->Issued is as far as
+    any Order in this codebase can currently travel. Payment reconciliation
+    (an Invoice becoming Paid because a Commerce `Payment` succeeded) has
+    no wiring at all yet — a third candidate for the same kind of Interface
+    Commerce's `TaxRateProviderInterface` demonstrates, if that direction
+    is ever wanted.
+20. **`finance.tax.calculate`'s strict behavior and `CommerceTaxRateProvider`'s
+    graceful one are easy to conflate** — see §7.8's "two different,
+    deliberately non-unified fallback chains" note before changing either;
+    they read similarly but intentionally never share code.
+21. **Coverage is unmeasured** for Finance same as everywhere else (§8.11).
 
 ---
 
 ## 9. What's next
 
-Phase 2 is fully complete (all 6 Stages). Phase 3 has begun — CRM
-Foundation (Stage 1) is done. Candidates worth raising with whoever's
-driving scope next, roughly in order of how much they'd reuse what
-already exists:
+Phase 2 is fully complete (all 6 Stages). Phase 3 has two Stages done —
+CRM Foundation and Finance (per-tenant tax + Invoices). Candidates worth
+raising with whoever's driving scope next, roughly in order of how much
+they'd reuse what already exists:
 
-- **Phase 3's next module** — Finance or AI Workflows per the project
-  vision, or a second CRM stage (Ticket assignment, Tag removal, a
-  `crm.tag.*` MCP surface — §8.15/§8.16) if CRM isn't considered done yet.
-  CRM Foundation is the first proof that the Module -> Module dependency
-  direction (§7.7) works, not just Core -> Module — a template for
-  whichever module needs to reference Commerce or CRM data next.
+- **Phase 3's next module** — AI Workflows per the project vision, or
+  more Finance (payment reconciliation to auto-mark Invoices Paid,
+  PDF/email export — §8.18/§8.19), or a second CRM stage (Ticket
+  assignment, Tag removal, a `crm.tag.*` MCP surface — §8.15/§8.16).
+  Finance is the first proof that the Module -> Module dependency
+  direction runs *both* ways safely (§7.8) — a template for whichever
+  module needs its own two-way integration next (an Interface the
+  depended-upon module owns, never a direct class import either way).
 - **A second real Connector** (Shopify) — `ProductConnectorInterface` and
   the WooCommerce implementation (§7.6) are now a template to follow;
   `ConnectorRegistry` already supports registering more than one by name.
-- **Wire the 11 un-wired capabilities from §6** (7 from Commerce Stages
-  1–5, 4 from CRM) if any Agent workflow actually needs cart-removal,
-  order-cancellation, payment lookup, ticket-updating, or tag management
-  through MCP — cheapest possible next increment each.
-- **Real per-tenant tax configuration** (§8.1) and **per-tenant connector
-  credentials** (§8.14) — the two most obviously "fake"/single-tenant
-  pieces of what's been built so far.
+- **Wire the 12 un-wired capabilities from §6** (7 from Commerce Stages
+  1–5, 4 from CRM, 1 from Finance) if any Agent workflow actually needs
+  cart-removal, order-cancellation, payment lookup, ticket-updating, tag
+  management, or tax-rate updates through MCP — cheapest possible next
+  increment each.
+- **Per-tenant connector credentials** (§8.14) — now the most obviously
+  "fake"/single-tenant piece remaining (per-tenant tax, §8.1's original
+  concern, is resolved as of this Stage).
 - **Order/Customer/Inventory sync out to WooCommerce** (§8.13) —
   `OrderConnectorInterface` still has no implementation.
 - **Shipping** — no shipping cost, address-to-carrier, or fulfillment
@@ -737,7 +919,7 @@ already exists:
   today, not on an Order.
 - **A dedicated `capabilities:sync` artisan command**, graduating away from
   the seeder pattern — flagged as an open decision since Phase 1, still
-  open, now with 20 capabilities across three seeders instead of 3.
+  open, now with 28 capabilities across four seeders instead of 3.
 
 Whatever comes next, follow §3's patterns and check §8 before assuming a
 piece of the puzzle doesn't already exist.

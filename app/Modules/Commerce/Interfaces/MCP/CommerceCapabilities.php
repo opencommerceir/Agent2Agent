@@ -98,7 +98,12 @@ final class CommerceCapabilities
                 'name' => 'commerce.checkout.calculate',
                 'description' => 'Preview the pricing for a cart, optionally with a coupon, without charging anything',
                 // coupon_code is optional — same reasoning as
-                // commerce.order.place's notes field.
+                // commerce.order.place's notes field. region is optional
+                // too (Phase 3.2, Finance module) — a TaxRegion string
+                // (e.g. "US-CA") to look up a real configured TaxRate
+                // through TaxRateProviderInterface; omitted, it falls
+                // back to the tenant's TaxRegion::default() row, and
+                // failing that, Commerce's own hardcoded 9%.
                 'inputSchema' => ['cart_id' => 'integer'],
                 'outputSchema' => ['pricing' => 'array'],
                 'requiredPermissions' => ['commerce.checkout.read'],
@@ -106,9 +111,11 @@ final class CommerceCapabilities
             [
                 'name' => 'commerce.checkout.process',
                 'description' => 'Charge payment for a cart and place the resulting Order',
-                // coupon_code is optional; payment_details is an
-                // arbitrary object whose shape depends on payment_method,
-                // so it is intentionally left untyped/unvalidated here.
+                // coupon_code and region are optional (region: same
+                // reasoning as commerce.checkout.calculate's); payment_details
+                // is an arbitrary object whose shape depends on
+                // payment_method, so it is intentionally left
+                // untyped/unvalidated here.
                 'inputSchema' => ['cart_id' => 'integer', 'payment_method' => 'string'],
                 'outputSchema' => ['order' => 'array', 'payment' => 'array'],
                 'requiredPermissions' => ['commerce.checkout.create'],

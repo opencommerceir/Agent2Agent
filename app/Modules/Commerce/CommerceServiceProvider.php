@@ -29,7 +29,9 @@ use App\Modules\Commerce\Application\DTOs\PaymentData;
 use App\Modules\Commerce\Application\DTOs\PricingData;
 use App\Modules\Commerce\Application\Services\ConnectorRegistry;
 use App\Modules\Commerce\Application\Services\MockPaymentGateway;
+use App\Modules\Commerce\Application\Services\NullTaxRateProvider;
 use App\Modules\Commerce\Application\Services\PaymentGatewayInterface;
+use App\Modules\Commerce\Application\Services\TaxRateProviderInterface;
 use App\Modules\Commerce\Application\Services\WooCommerceClient;
 use App\Modules\Commerce\Application\Services\WooCommerceClientInterface;
 use App\Modules\Commerce\Application\Services\WooCommerceConfig;
@@ -96,6 +98,11 @@ class CommerceServiceProvider extends ServiceProvider
             WooCommerceClientInterface::class,
             fn () => new WooCommerceClient(WooCommerceConfig::fromConfig()),
         );
+
+        // Overridden by FinanceServiceProvider (which registers after this
+        // one in bootstrap/providers.php) when the Finance module is
+        // loaded — see NullTaxRateProvider's own docblock.
+        $this->app->bind(TaxRateProviderInterface::class, NullTaxRateProvider::class);
     }
 
     public function boot(): void
@@ -192,6 +199,7 @@ class CommerceServiceProvider extends ServiceProvider
                 agentId: $context->agentId,
                 cartId: (int) $input['cart_id'],
                 couponCode: $input['coupon_code'] ?? null,
+                region: $input['region'] ?? null,
             );
 
             return ['pricing' => $pricing->toArray()];
@@ -208,6 +216,7 @@ class CommerceServiceProvider extends ServiceProvider
                 couponCode: $input['coupon_code'] ?? null,
                 notes: $input['notes'] ?? null,
                 customerId: isset($input['customer_id']) ? (int) $input['customer_id'] : null,
+                region: $input['region'] ?? null,
             );
 
             return ['order' => $result['order']->toArray(), 'payment' => $result['payment']->toArray()];
