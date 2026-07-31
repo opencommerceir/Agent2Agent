@@ -3,19 +3,24 @@
 **Status: Phase 1 (Core + MCP Gateway) and Phase 2 (Commerce, all 6
 Stages) are complete. Phase 3 (Domain Expansion) is under way: Stage 1
 (CRM Foundation), Stage 2 (Finance — per-tenant tax rates, Invoices),
-Stage 3 (Workflows — event-driven automation), and Stage 4 (Loyalty
-Program — points, Rewards, Redemptions) are all complete. Finance
-supplies Commerce's own checkout pricing with real tax rates through an
-Interface Commerce itself owns (§7.8) — the tax-rate tech debt flagged
-since Phase 2 §8.1 is resolved. Workflows introduces the platform's first
-real cross-module Domain Event Listener (§7.9) and the "Low Stock Alert"
-automation end to end: Commerce places an Order, stock drops below a
-tenant-configured threshold, and a Workflow reacts — no polling, no
-manual trigger required. Loyalty adds the platform's *second* real
+Stage 3 (Workflows — event-driven automation), Stage 4 (Loyalty Program
+— points, Rewards, Redemptions), and Stage 5 (Reporting — read-only
+analytics across Commerce/Loyalty) are all complete. Finance supplies
+Commerce's own checkout pricing with real tax rates through an Interface
+Commerce itself owns (§7.8) — the tax-rate tech debt flagged since Phase
+2 §8.1 is resolved. Workflows introduces the platform's first real
+cross-module Domain Event Listener (§7.9) and the "Low Stock Alert"
+automation end to end. Loyalty adds the platform's *second* real
 cross-module Domain Event Listener (§7.10): every placed Order with a
 Customer automatically earns that Customer 1 point per dollar, no MCP
-call required, and Customers can then redeem points for Rewards. 415
-tests passing, zero known regressions. Next up: wiring
+call required, and Customers can then redeem points for Rewards.
+Reporting is the platform's first read-only module (§7.11) — Sales, Top
+Products, Top Customers, Revenue, and Loyalty reports, computed via
+SQL-level aggregates (not PHP loops), and the first, deliberate,
+documented exception to the Module -> Module "depend on an Interface,
+never a Model" rule (a CQRS-style Read Model querying Commerce's/
+Loyalty's Eloquent Models directly — see SalesQueryBuilder's own
+docblock). 434 tests passing, zero known regressions. Next up: wiring
 CartAbandoned/HighValueOrder (both scaffolded, neither wired — §7.9), a
 scheduling mechanism to unlock both that and real point expiration
 (§7.10/§8.23), another Phase 3 module, or any deferred item in §8/§9.**
@@ -142,6 +147,24 @@ pattern CRM/Finance/Workflows already established, and reacts to
 Commerce's existing `OrderWasPlaced` event without requiring any change
 to Commerce at all — unlike Workflows' Stage, no new Commerce event was
 needed this time (`OrderWasPlaced` already carried everything).
+
+### `app/Modules/Reporting/` — **new in Phase 3. Read-only analytics — Phase 3, Stage 5, and the first deliberate, documented exception to the Module -> Module Repository Interface rule.**
+
+See §7.11 for the full detail. 2 Domain Entities (`Report`, `ReportResult`),
+3 Value Objects (`ReportType`, `DateRange`, `ReportFilter`), 5 pure
+Domain Services (one Generator per report type), 2 exceptions, 1
+Repository interface (owns `ReportResult` persistence too), 7
+Application Actions (5 wired to MCP — see §6), 6 DTOs, 2 Eloquent
+models, 1 Eloquent repository, 5 **Query Builders**
+(`Infrastructure/Queries/*`) that query Commerce's/Loyalty's Eloquent
+Models *directly* — not through their Repository Interfaces — for
+SUM/COUNT/GROUP BY aggregate performance. This is a real, considered
+architectural trade-off, not an oversight: see `SalesQueryBuilder`'s own
+docblock for the full reasoning, and why it's safe (Reporting never
+writes to another module's table). Every *entity detail* lookup
+(a product's name, a customer's full name) still goes through the
+proper Repository Interface, exactly as CRM/Finance/Workflows/Loyalty
+already established — only the aggregate math itself bypasses it.
 
 ### `app/Modules/Demo/` — unchanged since Phase 1
 
@@ -320,6 +343,53 @@ app/Modules/Loyalty/               new in Phase 3
                                    Event::listen()s OrderPlacedListener +
                                    registers 8 capability handlers (see §6)
 
+app/Modules/Reporting/             new in Phase 3
+├── Domain/
+│   ├── Entities/                 Report (saved definition), ReportResult
+│   │                             (computed output, owned by
+│   │                              ReportRepositoryInterface — same
+│   │                              "repo owns its child records" shape
+│   │                              Workflows'/Loyalty's own repos have)
+│   ├── ValueObjects/             ReportType, DateRange (start/end-of-day
+│   │                             normalized, validates ordering),
+│   │                             ReportFilter (thin array wrapper)
+│   ├── Services/                 SalesReportGenerator, TopProductsReportGenerator,
+│   │                             TopCustomersReportGenerator, RevenueReportGenerator,
+│   │                             LoyaltyReportGenerator (all pure,
+│   │                              framework-free — see §7.11)
+│   ├── Repositories/              ReportRepositoryInterface (Reporting's
+│   │                              own 2 tables only — NOT what the
+│   │                              Generate* Actions use to read
+│   │                              Commerce/Loyalty data, see below)
+│   └── Exceptions/                ReportNotFoundException, InvalidDateRangeException
+├── Application/
+│   ├── Actions/                  7 Actions — 5 wired to MCP (§6/§7.11);
+│   │                              GetReportAction/ListReportsAction are
+│   │                              the two un-wired ones
+│   └── DTOs/                     ReportData (saved-Report wrapper) +
+│                                  SalesReportData, TopProductsReportData,
+│                                  TopCustomersReportData, RevenueReportData,
+│                                  LoyaltyReportData (one per report type)
+├── Infrastructure/
+│   ├── Models/                    Report, ReportResult (2 Eloquent models)
+│   ├── Repositories/               EloquentReportRepository (1)
+│   └── Queries/                  **SalesQueryBuilder, TopProductsQueryBuilder,
+│                                  TopCustomersQueryBuilder, RevenueQueryBuilder,
+│                                  LoyaltyQueryBuilder** — query Commerce's/
+│                                  Loyalty's Eloquent Models directly (the
+│                                  one deliberate exception to the usual
+│                                  Module -> Module Interface rule, §7.11).
+│                                  Not behind an Interface, not bound in
+│                                  the ServiceProvider — plain,
+│                                  container-autowired concrete classes,
+│                                  since there's exactly one way to
+│                                  compute a SQL aggregate against
+│                                  another module's current schema.
+└── ReportingServiceProvider.php  binds 1 Repository interface + registers
+                                   5 capability handlers (see §6) — no
+                                   Event::listen() at all (this module
+                                   reacts to nothing, it only reads)
+
 app/Modules/Demo/                  unchanged since Phase 1
 
 packages/opencommerce-sdk/         unchanged since Phase 1
@@ -342,9 +412,10 @@ database/
 │   ├── 2026_07_31_000026-000028                  (Phase 3.2 — tax_rates, invoices, invoice_items)
 │   ├── 2026_07_31_000029-000032                  (Phase 3.3 — workflows, workflow_rules,
 │   │                                               workflow_actions, workflow_logs)
-│   └── 2026_07_31_000033-000036                  (Phase 3.4 — loyalty_accounts, point_transactions,
-│                                                   rewards, redemptions)
-└── seeders/{DemoCapabilitiesSeeder,CommerceCapabilitiesSeeder,CRMCapabilitiesSeeder,FinanceCapabilitiesSeeder,WorkflowsCapabilitiesSeeder,LoyaltyCapabilitiesSeeder}.php
+│   ├── 2026_07_31_000033-000036                  (Phase 3.4 — loyalty_accounts, point_transactions,
+│   │                                               rewards, redemptions)
+│   └── 2026_07_31_000037-000038                  (Phase 3.5 — reports, report_results)
+└── seeders/{DemoCapabilitiesSeeder,CommerceCapabilitiesSeeder,CRMCapabilitiesSeeder,FinanceCapabilitiesSeeder,WorkflowsCapabilitiesSeeder,LoyaltyCapabilitiesSeeder,ReportingCapabilitiesSeeder}.php
 
 tests/
 ├── Fixtures/            woocommerce-products-response.json (Stage 6 — reference payload)
@@ -374,8 +445,20 @@ tests/
 │                        insufficient-points/tenant isolation +
 │                        ExpirePointsAction (the one un-wired Action)
 │                        exercised directly with simulated past-due expiry
+├── Unit/Reporting/      6 files — DateRange, ReportFilter, and one test
+│                        per Generator (SalesReportGenerator,
+│                        TopProductsReportGenerator, RevenueReportGenerator,
+│                        LoyaltyReportGenerator), all framework-free PHPUnit
+├── Feature/Reporting/   1 file — 5 Customers, 10 Products, 20 real paid
+│                        Orders (real Payments, real tax, real Loyalty
+│                        points via OrderPlacedListener, no faking), all
+│                        5 Generate* capabilities checked against
+│                        independently-accumulated expected totals (not
+│                        report-side math re-derived in the test) +
+│                        tenant isolation on GetReportAction (exercised
+│                        directly, not wired to MCP) + invalid date range
 ├── Unit/Core/, Unit/MCP/, Feature/Core/, Feature/MCP/, Feature/Demo/, Unit/Demo/   unchanged since Phase 1
-└── 415 tests total, 926 assertions, ~7s runtime (`php artisan test`)
+└── 434 tests total, 989 assertions, ~7s runtime (`php artisan test`)
 ```
 
 ---
@@ -585,10 +668,10 @@ cd packages/opencommerce-sdk; composer install; cd ../..
 
 # Database
 php artisan migrate
-php artisan db:seed   # runs Demo-, Commerce-, CRM-, Finance-, Workflows-, and LoyaltyCapabilitiesSeeder
+php artisan db:seed   # runs Demo-, Commerce-, CRM-, Finance-, Workflows-, Loyalty-, and ReportingCapabilitiesSeeder
 
 # Tests
-php artisan test                                                  # full app suite — 415 tests, ~7s
+php artisan test                                                  # full app suite — 434 tests, ~7s
 cd packages/opencommerce-sdk; vendor/bin/phpunit tests; cd ../..   # SDK's own suite (unaffected by Phase 2)
 
 # Manual/live verification
@@ -609,7 +692,7 @@ end to end.
 
 ---
 
-## 6. The 41 MCP capabilities that exist right now
+## 6. The 46 MCP capabilities that exist right now
 
 | Capability | Phase/Stage | Permission | Notes |
 |---|---|---|---|
@@ -654,6 +737,11 @@ end to end.
 | `loyalty.reward.get` | P3.4 | `loyalty.rewards.read` | |
 | `loyalty.reward.list` | P3.4 | `loyalty.rewards.read` | Optional `is_active`. |
 | `loyalty.transaction.list` | P3.4 | `loyalty.transactions.read` | By `customer_id`, not `loyalty_account_id`. Optional `limit`. |
+| `report.sales.generate` | P3.5 | `reporting.sales.read` | `salesByDay` keyed by `Y-m-d`. Excludes Cancelled/Refunded orders. |
+| `report.products.top` | P3.5 | `reporting.products.read` | Optional `limit` (default 10). Ranked by quantity sold, fully in SQL. |
+| `report.customers.top` | P3.5 | `reporting.customers.read` | Optional `limit` (default 10). Ranked by total spent, fully in SQL. |
+| `report.revenue.generate` | P3.5 | `reporting.revenue.read` | Only counts Orders with ≥1 `completed` Payment. `netRevenue` excludes tax (§7.11). |
+| `report.loyalty.generate` | P3.5 | `reporting.loyalty.read` | `activeAccounts` is a current-balance snapshot, not date-range-scoped (§7.11). |
 
 **Deliberately NOT wired to MCP** despite the underlying Action existing and
 being fully tested (see §8.2 for why, and the same reasoning each time):
@@ -663,9 +751,11 @@ being fully tested (see §8.2 for why, and the same reasoning each time):
 `commerce.customer.orders`), `GetPaymentAction` (no `commerce.payment.get`),
 CRM's `UpdateTicketAction`, `GetCustomerNotesAction`, `CreateTagAction`,
 `AssignTagToCustomerAction` (§7.7), Finance's `UpdateTaxRateAction` (§7.8),
-Workflows' `UpdateWorkflowAction` (§7.9), and Loyalty's `ExpirePointsAction`
+Workflows' `UpdateWorkflowAction` (§7.9), Loyalty's `ExpirePointsAction`
 (§7.10 — the actual blocker is the same "no scheduler exists" gap
-CartAbandonedListener has, HANDOFF §8.23).
+CartAbandonedListener has, HANDOFF §8.23), and Reporting's `GetReportAction`/
+`ListReportsAction` (§7.11 — no `report.definition.get/list` capability
+was requested this stage).
 Every one of these is a one-capability-definition-plus-one-handler-closure
 addition if a future stage actually needs it through MCP — nothing about
 them is unfinished, they were just never asked for at the MCP layer.
@@ -1182,6 +1272,103 @@ requested permissions were already exactly 3 dot-separated segments,
 unlike WooCommerce/CRM/Workflows (HANDOFF gotcha #2) — the first stage
 where this didn't come up.
 
+### 7.11 Phase 3, Stage 5 — Reporting (read-only analytics)
+
+Entities: `Report` (the saved *definition* of a report run — type, date
+range, filters, which Agent ran it; immutable, no update method),
+`ReportResult` (the computed numbers from one run, kept separate so a
+Report can be re-run without overwriting its history — same "parent
+definition, child result" split Workflows' `Workflow`/`WorkflowLog`
+already establish). VOs: `ReportType` (sales/top_products/top_customers/
+revenue/loyalty), `DateRange` (validates `end >= start` at construction,
+normalizes to start-of-day/end-of-day so an inclusive whole-day range
+never silently drops that last day's data), `ReportFilter` (a thin,
+typed array wrapper for per-report-type extras like `limit`). Domain
+Services: one Generator per report type
+(`SalesReportGenerator`/`TopProductsReportGenerator`/
+`TopCustomersReportGenerator`/`RevenueReportGenerator`/
+`LoyaltyReportGenerator`) — pure, framework-free, the same shape
+Commerce's `PricingService`/Loyalty's `PointsCalculationService` already
+establish: each one only combines numbers/rows a Query Builder already
+aggregated in SQL, never re-sums raw rows in a PHP loop itself.
+
+**The platform's first genuinely read-only module.** Every prior Phase 3
+module wrote its own data (CRM/Finance/Workflows/Loyalty all persist
+their own aggregates) in addition to reading others'. Reporting only
+ever writes its own `reports`/`report_results` rows (the saved record of
+having run a report) — it never mutates Commerce, Loyalty, or anything
+else.
+
+**The platform's first deliberate, documented exception to "Module ->
+Module depends on a Repository Interface, never a Model"** (HANDOFF §3
+item 8). The five `Infrastructure/Queries/*` Query Builders
+(`SalesQueryBuilder`, `TopProductsQueryBuilder`, `TopCustomersQueryBuilder`,
+`RevenueQueryBuilder`, `LoyaltyQueryBuilder`) query Commerce's
+(`Order`/`OrderItem`/`Payment`) and Loyalty's (`LoyaltyAccount`/
+`PointTransaction`) Eloquent Models *directly* — see `SalesQueryBuilder`'s
+own docblock for the complete reasoning, condensed here: computing a
+SUM/COUNT/GROUP BY aggregate through `OrderRepositoryInterface::listByTenant()`
+would mean fetching every matching Order as a full Domain Entity and
+summing in a PHP loop — exactly the anti-pattern rule §e ("از Eloquent
+aggregates استفاده کن, نه loop در PHP") forbids — and extending that
+Interface with five report-shaped aggregate methods would leak
+Reporting's query needs into a write-side Domain contract Commerce
+itself doesn't need. This is safe specifically because every Query
+Builder is SELECT-only (standard CQRS "Read Model" territory — a
+read-only projection may cut across aggregate boundaries a write
+operation never could) and the coupling is explicit and contained to
+exactly 5 classes: if Commerce's/Loyalty's schema changes, these are the
+only files that need to change. Crucially, this exception is scoped
+*only* to bulk aggregation — every single-entity detail lookup in this
+module (a Product's name for Top Products, a Customer's full name for
+Top Customers/Loyalty) still goes through the proper
+`ProductRepositoryInterface`/`CustomerRepositoryInterface`, exactly like
+every prior module. Query Builders are plain, container-autowired
+concrete classes with no Interface and no ServiceProvider binding
+(`ReportingServiceProvider`'s own docblock) — there's exactly one way to
+run a SQL aggregate against another module's current schema, so an
+Interface+Implementation split would be pure ceremony.
+
+**Bounded per-row Repository lookups, not a new batch method.** Both
+`GenerateTopProductsReportAction` and `GenerateTopCustomersReportAction`
+(and `GenerateLoyaltyReportAction` for its `topEarners`) call
+`findById()` once per already-ranked-and-limited row (≤ `limit`, default
+10) to resolve a display name — the same "small, bounded per-item
+lookup, not a batch method added to another module's Interface"
+precedent Finance's `CreateInvoiceAction` already established for
+resolving an OrderItem's Product name.
+
+**`net_revenue` deliberately excludes tax.** `RevenueReportGenerator`'s
+formula is `net_revenue = gross_revenue - discounts_applied` — tax is
+money collected on behalf of a tax authority, not revenue the business
+keeps or loses, so it's reported alongside gross/net but never netted
+against either. `RevenueQueryBuilder` also only counts an Order toward
+revenue if it has at least one `completed` Payment (rule §e.4) — an
+Order placed but never actually paid contributed no real revenue — using
+`whereExists` rather than a JOIN specifically to avoid double-counting
+an Order's amounts if it somehow has more than one `completed` Payment
+row.
+
+**`loyalty` report's `active_accounts` is a current-balance snapshot,
+not date-range-scoped** — "how many accounts currently hold a positive
+balance" rather than "how many had any transaction in this window". A
+deliberate choice (`LoyaltyQueryBuilder`'s own docblock): an account's
+overall activity naturally spans beyond any one report's window,
+documented explicitly so a future report wanting the date-scoped
+definition instead doesn't silently assume this one already means that.
+
+**`GetReportAction`/`ListReportsAction` aren't wired to MCP this
+stage** — no `report.definition.get`/`.list` capability was among the 5
+requested (only the 5 Generate* ones were). Both exercised directly in
+`tests/Feature/Reporting/ReportingCapabilityTest.php`, the same "built,
+tested, not yet exposed to Agents" gap every prior module has carried at
+least one of (§6).
+
+**Capability and permission names needed no renaming this stage** — all
+5 requested capability names and all 5 requested permissions were
+already exactly 3 dot-separated segments, the second stage in a row
+(after Loyalty) where this didn't come up.
+
 ---
 
 ## 8. Known technical debt (ranked, carried over + Phase 2 additions)
@@ -1336,16 +1523,39 @@ where this didn't come up.
     values yet, the same "modeled but not all reachable" gap
     `RewardType::FreeProduct`/`FreeShipping` and Workflows'
     `EventType::CartAbandoned`/`OrderHighValue` already have.
+30. **Reporting's Query Builders are coupled to Commerce's/Loyalty's
+    current column names** (§7.11) — a deliberate, documented,
+    accepted exception to the usual Repository Interface boundary, not
+    an oversight, but it does mean a future rename of e.g.
+    `orders.total_amount` or `point_transactions.transaction_type` needs
+    to touch Reporting too, something no other module's own schema
+    changes have ever required of a *different* module before.
+31. **No caching is actually implemented for ReportResult**, even though
+    `expires_at` exists on the table and rule §d.4 calls out caching as
+    a possibility — every `Generate*ReportAction` call always
+    recomputes from scratch and writes a brand new `ReportResult` row;
+    nothing reads a still-fresh prior result instead. `expires_at` is
+    schema-ready, not yet wired to any actual short-circuit logic.
+32. **No `report.definition.get`/`.list` MCP surface** — `GetReportAction`/
+    `ListReportsAction` exist and are tested but aren't reachable by an
+    Agent yet (§7.11), so a saved Report's history can only be inspected
+    by re-running the same report, not by listing/retrieving past runs.
+33. **Reporting has no Shipping/Inventory-turnover/Customer-lifetime-value
+    report yet** — only the 5 requested types exist; `Product`'s
+    Category (Stage 1) and `Inventory`'s current stock levels (Stage 2)
+    are both untouched by any report so far, a natural next report type
+    if inventory/catalog analytics are ever wanted.
 
 ---
 
 ## 9. What's next
 
-Phase 2 is fully complete (all 6 Stages). Phase 3 has four Stages done —
+Phase 2 is fully complete (all 6 Stages). Phase 3 has five Stages done —
 CRM Foundation, Finance (per-tenant tax + Invoices), Workflows
-(event-driven automation), and Loyalty (points, Rewards, Redemptions).
-Candidates worth raising with whoever's driving scope next, roughly in
-order of how much they'd reuse what already exists:
+(event-driven automation), Loyalty (points, Rewards, Redemptions), and
+Reporting (read-only analytics). Candidates worth raising with whoever's
+driving scope next, roughly in order of how much they'd reuse what
+already exists:
 
 - **A scheduling mechanism** (§8.23/§8.27) — now unlocks *two* things at
   once: `CartAbandonedListener` (Workflows) and running
@@ -1376,12 +1586,15 @@ order of how much they'd reuse what already exists:
 - **A second real Connector** (Shopify) — `ProductConnectorInterface` and
   the WooCommerce implementation (§7.6) are now a template to follow;
   `ConnectorRegistry` already supports registering more than one by name.
-- **Wire the 14 un-wired capabilities from §6** (7 from Commerce Stages
-  1–5, 4 from CRM, 1 from Finance, 1 from Workflows, 1 from Loyalty) if
-  any Agent workflow actually needs cart-removal, order-cancellation,
-  payment lookup, ticket-updating, tag management, tax-rate updates,
-  workflow-updating, or points-expiration through MCP — cheapest
-  possible next increment each.
+- **Wire the 16 un-wired capabilities from §6** (7 from Commerce Stages
+  1–5, 4 from CRM, 1 from Finance, 1 from Workflows, 1 from Loyalty, 2
+  from Reporting) if any Agent workflow actually needs cart-removal,
+  order-cancellation, payment lookup, ticket-updating, tag management,
+  tax-rate updates, workflow-updating, points-expiration, or saved-report
+  retrieval through MCP — cheapest possible next increment each.
+- **Wire actual caching for ReportResult** (§8.31) — `expires_at`
+  already exists on the schema; a `Generate*ReportAction` could check
+  for a still-fresh prior result before recomputing.
 - **Per-tenant connector credentials** (§8.14) — the most obviously
   "fake"/single-tenant piece remaining (per-tenant tax, §8.1's original
   concern, is resolved as of Phase 3.2).
