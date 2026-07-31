@@ -1,12 +1,13 @@
 # OpenCommerce Platform — Session Handoff
 
-**Status: Phase 1 (Core + MCP Gateway) is complete. Phase 2 (Commerce) is
-now fully complete — all 6 Stages: Product & Category, Cart & Inventory,
-Order Management, Customer Management, Checkout & Payment, and Real
-Connectors (WooCommerce). 279 tests passing, zero known regressions. Next
-up: Phase 3 (CRM, Finance, AI Workflows), or any of the deferred items in
-§8/§9 (a real Shopify Connector, per-tenant tax config, wiring the
-remaining un-exposed Actions) if Phase 2 needs more polish first.**
+**Status: Phase 1 (Core + MCP Gateway) and Phase 2 (Commerce, all 6
+Stages) are complete. Phase 3 (Domain Expansion) has begun — Stage 1,
+CRM Foundation (Tickets, Ticket Comments, Customer Notes, Tags), is
+complete. 314 tests passing, zero known regressions. Next up: whatever
+Phase 3's next module turns out to be (Finance? AI Workflows?), or any
+deferred item in §8/§9 (a real Shopify Connector, per-tenant tax config,
+wiring CRM's remaining un-exposed Actions) if more polish is wanted
+first.**
 
 This file is a working-state snapshot for picking up development in a new
 session. It assumes you've already read `CLAUDE.md` and `docs/*.md` (the
@@ -48,7 +49,7 @@ added so Domain Modules can opt an exception into the MCP error envelope
 See §7 for the full stage-by-stage breakdown (what was built, in what order,
 and why). At a glance, the module now has 9 Domain Entities, ~28 Value
 Objects/enums, 3 Domain Services, ~32 Application Actions, 9 Eloquent
-Repositories, and 20 numbered migrations, backing 18 MCP capabilities.
+Repositories, and 20 numbered migrations, backing 15 MCP capabilities.
 
 `Domain/UCP/*` (the 6 normalized value objects for *external* connector
 data — never persisted, never touched by any Stage 1–5 work) is unchanged
@@ -60,6 +61,20 @@ implementation backed by a real Guzzle HTTP client
 configured out of the box (same "needs live credentials to test honestly"
 reasoning HANDOFF has always given) — `MockWooCommerceHttpClient`
 (Infrastructure/Http) stands in for one in every test.
+
+### `app/Modules/CRM/` — **new in Phase 3. Support Tickets, Ticket Comments, Customer Notes, and Tags — Phase 3's first Domain Module, built on Phase 1/2's infrastructure without changing either.**
+
+See §7.7 for the full detail. 4 Domain Entities (`Ticket`, `TicketComment`,
+`CustomerNote`, `Tag`), 3 Value Objects (`TicketStatus`, `TicketPriority`,
+`TagName`), 4 domain events, 4 exceptions, 3 Repository interfaces, 9
+Application Actions (only 5 wired to MCP — see §6), 4 Eloquent models, 3
+Eloquent repositories, 5 migrations. Demonstrates the Module -> Module
+dependency direction CLAUDE.md's "Infrastructure First" philosophy
+implies but Phase 2 never had occasion to exercise: CRM depends on
+Commerce's `CustomerRepositoryInterface` (a Domain-layer Interface) to
+validate a `customer_id` exists, and never imports Commerce's
+Infrastructure/Model classes or even Commerce's own exception types (see
+CRM's own `CustomerNotFoundException` docblock).
 
 ### `app/Modules/Demo/` — unchanged since Phase 1
 
@@ -124,7 +139,31 @@ app/Modules/Commerce/
 │   ├── Models/                    9 Eloquent models, one per aggregate
 │   └── Repositories/               9 Eloquent repository implementations
 └── CommerceServiceProvider.php    binds every Repository interface + registers
-                                   18 capability handlers (see §6 for the full list)
+                                   15 capability handlers (see §6 for the full list)
+
+app/Modules/CRM/                  new in Phase 3
+├── Domain/
+│   ├── Entities/                 Ticket, TicketComment, CustomerNote, Tag
+│   ├── ValueObjects/             TicketStatus, TicketPriority, TagName
+│   ├── Events/                   TicketWasCreated, TicketWasUpdated,
+│   │                             CommentWasAddedToTicket, NoteWasAddedToCustomer
+│   ├── Repositories/              TicketRepositoryInterface (owns TicketComment
+│   │                              persistence too), CustomerNoteRepositoryInterface,
+│   │                              TagRepositoryInterface (owns the customer_tag pivot too)
+│   └── Exceptions/                TicketNotFoundException, CustomerNotFoundException
+│                                  (CRM's own, not Commerce's — see §7.7),
+│                                  InvalidTicketStatusException, TagNotFoundException
+│                                  (added unprompted, same reasoning Discount's
+│                                  Repository was in Stage 5)
+├── Application/
+│   ├── Actions/                  9 Actions — only 5 wired to MCP (§6/§7.7)
+│   └── DTOs/                     TicketData, TicketCommentData, CustomerNoteData, TagData
+├── Infrastructure/
+│   ├── Models/                    4 Eloquent models — Tag has no belongsToMany to
+│   │                              Commerce's Customer Model (§7.7)
+│   └── Repositories/               3 Eloquent repository implementations
+└── CRMServiceProvider.php        binds 3 Repository interfaces + registers
+                                   5 capability handlers (see §6)
 
 app/Modules/Demo/                  unchanged since Phase 1
 
@@ -140,15 +179,21 @@ database/
 │   ├── 2026_07_30_000010-000012                  (Stage 2 — carts, cart_items, inventories)
 │   ├── 2026_07_30_000013-000014                  (Stage 3 — orders, order_items)
 │   ├── 2026_07_30_000015-000016                  (Stage 4 — customers, +orders.customer_id)
-│   └── 2026_07_31_000017-000020                  (Stage 5 — payments, coupons, discounts, +orders pricing cols)
-│                                  (Stage 6 added no migrations — WooCommerce products
-│                                   are stored in the existing `products` table, keyed by SKU)
-└── seeders/{DemoCapabilitiesSeeder,CommerceCapabilitiesSeeder}.php
+│   ├── 2026_07_31_000017-000020                  (Stage 5 — payments, coupons, discounts, +orders pricing cols)
+│   │                                  (Stage 6 added no migrations — WooCommerce products
+│   │                                   are stored in the existing `products` table, keyed by SKU)
+│   └── 2026_07_31_000021-000025                  (Phase 3.1 — tickets, ticket_comments,
+│                                                   customer_notes, tags, customer_tag pivot)
+└── seeders/{DemoCapabilitiesSeeder,CommerceCapabilitiesSeeder,CRMCapabilitiesSeeder}.php
 
 tests/
 ├── Fixtures/            woocommerce-products-response.json (Stage 6 — reference payload)
 ├── Unit/Commerce/       ~32 files — VOs, Entities, Domain Services, all framework-free PHPUnit
 ├── Feature/Commerce/    ~27 files — Actions against real sqlite :memory: DB, MCP HTTP end-to-end
+├── Unit/CRM/            5 files — Ticket (incl. state machine), TicketComment,
+│                        CustomerNote, Tag, TagName, all framework-free PHPUnit
+├── Feature/CRM/         4 files — full MCP scenario + tenant isolation +
+│                        the 4 un-wired Actions exercised directly
 ├── Unit/Core/, Unit/MCP/, Feature/Core/, Feature/MCP/, Feature/Demo/, Unit/Demo/   unchanged since Phase 1
 └── 279 tests total, 634 assertions, ~5s runtime (`php artisan test`)
 ```
@@ -291,10 +336,10 @@ cd packages/opencommerce-sdk; composer install; cd ../..
 
 # Database
 php artisan migrate
-php artisan db:seed   # runs both DemoCapabilitiesSeeder and CommerceCapabilitiesSeeder
+php artisan db:seed   # runs Demo-, Commerce-, and CRMCapabilitiesSeeder
 
 # Tests
-php artisan test                                                  # full app suite — 279 tests, ~5s
+php artisan test                                                  # full app suite — 314 tests, ~8s
 cd packages/opencommerce-sdk; vendor/bin/phpunit tests; cd ../..   # SDK's own suite (unaffected by Phase 2)
 
 # Manual/live verification
@@ -315,39 +360,46 @@ end to end.
 
 ---
 
-## 6. The 18 MCP capabilities that exist right now
+## 6. The 20 MCP capabilities that exist right now
 
-| Capability | Stage | Permission | Notes |
+| Capability | Phase/Stage | Permission | Notes |
 |---|---|---|---|
-| `commerce.product.search` | 1 | `commerce.products.read` | Active products only. |
-| `commerce.cart.add` | 2 | `commerce.cart.manage` | Reserves Inventory. |
-| `commerce.cart.get` | 2 | `commerce.cart.read` | Never persists an empty Cart. |
-| `commerce.order.place` | 3 | `commerce.orders.create` | No tax/discount applied (see §8.3). |
-| `commerce.order.get` | 3 | `commerce.orders.read` | Tenant-wide, not owner-scoped. |
-| `commerce.order.list` | 3 | `commerce.orders.read` | Optional `status`/`limit`. |
-| `commerce.customer.create` | 4 | `commerce.customers.create` | |
-| `commerce.customer.get` | 4 | `commerce.customers.read` | |
-| `commerce.customer.list` | 4 | `commerce.customers.read` | |
-| `commerce.checkout.calculate` | 5 | `commerce.checkout.read` | Pure preview, no side effects. |
-| `commerce.checkout.process` | 5 | `commerce.checkout.create` | The full Cart→Payment→Order flow. |
-| `commerce.payment.refund` | 5 | `commerce.payments.refund` | Restores Inventory. |
-| `commerce.coupon.create` | 5 | `commerce.coupons.create` | |
-| `commerce.woocommerce.sync` | 6 | `commerce.connectors.sync` | Upserts a page of WooCommerce products into the catalog by SKU. |
-| `commerce.woocommerce.get` | 6 | `commerce.connectors.read` | Live lookup straight from the Connector — not the local catalog. |
+| `commerce.product.search` | P2.1 | `commerce.products.read` | Active products only. |
+| `commerce.cart.add` | P2.2 | `commerce.cart.manage` | Reserves Inventory. |
+| `commerce.cart.get` | P2.2 | `commerce.cart.read` | Never persists an empty Cart. |
+| `commerce.order.place` | P2.3 | `commerce.orders.create` | No tax/discount applied (see §8.3). |
+| `commerce.order.get` | P2.3 | `commerce.orders.read` | Tenant-wide, not owner-scoped. |
+| `commerce.order.list` | P2.3 | `commerce.orders.read` | Optional `status`/`limit`. |
+| `commerce.customer.create` | P2.4 | `commerce.customers.create` | |
+| `commerce.customer.get` | P2.4 | `commerce.customers.read` | |
+| `commerce.customer.list` | P2.4 | `commerce.customers.read` | |
+| `commerce.checkout.calculate` | P2.5 | `commerce.checkout.read` | Pure preview, no side effects. |
+| `commerce.checkout.process` | P2.5 | `commerce.checkout.create` | The full Cart→Payment→Order flow. |
+| `commerce.payment.refund` | P2.5 | `commerce.payments.refund` | Restores Inventory. |
+| `commerce.coupon.create` | P2.5 | `commerce.coupons.create` | |
+| `commerce.woocommerce.sync` | P2.6 | `commerce.connectors.sync` | Upserts a page of WooCommerce products into the catalog by SKU. |
+| `commerce.woocommerce.get` | P2.6 | `commerce.connectors.read` | Live lookup straight from the Connector — not the local catalog. |
+| `crm.ticket.create` | P3.1 | `crm.tickets.create` | Validates `customer_id` against Commerce's own `CustomerRepositoryInterface`. |
+| `crm.ticket.get` | P3.1 | `crm.tickets.read` | Tenant-scoped by `findById()`; cross-tenant id -> 404, not 403. |
+| `crm.ticket.list` | P3.1 | `crm.tickets.read` | Optional `status`/`customer_id`. |
+| `crm.comment.create` | P3.1 | `crm.tickets.update` | Renamed from the requested `crm.ticket.comment.add` — 4 segments, see §7.7. |
+| `crm.note.create` | P3.1 | `crm.customers.update` | Renamed from the requested `crm.customer.note.add` — same reason. |
 
 **Deliberately NOT wired to MCP** despite the underlying Action existing and
 being fully tested (see §8.2 for why, and the same reasoning each time):
 `RemoveFromCartAction` (no `commerce.cart.remove`), `UpdateCartItemQuantityAction`,
 `ClearCartAction`, `CancelOrderAction` (no `commerce.order.cancel`),
 `UpdateOrderStatusAction`, `GetCustomerOrdersAction` (no
-`commerce.customer.orders`), `GetPaymentAction` (no `commerce.payment.get`).
+`commerce.customer.orders`), `GetPaymentAction` (no `commerce.payment.get`),
+and CRM's `UpdateTicketAction`, `GetCustomerNotesAction`, `CreateTagAction`,
+`AssignTagToCustomerAction` (§7.7).
 Every one of these is a one-capability-definition-plus-one-handler-closure
 addition if a future stage actually needs it through MCP — nothing about
 them is unfinished, they were just never asked for at the MCP layer.
 
 ---
 
-## 7. Phase 2 stage-by-stage detail
+## 7. Phase 2/3 stage-by-stage detail
 
 ### 7.1 Stage 1 — Product & Category Management
 
@@ -489,6 +541,85 @@ out of the box — `WooCommerceConfig::fromConfig()` is the one place that
 reads them; nothing else calls `config()`/`env()` directly for WooCommerce
 settings.
 
+### 7.7 Phase 3, Stage 1 — CRM Foundation
+
+Entities: `Ticket` (support ticket), `TicketComment` (child, no
+`id`-lookup use case beyond its own row, no `tenant_id` — inherited via
+`ticket_id`, same shape `OrderItem` has relative to `Order`),
+`CustomerNote` (immutable append-only annotation on a Customer), `Tag`
+(tenant-scoped label, unique name per tenant). VOs: `TicketStatus`
+(open/in_progress/resolved/closed), `TicketPriority`
+(low/medium/high/urgent), `TagName` (trimmed, internal whitespace
+collapsed, casing preserved — unlike SKU/CouponCode, a Tag name is a
+human-facing label, not a machine identifier).
+
+**`Ticket::changeStatus()` is stricter than Commerce's
+`Order::changeStatus()`**: not just "no path back to a terminal state"
+but "no path back or sideways at all" — a fixed `SEQUENCE` array
+(`Open, InProgress, Resolved, Closed`) means only a strictly-forward
+index move is ever legal; re-targeting the *current* status is rejected
+too, unlike Order (which tolerates a same-status no-op inside its
+fulfillment pipeline). `UpdateTicketAction` is the thin
+findById→changeStatus→save→dispatch wrapper, mirroring
+`UpdateOrderStatusAction`'s shape exactly.
+
+**Cross-module dependency, demonstrated for the first time**: CRM needs
+to verify a `customer_id` refers to a real Commerce Customer before a
+Ticket/Note/Tag-assignment can reference it. `CreateTicketAction`,
+`AddNoteToCustomerAction`, and `AssignTagToCustomerAction` all inject
+Commerce's `Domain\Repositories\CustomerRepositoryInterface` directly —
+an Interface from another Domain Module's Domain layer, never Commerce's
+Infrastructure/Model classes. The reason this doesn't violate module
+independence: CRM depends on a *published contract*, not on Commerce's
+implementation details, the identical Dependency-Inversion direction
+Core's marker-interface mechanism already established for Core -> Module,
+just one level over (Module -> Module). The one place this could have
+gone wrong and didn't: CRM throws **its own**
+`Domain\Exceptions\CustomerNotFoundException` when the check fails, never
+Commerce's — see that class's docblock for why importing Commerce's
+concrete exception type from CRM would have been the wrong kind of
+coupling even though the Interface dependency is fine.
+
+**`TagNotFoundException` wasn't in the original request** — added for
+the same reason Commerce's Stage 5 added
+`DiscountRepositoryInterface`/`EloquentDiscountRepository` unprompted
+(HANDOFF §7.5): `AssignTagToCustomerAction` needed a real 404 for an
+unknown tag id, not a raw foreign-key failure surfacing from
+`customer_tag`'s insert.
+
+**Capability names changed from the request** — `crm.ticket.comment.add`
+and `crm.customer.note.add` were both 4 segments; `CapabilityName`
+requires exactly 3 (HANDOFF gotcha #2, hit again here the same way
+WooCommerce's Stage 6 capabilities hit it). Renamed to `crm.comment.create`
+and `crm.note.create` — reusing the `create` verb Commerce's own
+`commerce.coupon.create`/`commerce.customer.create` already established,
+rather than inventing "comment"/"note" as pseudo-verbs.
+
+**4 of CRM's 9 Actions are deliberately not wired to MCP this stage** —
+`UpdateTicketAction`, `GetCustomerNotesAction`, `CreateTagAction`,
+`AssignTagToCustomerAction` — only the 5 capabilities actually requested
+(`crm.ticket.create/get/list`, `crm.comment.create`, `crm.note.create`)
+got a `CRMCapabilities` entry + `CRMServiceProvider` handler closure. Same
+"built, tested, not yet exposed to Agents" gap Commerce has always
+carried (HANDOFF §6/§8.2) — each is a small addition whenever a future
+stage actually needs it through MCP. All four are still exercised
+directly in `tests/Feature/CRM/*ActionTest.php`.
+
+**`customer_tag` is a plain pivot, not an Eloquent `belongsToMany`
+relation** — `Tag`'s Eloquent Model has no `customers()` relation to
+Commerce's Customer Model at all; `EloquentTagRepository::assignToCustomer()`
+writes the pivot row with a plain query-builder insert (explicit
+exists-check first, so double-assignment is a silent no-op, not a
+duplicate-key error) instead. Keeps CRM decoupled from Commerce's Model
+classes even at the Infrastructure layer, not just the Domain layer.
+
+`ticket_comments.agent_id` and `customer_notes.agent_id` are both real,
+non-nullable foreign keys to `agents` — the exact same
+`orders.agent_id` shape HANDOFF gotcha #8 already warns about, and one
+CRM test caught itself making that exact mistake (a bare `1` instead of
+a real registered Agent id) during this stage — see
+`GetCustomerNotesActionTest`'s docblock.
+
 ---
 
 ## 8. Known technical debt (ranked, carried over + Phase 2 additions)
@@ -559,24 +690,43 @@ settings.
     connector credentials — the "credential storage" responsibility
     `ConnectorRegistry`'s own docblock already flags as belonging to a
     future, fuller Connection Manager, not this registry.
+15. **CRM's Ticket has no assignment concept** — `agent_id` on a Ticket is
+    only ever "whichever Agent created it," permanently; there is no
+    "assign/reassign this Ticket to a different Agent" operation. A real
+    support-desk use case will want one.
+16. **No way to remove a Tag once assigned, and no `crm.tag.*` capability
+    at all exists through MCP** — `CreateTagAction`/`AssignTagToCustomerAction`
+    are Action-only this stage (§7.7); there is also no
+    `RemoveTagFromCustomerAction` — assignment is currently append-only.
+17. **`TicketComment`/`CustomerNote` have no `id`-based lookup path** —
+    same "no separate repository for a child record with no independent
+    identity" reasoning `OrderItem`/`Discount` already established
+    (HANDOFF gotcha #10), inherited by CRM's own child entities. If a
+    future feature needs to reference/edit one specific comment or note,
+    this is the thing that will need to change.
 
 ---
 
 ## 9. What's next
 
-Phase 2 is now fully complete (all 6 Stages). Candidates worth raising with
-whoever's driving scope next, roughly in order of how much they'd reuse
-what already exists:
+Phase 2 is fully complete (all 6 Stages). Phase 3 has begun — CRM
+Foundation (Stage 1) is done. Candidates worth raising with whoever's
+driving scope next, roughly in order of how much they'd reuse what
+already exists:
 
-- **Phase 3** (CRM, Finance, AI Workflows per the project vision) — the
-  natural next unit of work now that Commerce proves the Core/Domain
-  Module/Connector pattern end to end.
+- **Phase 3's next module** — Finance or AI Workflows per the project
+  vision, or a second CRM stage (Ticket assignment, Tag removal, a
+  `crm.tag.*` MCP surface — §8.15/§8.16) if CRM isn't considered done yet.
+  CRM Foundation is the first proof that the Module -> Module dependency
+  direction (§7.7) works, not just Core -> Module — a template for
+  whichever module needs to reference Commerce or CRM data next.
 - **A second real Connector** (Shopify) — `ProductConnectorInterface` and
   the WooCommerce implementation (§7.6) are now a template to follow;
   `ConnectorRegistry` already supports registering more than one by name.
-- **Wire the 7 un-wired Stage 1–5 capabilities from §6** if any Agent
-  workflow actually needs cart-removal, order-cancellation, or payment
-  lookup through MCP — cheapest possible next increment.
+- **Wire the 11 un-wired capabilities from §6** (7 from Commerce Stages
+  1–5, 4 from CRM) if any Agent workflow actually needs cart-removal,
+  order-cancellation, payment lookup, ticket-updating, or tag management
+  through MCP — cheapest possible next increment each.
 - **Real per-tenant tax configuration** (§8.1) and **per-tenant connector
   credentials** (§8.14) — the two most obviously "fake"/single-tenant
   pieces of what's been built so far.
@@ -587,7 +737,7 @@ what already exists:
   today, not on an Order.
 - **A dedicated `capabilities:sync` artisan command**, graduating away from
   the seeder pattern — flagged as an open decision since Phase 1, still
-  open, now with 18 capabilities across two seeders instead of 3.
+  open, now with 20 capabilities across three seeders instead of 3.
 
 Whatever comes next, follow §3's patterns and check §8 before assuming a
 piece of the puzzle doesn't already exist.
