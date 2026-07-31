@@ -5,6 +5,7 @@ use App\Modules\Commerce\CommerceServiceProvider;
 use App\Modules\CRM\CRMServiceProvider;
 use App\Modules\Demo\DemoServiceProvider;
 use App\Modules\Finance\FinanceServiceProvider;
+use App\Modules\Loyalty\LoyaltyServiceProvider;
 use App\Modules\Workflows\WorkflowsServiceProvider;
 use App\Providers\AppServiceProvider;
 
@@ -15,5 +16,6 @@ return [
     CRMServiceProvider::class,
     FinanceServiceProvider::class,
     WorkflowsServiceProvider::class,
+    LoyaltyServiceProvider::class,
     DemoServiceProvider::class,
 ];

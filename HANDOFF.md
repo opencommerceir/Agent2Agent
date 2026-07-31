@@ -2,17 +2,23 @@
 
 **Status: Phase 1 (Core + MCP Gateway) and Phase 2 (Commerce, all 6
 Stages) are complete. Phase 3 (Domain Expansion) is under way: Stage 1
-(CRM Foundation), Stage 2 (Finance — per-tenant tax rates, Invoices), and
-Stage 3 (Workflows — event-driven automation) are all complete. Finance
+(CRM Foundation), Stage 2 (Finance — per-tenant tax rates, Invoices),
+Stage 3 (Workflows — event-driven automation), and Stage 4 (Loyalty
+Program — points, Rewards, Redemptions) are all complete. Finance
 supplies Commerce's own checkout pricing with real tax rates through an
 Interface Commerce itself owns (§7.8) — the tax-rate tech debt flagged
 since Phase 2 §8.1 is resolved. Workflows introduces the platform's first
 real cross-module Domain Event Listener (§7.9) and the "Low Stock Alert"
 automation end to end: Commerce places an Order, stock drops below a
 tenant-configured threshold, and a Workflow reacts — no polling, no
-manual trigger required. 377 tests passing, zero known regressions. Next
-up: wiring CartAbandoned/HighValueOrder (both scaffolded, neither wired —
-§7.9), another Phase 3 module, or any deferred item in §8/§9.**
+manual trigger required. Loyalty adds the platform's *second* real
+cross-module Domain Event Listener (§7.10): every placed Order with a
+Customer automatically earns that Customer 1 point per dollar, no MCP
+call required, and Customers can then redeem points for Rewards. 415
+tests passing, zero known regressions. Next up: wiring
+CartAbandoned/HighValueOrder (both scaffolded, neither wired — §7.9), a
+scheduling mechanism to unlock both that and real point expiration
+(§7.10/§8.23), another Phase 3 module, or any deferred item in §8/§9.**
 
 This file is a working-state snapshot for picking up development in a new
 session. It assumes you've already read `CLAUDE.md` and `docs/*.md` (the
@@ -121,6 +127,21 @@ side). `InventoryLowListener` reacts to it using Commerce's
 `InventoryRepositoryInterface`/`ProductRepositoryInterface` (Interfaces,
 never Commerce's Models), the same Dependency Inversion direction
 CRM/Finance already established.
+
+### `app/Modules/Loyalty/` — **new in Phase 3. Points, Rewards, and Redemptions — Phase 3, Stage 4, and the second module to attach a real Listener to another module's Domain Event.**
+
+See §7.10 for the full detail. 4 Domain Entities (`LoyaltyAccount`,
+`PointTransaction`, `Reward`, `Redemption`), 4 Value Objects (`Points`,
+`TransactionType`, `RewardType`, `ExpirationDate`), 4 domain events, 6
+exceptions (4 requested + 2 added unprompted — see §7.10), 3 Repository
+interfaces, 9 Application Actions (8 wired to MCP — see §6), 1 Listener
+(`OrderPlacedListener`, registered), 4 Eloquent models, 3 Eloquent
+repositories, 4 migrations. Depends on Commerce's
+`CustomerRepositoryInterface` the same one-directional Module -> Module
+pattern CRM/Finance/Workflows already established, and reacts to
+Commerce's existing `OrderWasPlaced` event without requiring any change
+to Commerce at all — unlike Workflows' Stage, no new Commerce event was
+needed this time (`OrderWasPlaced` already carried everything).
 
 ### `app/Modules/Demo/` — unchanged since Phase 1
 
@@ -270,6 +291,35 @@ app/Modules/Workflows/            new in Phase 3
                                    Event::listen()s InventoryLowListener +
                                    registers 5 capability handlers (see §6)
 
+app/Modules/Loyalty/               new in Phase 3
+├── Domain/
+│   ├── Entities/                 LoyaltyAccount, PointTransaction, Reward, Redemption
+│   ├── ValueObjects/             Points, TransactionType, RewardType, ExpirationDate
+│   ├── Events/                   PointsWereEarned, PointsWereRedeemed,
+│   │                             PointsWereExpired, RewardWasRedeemed
+│   ├── Services/                 PointsCalculationService (pure, framework-free)
+│   ├── Repositories/              LoyaltyAccountRepositoryInterface (owns Redemption
+│   │                              persistence too), PointTransactionRepositoryInterface,
+│   │                              RewardRepositoryInterface
+│   └── Exceptions/                LoyaltyAccountNotFoundException, InsufficientPointsException,
+│                                  RewardNotFoundException, InvalidPointsException (all 4
+│                                  requested) + CustomerNotFoundException,
+│                                  LoyaltyAccountAlreadyExistsException (added
+│                                  unprompted, same reasoning Finance's
+│                                  OrderNotFoundException was — see §7.10)
+├── Application/
+│   ├── Actions/                  9 Actions — 8 wired to MCP (§6/§7.10);
+│   │                              ExpirePointsAction is the one un-wired Action
+│   └── Listeners/                OrderPlacedListener (registered — reacts to
+│                                  Commerce's existing OrderWasPlaced event)
+│   └── DTOs/                     LoyaltyAccountData, PointTransactionData, RewardData, RedemptionData
+├── Infrastructure/
+│   ├── Models/                    4 Eloquent models
+│   └── Repositories/               3 Eloquent repository implementations
+└── LoyaltyServiceProvider.php    binds 3 Repository interfaces +
+                                   Event::listen()s OrderPlacedListener +
+                                   registers 8 capability handlers (see §6)
+
 app/Modules/Demo/                  unchanged since Phase 1
 
 packages/opencommerce-sdk/         unchanged since Phase 1
@@ -290,9 +340,11 @@ database/
 │   ├── 2026_07_31_000021-000025                  (Phase 3.1 — tickets, ticket_comments,
 │   │                                               customer_notes, tags, customer_tag pivot)
 │   ├── 2026_07_31_000026-000028                  (Phase 3.2 — tax_rates, invoices, invoice_items)
-│   └── 2026_07_31_000029-000032                  (Phase 3.3 — workflows, workflow_rules,
-│                                                   workflow_actions, workflow_logs)
-└── seeders/{DemoCapabilitiesSeeder,CommerceCapabilitiesSeeder,CRMCapabilitiesSeeder,FinanceCapabilitiesSeeder,WorkflowsCapabilitiesSeeder}.php
+│   ├── 2026_07_31_000029-000032                  (Phase 3.3 — workflows, workflow_rules,
+│   │                                               workflow_actions, workflow_logs)
+│   └── 2026_07_31_000033-000036                  (Phase 3.4 — loyalty_accounts, point_transactions,
+│                                                   rewards, redemptions)
+└── seeders/{DemoCapabilitiesSeeder,CommerceCapabilitiesSeeder,CRMCapabilitiesSeeder,FinanceCapabilitiesSeeder,WorkflowsCapabilitiesSeeder,LoyaltyCapabilitiesSeeder}.php
 
 tests/
 ├── Fixtures/            woocommerce-products-response.json (Stage 6 — reference payload)
@@ -313,8 +365,17 @@ tests/
 ├── Feature/Workflows/   2 files — full real-Order-triggers-real-Listener
 │                        scenario (no event faking) + tenant isolation +
 │                        the one un-wired Action exercised directly
+├── Unit/Loyalty/        5 files — Points, PointTransaction (incl. the
+│                        sign-by-type invariant), LoyaltyAccount (earn/
+│                        redeem/expire/adjust), ExpirationDate,
+│                        PointsCalculationService, all framework-free PHPUnit
+├── Feature/Loyalty/     2 files — full real-Order-triggers-real-Listener
+│                        earn scenario (no event faking) + redeem/
+│                        insufficient-points/tenant isolation +
+│                        ExpirePointsAction (the one un-wired Action)
+│                        exercised directly with simulated past-due expiry
 ├── Unit/Core/, Unit/MCP/, Feature/Core/, Feature/MCP/, Feature/Demo/, Unit/Demo/   unchanged since Phase 1
-└── 377 tests total, 845 assertions, ~6s runtime (`php artisan test`)
+└── 415 tests total, 926 assertions, ~7s runtime (`php artisan test`)
 ```
 
 ---
@@ -524,10 +585,10 @@ cd packages/opencommerce-sdk; composer install; cd ../..
 
 # Database
 php artisan migrate
-php artisan db:seed   # runs Demo-, Commerce-, CRM-, Finance-, and WorkflowsCapabilitiesSeeder
+php artisan db:seed   # runs Demo-, Commerce-, CRM-, Finance-, Workflows-, and LoyaltyCapabilitiesSeeder
 
 # Tests
-php artisan test                                                  # full app suite — 377 tests, ~6s
+php artisan test                                                  # full app suite — 415 tests, ~7s
 cd packages/opencommerce-sdk; vendor/bin/phpunit tests; cd ../..   # SDK's own suite (unaffected by Phase 2)
 
 # Manual/live verification
@@ -548,7 +609,7 @@ end to end.
 
 ---
 
-## 6. The 33 MCP capabilities that exist right now
+## 6. The 41 MCP capabilities that exist right now
 
 | Capability | Phase/Stage | Permission | Notes |
 |---|---|---|---|
@@ -585,6 +646,14 @@ end to end.
 | `workflow.definition.list` | P3.3 | `workflow.definitions.read` | Renamed from `workflow.list` — same reason. Optional `status`/`event_type`. |
 | `workflow.event.trigger` | P3.3 | `workflow.definitions.execute` | Renamed from `workflow.trigger` — same reason. Same code path `InventoryLowListener` calls internally. |
 | `workflow.log.list` | P3.3 | `workflow.definitions.read` | Already 3 segments, unchanged. Optional `workflow_id`/`limit`. |
+| `loyalty.account.get` | P3.4 | `loyalty.accounts.read` | Strict lookup by `customer_id` — 404 if none exists yet. |
+| `loyalty.account.create` | P3.4 | `loyalty.accounts.create` | Validates the Customer exists (Commerce's `CustomerRepositoryInterface`); 409 if one already exists (rule §d.2). |
+| `loyalty.points.earn` | P3.4 | `loyalty.points.manage` | Find-or-create — unlike `.get`, a missing LoyaltyAccount is silently opened first (§7.10). |
+| `loyalty.points.redeem` | P3.4 | `loyalty.points.redeem` | `points` must match the named Reward's `points_required` exactly (422 if not) before the balance check (409 if insufficient). |
+| `loyalty.reward.create` | P3.4 | `loyalty.rewards.manage` | `discount_amount` required only when `reward_type` is `discount_coupon`. |
+| `loyalty.reward.get` | P3.4 | `loyalty.rewards.read` | |
+| `loyalty.reward.list` | P3.4 | `loyalty.rewards.read` | Optional `is_active`. |
+| `loyalty.transaction.list` | P3.4 | `loyalty.transactions.read` | By `customer_id`, not `loyalty_account_id`. Optional `limit`. |
 
 **Deliberately NOT wired to MCP** despite the underlying Action existing and
 being fully tested (see §8.2 for why, and the same reasoning each time):
@@ -594,7 +663,9 @@ being fully tested (see §8.2 for why, and the same reasoning each time):
 `commerce.customer.orders`), `GetPaymentAction` (no `commerce.payment.get`),
 CRM's `UpdateTicketAction`, `GetCustomerNotesAction`, `CreateTagAction`,
 `AssignTagToCustomerAction` (§7.7), Finance's `UpdateTaxRateAction` (§7.8),
-and Workflows' `UpdateWorkflowAction` (§7.9).
+Workflows' `UpdateWorkflowAction` (§7.9), and Loyalty's `ExpirePointsAction`
+(§7.10 — the actual blocker is the same "no scheduler exists" gap
+CartAbandonedListener has, HANDOFF §8.23).
 Every one of these is a one-capability-definition-plus-one-handler-closure
 addition if a future stage actually needs it through MCP — nothing about
 them is unfinished, they were just never asked for at the MCP layer.
@@ -996,6 +1067,121 @@ docblock documents the exact numbers (6 on hand, order 3) chosen to stay
 under that ceiling while still crossing the Low Stock Alert's `<5`
 threshold once committed. Flagged in §8 as a debt item worth a real fix.
 
+### 7.10 Phase 3, Stage 4 — Loyalty Program (points, Rewards, Redemptions)
+
+Entities: `LoyaltyAccount` (one per Customer per tenant, rule §d.2),
+`PointTransaction` (immutable ledger row, same shape Commerce's
+`OrderItem`/Workflows' `WorkflowLog` already establish), `Reward`,
+`Redemption` (see below). VOs: `Points` (a non-negative *amount* —
+deliberately never the same type as `PointTransaction`'s own signed
+`points` delta column; that Entity's own docblock explains why they're
+not unified), `TransactionType` (earn/redeem/expire/adjust/bonus),
+`RewardType` (discount_coupon/free_product/free_shipping — only
+`DiscountCoupon` does anything with `discount_amount` this stage, the
+other two are modeled-but-unfulfilled the same way Workflows'
+`EventType::CartAbandoned`/`OrderHighValue` are), `ExpirationDate` (a
+1-year-default, configurable validity window, rule §d.5). Domain
+Service: `PointsCalculationService` — pure, framework-free, the same
+shape Commerce's `PricingService`/Finance's `TaxCalculationService`/
+Workflows' `WorkflowEvaluator` already establish (rule §d.6: $1 = 100
+cents = 1 point, integer division, always rounds down).
+
+**`LoyaltyAccount.current_balance` is maintained directly, not
+recomputed from the other two totals on read** — `earn()`/`redeem()`
+move it in lock-step with `total_points_earned`/`total_points_redeemed`;
+`expire()` subtracts from `current_balance` alone. This still satisfies
+the requested formula
+(`current_balance = total_points_earned - total_points_redeemed - expired_points`)
+exactly, because those are the only three operations (plus `adjust()`)
+that ever touch it — there is deliberately no `total_points_expired`
+column in the schema (see `PointTransactionRepositoryInterface::findExpirable()`'s
+docblock for how an already-expired batch is recognized without one).
+
+**Two exceptions weren't in the original request's list of 4** — added
+unprompted for the same reason CRM's `TagNotFoundException`/Finance's
+`OrderNotFoundException`/Workflows' `WorkflowLog` were (HANDOFF §3 item
+12):
+- `CustomerNotFoundException` (Loyalty's own, not Commerce's) —
+  `CreateLoyaltyAccountAction` validates a `customer_id` against
+  Commerce's `CustomerRepositoryInterface` (Dependency Inversion — an
+  Interface, never Commerce's Infrastructure/Model), and must throw its
+  own exception type for the same reason CRM's own
+  `CustomerNotFoundException` docblock explains.
+- `LoyaltyAccountAlreadyExistsException` — rule §d.2 ("one LoyaltyAccount
+  per Customer per tenant") needs a real 409 CONFLICT when
+  `loyalty.account.create` is called twice for the same Customer, rather
+  than letting `loyalty_accounts`' own `unique(tenant_id, customer_id)`
+  constraint surface as a raw database error.
+
+**`loyalty.points.earn` finds-or-creates the LoyaltyAccount; `loyalty.account.get`
+does a strict lookup (404 if missing)** — a deliberate difference between
+the two verbs, not an inconsistency. Earning points for a first-time
+purchaser who has no LoyaltyAccount yet is an entirely normal case (the
+capability's own input is just `customer_id`, no requirement that
+`loyalty.account.create` was called first) — `EarnPointsAction` composes
+`CreateLoyaltyAccountAction` internally (Actions composing Actions,
+HANDOFF §3 item 3) rather than requiring the caller to provision one
+explicitly first.
+
+**`loyalty.points.redeem`'s `points` input is validated against the
+named Reward's own `points_required` before the balance is even
+checked** — a mismatch is `InvalidPointsException` (422), not silently
+accepted or conflated with `InsufficientPointsException` (409, thrown
+only once the price is confirmed correct but the balance genuinely isn't
+there). This makes the capability's redundant-looking `points`/`reward_id`
+pair meaningful: the caller states the price it expects to pay, and a
+stale expectation fails loudly instead of silently charging whatever the
+Reward costs today.
+
+**`Redemption` wasn't in the original request's Repository list** — the
+request names a `redemptions` table and this Entity but only 3
+Repository interfaces for the whole module, the same gap Workflows'
+`WorkflowLog` had. Per that stage's own precedent (a Repository
+interface owns its child records), the natural owner is
+`LoyaltyAccountRepositoryInterface::saveRedemption()`/`listRedemptions()`,
+not a 4th interface.
+
+**The platform's second real cross-module Domain Event Listener.**
+`OrderPlacedListener::handle(OrderWasPlaced $event)` earns points for the
+placed Order's Customer, if it has one. Unlike Workflows'
+`InventoryLowListener` (which re-fetches Inventory through a Repository
+because `InventoryWasCommitted` deliberately carries only identifiers),
+`OrderWasPlaced` already carries the full, authoritative `Order` entity
+— its `total()`/`customerId()` are exactly what's needed, so no Commerce
+Repository dependency was required at all for this Listener (the same
+observation Workflows' own unwired `HighValueOrderListener` docblock
+already made about this same event). Orders with no `customer_id`
+(optional since Stage 4/Commerce) or worth less than $1 (rounds to 0
+points) are silently skipped — neither is an error.
+
+**`ExpirePointsAction` is a deliberate simplification, not a full
+per-lot FIFO ledger.** It processes one LoyaltyAccount at a time (no
+`loyalty.points.expire` capability was requested — same "built, tested,
+not yet exposed to Agents" gap Finance's `UpdateTaxRateAction`/Workflows'
+`UpdateWorkflowAction` carry), finding `earn`/`bonus` PointTransactions
+whose `expires_at` is due and not already expired (recognized via an
+`expire` transaction's `reference_id` pointing back at the source row —
+no mutable "processed" flag is ever added to an immutable ledger row),
+oldest first, expiring each fully but capped by whatever balance
+genuinely remains. It does **not** track which specific Redemption
+consumed which specific earn-batch — a Customer who redeems mostly from
+a recent batch will still see an *older*, unrelated batch expire first,
+which is the tenant-favoring (conservative) outcome, not the
+customer-favoring one a true per-lot ledger would give. Flagged as a
+simplification worth a real fix (§8), not silently broken behavior — no
+point this method ever expires was un-redeemed or not yet due.
+**Not wired to MCP** — and can't usefully run on a schedule yet anyway,
+since **no scheduling mechanism exists anywhere in this codebase**
+(HANDOFF §8.23, unchanged since Workflows' Stage) — the identical blocker
+`CartAbandonedListener` has.
+
+**Capability names needed no renaming this stage** — all 8 requested
+names (`loyalty.account.get/create`, `loyalty.points.earn/redeem`,
+`loyalty.reward.create/get/list`, `loyalty.transaction.list`) and all 7
+requested permissions were already exactly 3 dot-separated segments,
+unlike WooCommerce/CRM/Workflows (HANDOFF gotcha #2) — the first stage
+where this didn't come up.
+
 ---
 
 ## 8. Known technical debt (ranked, carried over + Phase 2 additions)
@@ -1131,16 +1317,41 @@ threshold once committed. Flagged in §8 as a debt item worth a real fix.
     workflow builder UI would need a more deliberate redefinition
     operation than currently exists, the same gap Ticket/Tag's own
     "structure is frozen, generic fields aren't" shape has elsewhere.
+26. **`ExpirePointsAction` is a simplified FIFO, not a true per-lot
+    ledger** (§7.10) — it doesn't track which specific Redemption
+    consumed which specific earn-batch, so expiration always processes
+    the oldest still-flagged batch first regardless of which batch a
+    Customer's redemptions actually drew down. Tenant-favoring, not
+    wrong, but a precise implementation is real future work.
+27. **No scheduling mechanism exists anywhere in this codebase** (same
+    item as §8.23, hit again) — the actual blocker for running
+    `ExpirePointsAction` automatically, same as `CartAbandonedListener`.
+    Both would be unlocked by the same piece of infrastructure.
+28. **No `crm.tag.*`-style admin surface for Rewards** — no
+    `UpdateRewardAction`/deactivate operation exists; a Reward, once
+    created, can only be read or listed, never edited or retired.
+29. **Redemption has no `pending`/`cancelled` path** — `status` models
+    those states (rule §d schema) but every Redemption this stage
+    creates goes straight to `completed`; nothing produces the other two
+    values yet, the same "modeled but not all reachable" gap
+    `RewardType::FreeProduct`/`FreeShipping` and Workflows'
+    `EventType::CartAbandoned`/`OrderHighValue` already have.
 
 ---
 
 ## 9. What's next
 
-Phase 2 is fully complete (all 6 Stages). Phase 3 has three Stages done —
-CRM Foundation, Finance (per-tenant tax + Invoices), and Workflows
-(event-driven automation). Candidates worth raising with whoever's
-driving scope next, roughly in order of how much they'd reuse what
-already exists:
+Phase 2 is fully complete (all 6 Stages). Phase 3 has four Stages done —
+CRM Foundation, Finance (per-tenant tax + Invoices), Workflows
+(event-driven automation), and Loyalty (points, Rewards, Redemptions).
+Candidates worth raising with whoever's driving scope next, roughly in
+order of how much they'd reuse what already exists:
+
+- **A scheduling mechanism** (§8.23/§8.27) — now unlocks *two* things at
+  once: `CartAbandonedListener` (Workflows) and running
+  `ExpirePointsAction` automatically (Loyalty) — the highest-leverage
+  single piece of infrastructure available right now, since it's the
+  same blocker in two different modules.
 
 - **Wire `HighValueOrderListener`** (§7.9) — genuinely the cheapest
   possible next increment in the entire codebase right now: the event it
@@ -1165,11 +1376,12 @@ already exists:
 - **A second real Connector** (Shopify) — `ProductConnectorInterface` and
   the WooCommerce implementation (§7.6) are now a template to follow;
   `ConnectorRegistry` already supports registering more than one by name.
-- **Wire the 13 un-wired capabilities from §6** (7 from Commerce Stages
-  1–5, 4 from CRM, 1 from Finance, 1 from Workflows) if any Agent
-  workflow actually needs cart-removal, order-cancellation, payment
-  lookup, ticket-updating, tag management, tax-rate updates, or
-  workflow-updating through MCP — cheapest possible next increment each.
+- **Wire the 14 un-wired capabilities from §6** (7 from Commerce Stages
+  1–5, 4 from CRM, 1 from Finance, 1 from Workflows, 1 from Loyalty) if
+  any Agent workflow actually needs cart-removal, order-cancellation,
+  payment lookup, ticket-updating, tag management, tax-rate updates,
+  workflow-updating, or points-expiration through MCP — cheapest
+  possible next increment each.
 - **Per-tenant connector credentials** (§8.14) — the most obviously
   "fake"/single-tenant piece remaining (per-tenant tax, §8.1's original
   concern, is resolved as of Phase 3.2).
