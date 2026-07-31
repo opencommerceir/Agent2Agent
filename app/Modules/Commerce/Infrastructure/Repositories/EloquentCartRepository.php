@@ -44,6 +44,17 @@ class EloquentCartRepository implements CartRepositoryInterface
         return $model ? $this->toEntity($model) : null;
     }
 
+    public function findStaleActive(int $tenantId, DateTimeImmutable $before): array
+    {
+        return CartModel::query()
+            ->where('tenant_id', $tenantId)
+            ->where('status', CartStatus::Active->value)
+            ->where('updated_at', '<', $before)
+            ->get()
+            ->map(fn (CartModel $model) => $this->toEntity($model))
+            ->all();
+    }
+
     public function save(CartEntity $cart): CartEntity
     {
         return DB::transaction(function () use ($cart) {

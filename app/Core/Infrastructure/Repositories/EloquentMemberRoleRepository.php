@@ -46,20 +46,18 @@ class EloquentMemberRoleRepository implements MemberRoleRepositoryInterface
 
     public function findRolesForMember(MemberType $memberType, int $memberId, int $tenantId): array
     {
-        // N+1 by design for now — role counts per member are small.
-        // Revisit with a dedicated projection/cache once CheckPermission
-        // is on the hot path (see the "cache-friendly in the future" note).
+        // Was N+1 (a findById() call per role id) — now a constant 3
+        // queries total (this pluck + findByIds()'s own 2), regardless
+        // of how many roles a member has. See
+        // EloquentRoleRepository::findByIds()'s own docblock.
         $roleIds = MemberRoleModel::query()
             ->where('member_type', $memberType->value)
             ->where('member_id', $memberId)
             ->whereHas('role', fn ($query) => $query->where('tenant_id', $tenantId))
-            ->pluck('role_id');
-
-        return $roleIds
-            ->map(fn (int $roleId) => $this->roles->findById($roleId))
-            ->filter()
-            ->values()
+            ->pluck('role_id')
             ->all();
+
+        return $this->roles->findByIds($roleIds);
     }
 
     public function save(MemberRoleEntity $memberRole): MemberRoleEntity

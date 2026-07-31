@@ -29,6 +29,14 @@ class EloquentTenantRepository implements TenantRepositoryInterface
         return TenantModel::query()->where('slug', $slug)->exists();
     }
 
+    public function all(): array
+    {
+        return TenantModel::query()
+            ->get()
+            ->map(fn (TenantModel $model) => $this->toEntity($model))
+            ->all();
+    }
+
     public function save(TenantEntity $tenant): TenantEntity
     {
         $model = $tenant->id()

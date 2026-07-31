@@ -19,6 +19,17 @@ class EloquentInventoryRepository implements InventoryRepositoryInterface
         return $model ? $this->toEntity($model) : null;
     }
 
+    public function findByProductForUpdate(int $productId, int $tenantId): ?InventoryEntity
+    {
+        $model = InventoryModel::query()
+            ->where('tenant_id', $tenantId)
+            ->where('product_id', $productId)
+            ->lockForUpdate()
+            ->first();
+
+        return $model ? $this->toEntity($model) : null;
+    }
+
     public function save(InventoryEntity $inventory): InventoryEntity
     {
         $model = $inventory->id()

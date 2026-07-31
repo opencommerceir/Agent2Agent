@@ -3,6 +3,7 @@
 namespace App\Core\Interfaces\HTTP\Controllers\MCP;
 
 use App\Core\Application\Actions\CheckPermissionAction;
+use App\Core\Application\Actions\EnforceRateLimitAction;
 use App\Core\Application\Actions\GetCapabilityAction;
 use App\Core\Application\DTOs\AuthContext;
 use App\Core\Application\Services\AgentAuthenticationService;
@@ -33,6 +34,7 @@ final class MCPGatewayController extends Controller
 {
     public function __construct(
         private readonly AgentAuthenticationService $agentAuthentication,
+        private readonly EnforceRateLimitAction $enforceRateLimit,
         private readonly GetCapabilityAction $getCapability,
         private readonly CheckPermissionAction $checkPermission,
         private readonly CapabilityExecutionService $capabilityExecution,
@@ -43,6 +45,8 @@ final class MCPGatewayController extends Controller
     public function execute(ExecuteCapabilityRequest $request): JsonResponse
     {
         $agent = $this->agentAuthentication->authenticateFromRequest($request);
+
+        $this->enforceRateLimit->authorize($agent->id);
 
         $capabilityName = $request->string('capability')->toString();
         $input = $request->input('input', []);

@@ -37,6 +37,15 @@ class EloquentLoyaltyAccountRepository implements LoyaltyAccountRepositoryInterf
             ->exists();
     }
 
+    public function allForTenant(int $tenantId): array
+    {
+        return LoyaltyAccountModel::query()
+            ->where('tenant_id', $tenantId)
+            ->get()
+            ->map(fn (LoyaltyAccountModel $model) => $this->toEntity($model))
+            ->all();
+    }
+
     public function save(LoyaltyAccountEntity $account): LoyaltyAccountEntity
     {
         $model = $account->id()

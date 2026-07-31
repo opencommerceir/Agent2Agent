@@ -19,7 +19,7 @@ jobs:
         with:
           php-version: '8.3'
           extensions: mbstring, dom, fileinfo, sqlite3
-          coverage: none
+          coverage: pcov
 
       - name: Cache Composer dependencies
         uses: actions/cache@v4
@@ -37,8 +37,21 @@ jobs:
       - name: Generate application key
         run: php artisan key:generate
 
-      - name: Run tests
+      # --min=60 is a conservative starting floor, not a measured target —
+      # no coverage driver (pcov/xdebug) is available in the local dev
+      # environment this gate was authored in, so the real number could
+      # only be measured here in CI. Raise this once the first real run's
+      # percentage is known (see the uploaded coverage-report artifact
+      # below), matching whatever the actual baseline turns out to be.
+      - name: Run tests with coverage
         env:
           DB_CONNECTION: sqlite
           DB_DATABASE: ':memory:'
-        run: php artisan test
+        run: php artisan test --coverage --min=60
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/

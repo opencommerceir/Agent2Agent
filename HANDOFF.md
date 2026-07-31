@@ -20,11 +20,30 @@ onto the Order it fulfills, the same Dependency-Inversion direction
 every prior cross-module integration used, just flowing one field
 further than before — see `Order::assignShipping()`'s own docblock for
 the full reasoning and the alternative that was considered and rejected.
-459 tests passing, zero known regressions. Next up: another Phase 4
-Shipping/Logistics stage, wiring CartAbandoned/HighValueOrder (both
-scaffolded, neither wired — §7.9), a scheduling mechanism to unlock both
-that and real point expiration (§7.10/§8.23), or any deferred item in
-§8/§9.**
+
+**A Tech Debt Sprint (§7.13) ran immediately after Shipping Stage 1,
+before Phase 4 continues, closing 7 items from §8/§9 in one pass: the
+`CheckInventoryAction` re-check arithmetic bug (§8.22, plus a related
+reservation race condition found while fixing it), the permission-check
+N+1, per-agent MCP rate limiting, CI coverage reporting, a real Laravel
+scheduler (§8.23/§8.27 — the first ever `Schedule::command()` in this
+codebase), and a generated `docs/api-reference.md`. The scheduler
+immediately wired Workflows' previously-scaffolded `CartAbandonedListener`
+for real (Commerce gained a new `CartWasAbandoned` event and
+`Cart::abandon()` — dormant since Phase 3 — finally has a caller).
+See §7.13 for the full detail, including two places where the sprint's
+own brief didn't match the actual code/environment and what was built
+instead.**
+
+470 tests passing, zero known regressions. Next up: another Phase 4
+Shipping/Logistics stage (Shipping Zones, partial fulfillment, folding
+`shipping_cost` into checkout pricing — §8.37/§8.35/§8.36), wiring
+`HighValueOrderListener` (still scaffolded, still the cheapest available
+increment — §9), or any remaining deferred item in §8/§9. Note:
+`WorkflowsCapabilityTest`'s own docblock still describes working around
+the now-fixed §8.22 ceiling (6-on-hand/order-3, kept under half of
+stock) — harmless (the test still passes either way) but worth a quick
+cleanup pass since the constraint that motivated it is gone.**
 
 This file is a working-state snapshot for picking up development in a new
 session. It assumes you've already read `CLAUDE.md` and `docs/*.md` (the
@@ -51,7 +70,7 @@ added so Domain Modules can opt an exception into the MCP error envelope
 
 | Sub-area | Key classes | Notes |
 |---|---|---|
-| Tenant | `Domain/Entities/Tenant.php`, `Application/Actions/CreateTenantAction.php` | Unchanged since Phase 1. |
+| Tenant | `Domain/Entities/Tenant.php`, `Application/Actions/CreateTenantAction.php` | `TenantRepositoryInterface` gained `all()` in the Tech Debt Sprint (§7.13) — the first thing that ever needed to list every Tenant, for the new cross-tenant scheduled commands. |
 | Organization | `Domain/Entities/Organization.php`, `OrganizationMember.php` | Unchanged since Phase 1. |
 | Agent Registry | `Domain/Entities/Agent.php`, `AgentToken.php`, related Actions | Unchanged since Phase 1. |
 | Permission System | `Domain/Entities/{Permission,Role,MemberRole}.php`, `CheckPermissionAction` | Unchanged since Phase 1. |
@@ -220,11 +239,24 @@ point of view.
 ```
 app/Core/
 ├── Domain/{Entities,ValueObjects,Events,Repositories,Exceptions,Exceptions/Contracts}/
+│                        + RateLimitExceededException (Tech Debt Sprint, §7.13 —
+│                        implements neither marker interface, same reasoning
+│                        WooCommerceApiException has)
 ├── Application/{Actions,DTOs,Services,Listeners}/
+│                        + EnforceRateLimitAction (§7.13)
 ├── Infrastructure/{Models,Repositories}/
 ├── Interfaces/HTTP/{Controllers/MCP,Requests/MCP}/
 ├── Exceptions/MCPExceptionHandler.php
 └── CoreServiceProvider.php
+
+config/mcp.php              new in Tech Debt Sprint (§7.13) — MCP_RATE_LIMIT_PER_MINUTE
+
+app/Console/Commands/       new in Tech Debt Sprint (§7.13) — this directory
+                             didn't exist before: ExpireLoyaltyPointsCommand,
+                             MarkAbandonedCartsCommand, both scheduled via
+                             routes/console.php (Schedule::command(), also
+                             new — no app/Console/Kernel.php in this Laravel
+                             version)
 
 app/Modules/Commerce/
 ├── Domain/
@@ -240,13 +272,19 @@ app/Modules/Commerce/
 │   │                             WooCommerceProductData
 │   ├── Services/                 PricingService, CouponValidationService,
 │   │                             WooCommerceProductMapper  (all pure, framework-free)
-│   ├── Events/                   17 domain events across Stages 1-5
-│   ├── Repositories/              9 Repository interfaces (one per aggregate + Discount's)
+│   ├── Events/                   17 domain events across Stages 1-5, + CartWasAbandoned
+│   │                             (Tech Debt Sprint, §7.13 — carries only identifiers,
+│   │                             same shape InventoryWasCommitted established)
+│   ├── Repositories/              9 Repository interfaces (one per aggregate + Discount's),
+│   │                             + findByProductForUpdate() on InventoryRepositoryInterface
+│   │                             and findStaleActive() on CartRepositoryInterface (§7.13)
 │   └── Exceptions/                18 exception classes; every NotFound/Conflict-shaped one
 │                                  implements a Core marker interface (§1) —
 │                                  WooCommerceApiException deliberately does not (§7.6)
 ├── Application/
-│   ├── Actions/                  ~32 Actions — see §7 for the per-stage list
+│   ├── Actions/                  ~32 Actions — see §7 for the per-stage list, +
+│   │                             MarkCartsAbandonedAction (§7.13); CheckInventoryAction
+│   │                             gained executeCommit()/authorizeCommit() (§7.13, §8.22 fix)
 │   ├── DTOs/                     ProductData, CategoryData, CartData, CartItemData,
 │   │                             OrderData, OrderItemData, CustomerData, AddressData,
 │   │                             PricingData, PaymentData, CouponData, WooCommerceSyncResult
@@ -332,18 +370,21 @@ app/Modules/Workflows/            new in Phase 3
 │   ├── Actions/                  7 Actions — 5 wired to MCP (§6/§7.9);
 │   │                              ListWorkflowLogsAction added unprompted
 │   │                              alongside WorkflowLog
-│   └── Listeners/                InventoryLowListener (the only one actually
-│                                  registered — reacts to Commerce's new
-│                                  InventoryWasCommitted event), CartAbandonedListener,
-│                                  HighValueOrderListener (both documented,
-│                                  unwired scaffolding, §7.9)
+│   └── Listeners/                InventoryLowListener (reacts to Commerce's
+│                                  InventoryWasCommitted event) and, since the Tech
+│                                  Debt Sprint (§7.13), CartAbandonedListener (reacts
+│                                  to Commerce's new CartWasAbandoned event — both now
+│                                  registered). HighValueOrderListener remains
+│                                  documented, unwired scaffolding (§7.9/§9) — it
+│                                  wasn't in that sprint's scope.
 │   └── DTOs/                     WorkflowData, WorkflowRuleData, WorkflowActionData,
 │                                  WorkflowLogData (added alongside WorkflowLog)
 ├── Infrastructure/
 │   ├── Models/                    4 Eloquent models
 │   └── Repositories/               1 Eloquent repository implementation
 └── WorkflowsServiceProvider.php  binds 1 Repository interface +
-                                   Event::listen()s InventoryLowListener +
+                                   Event::listen()s InventoryLowListener and
+                                   CartAbandonedListener (§7.13) +
                                    registers 5 capability handlers (see §6)
 
 app/Modules/Loyalty/               new in Phase 3
@@ -355,7 +396,8 @@ app/Modules/Loyalty/               new in Phase 3
 │   ├── Services/                 PointsCalculationService (pure, framework-free)
 │   ├── Repositories/              LoyaltyAccountRepositoryInterface (owns Redemption
 │   │                              persistence too), PointTransactionRepositoryInterface,
-│   │                              RewardRepositoryInterface
+│   │                              RewardRepositoryInterface, + allForTenant() on
+│   │                              LoyaltyAccountRepositoryInterface (Tech Debt Sprint, §7.13)
 │   └── Exceptions/                LoyaltyAccountNotFoundException, InsufficientPointsException,
 │                                  RewardNotFoundException, InvalidPointsException (all 4
 │                                  requested) + CustomerNotFoundException,
@@ -364,7 +406,9 @@ app/Modules/Loyalty/               new in Phase 3
 │                                  OrderNotFoundException was — see §7.10)
 ├── Application/
 │   ├── Actions/                  9 Actions — 8 wired to MCP (§6/§7.10);
-│   │                              ExpirePointsAction is the one un-wired Action
+│   │                              ExpirePointsAction is the one un-wired Action (now
+│   │                              runs daily via BulkExpirePointsAction, new in §7.13,
+│   │                              and the loyalty:expire-points scheduled command)
 │   └── Listeners/                OrderPlacedListener (registered — reacts to
 │                                  Commerce's existing OrderWasPlaced event)
 │   └── DTOs/                     LoyaltyAccountData, PointTransactionData, RewardData, RedemptionData
@@ -541,8 +585,20 @@ tests/
 │                        read) -> status transition -> tracking event ->
 │                        tenant isolation -> status-filtered listing +
 │                        invalid transition/nonexistent-order/forbidden
-├── Unit/Core/, Unit/MCP/, Feature/Core/, Feature/MCP/, Feature/Demo/, Unit/Demo/   unchanged since Phase 1
-└── 459 tests total, 1050 assertions, ~8s runtime (`php artisan test`)
+├── Unit/Core/, Unit/MCP/, Feature/Demo/, Unit/Demo/   unchanged since Phase 1
+├── Feature/Core/        + MCPRateLimitTest (Tech Debt Sprint, §7.13) +
+│                        a new query-count regression test in
+│                        CheckPermissionTest (the N+1 fix)
+├── Feature/Commerce/    + InventoryConcurrencyTest (§8.22 regression +
+│                        the reservation race fix) +
+│                        MarkAbandonedCartsCommandTest (Tech Debt Sprint,
+│                        §7.13 — the scheduler, cross-tenant)
+├── Feature/Loyalty/     + ExpireLoyaltyPointsCommandTest (Tech Debt
+│                        Sprint, §7.13 — the scheduler, cross-tenant)
+├── Feature/Workflows/   + CartAbandonedListenerTest (Tech Debt Sprint,
+│                        §7.13 — real CartWasAbandoned event, no faking,
+│                        dispatched by the real scheduled command)
+└── 470 tests total, 1097 assertions, ~8s runtime (`php artisan test`)
 ```
 
 ---
@@ -667,11 +723,36 @@ Domain Module exists:
     same semantic grouping the request specified rather than inventing
     new, more granular ones — `CapabilityName`/`PermissionKey` both
     enforce this (HANDOFF gotcha #2) and it has come up in every single
-    module added so far (WooCommerce, CRM, Finance, Workflows all needed
-    at least one rename). Check every new capability/permission name
-    against this *before* writing any code that references it — it's
-    always cheaper to catch before the ServiceProvider/Seeder/tests are
-    all written against the wrong name.
+    module added so far except Loyalty and Reporting (WooCommerce, CRM,
+    Finance, Workflows, and Shipping all needed at least one rename).
+    Check every new capability/permission name against this *before*
+    writing any code that references it — it's always cheaper to catch
+    before the ServiceProvider/Seeder/tests are all written against the
+    wrong name.
+
+What Phase 4 *added* on top of that (§7.12 has the full reasoning):
+
+14. **A module is allowed to write data back onto an *earlier* module's
+    own entity, through a new mutator that module gains for exactly this
+    purpose** — the mirror image of pattern #8 (which only covers
+    *reading* another module's data through its Repository Interface).
+    Shipping's `CreateShipmentAction` needed to record which
+    Shipment/ShippingMethod fulfills an Order; rather than either (a)
+    importing/mutating Commerce's `Order` in some ad-hoc way, or (b)
+    leaving `orders` untouched and only ever answering "what ships this"
+    from Shipping's own side, Commerce's `Order` entity gained one new
+    mutator (`assignShipping()`) and a handful of new nullable fields —
+    the exact same "widen with optional trailing state" shape pattern #6
+    already established, just authored by the *dependent* module instead
+    of the *owning* module's own next stage. The caller still only ever
+    reaches this through the owning module's existing `Repository
+    Interface::save()` — never a direct Model write, never a new
+    Interface method that leaks the dependent module's concerns into the
+    owner's contract. Use this sparingly: it's the right shape only when
+    the literal requirement is "the other module's own record must
+    change," not merely "I need to read/derive something from it" (which
+    pattern #8 already covers) or "I need to react to something it did"
+    (which pattern #11's Listener shape already covers).
 
 ---
 
@@ -755,7 +836,7 @@ php artisan migrate
 php artisan db:seed   # runs Demo-, Commerce-, CRM-, Finance-, Workflows-, Loyalty-, Reporting-, and ShippingCapabilitiesSeeder
 
 # Tests
-php artisan test                                                  # full app suite — 459 tests, ~8s
+php artisan test                                                  # full app suite — 470 tests, ~8s
 cd packages/opencommerce-sdk; vendor/bin/phpunit tests; cd ../..   # SDK's own suite (unaffected by Phase 2)
 
 # Manual/live verification
@@ -765,6 +846,14 @@ php examples/woocommerce-sync.php <agent-token> http://127.0.0.1:8000/mcp/v1   #
                                                                                 # WOOCOMMERCE_* in .env first,
                                                                                 # or every call fails against
                                                                                 # an empty base URL
+
+# Scheduled jobs (Tech Debt Sprint, §7.13) — run once manually, or via a
+# real OS cron entry (`* * * * * php artisan schedule:run`) in any actual
+# deployment; routes/console.php's Schedule::command() calls only define
+# *what* runs, not that anything triggers them automatically
+php artisan loyalty:expire-points          # daily @ 02:00
+php artisan commerce:check-abandoned-carts # hourly
+php artisan schedule:list                  # confirm both are registered
 ```
 
 To generate a throwaway Agent token for manual testing, see the Tinker
@@ -1559,6 +1648,119 @@ need it). Renamed to `shipping.shipment.transition` and
 `shipping.tracking.add`, restructuring the same 3 semantic groupings the
 request specified rather than inventing new, more granular ones.
 
+### 7.13 Tech Debt Sprint (between Phase 4 Stage 1 and Stage 2)
+
+Requested as 7 items, ranked critical/important/quality. Two of the
+seven came with a diagnosis or a deliverable that didn't match the real
+code/environment — both were caught before implementing and fixed
+instead of implemented as originally described:
+
+1. **§8.22's `CheckInventoryAction` re-check bug — the request's own
+   proposed fix was already the bug, not a fix.** The brief described
+   the *current* behavior as checking only `quantityOnHand`, and
+   proposed fixing it by checking `available()`
+   (`quantityOnHand - quantityReserved`) instead — but
+   `CheckInventoryAction::execute()` already checked `available()`, and
+   that's exactly what §8.22 documents as wrong: `PlaceOrderAction`'s
+   re-check runs *after* `AddToCartAction` already subtracted the same
+   quantity into `quantityReserved`, so checking it against
+   `available()` again double-subtracts it, failing any Order for >=
+   half of on-hand stock. The actual fix: `CheckInventoryAction` gained
+   a second pair, `executeCommit()`/`authorizeCommit()`, checking
+   `quantityOnHand` directly — the question "can the quantity already
+   reserved by this Cart still be fulfilled," not "is there additional
+   uncommitted capacity" (`execute()`/`authorize()`'s question, still
+   correct for `AddToCartAction`'s own use, left unchanged).
+   `PlaceOrderAction` now calls `authorizeCommit()` for its re-check.
+2. **A related concurrency bug, not in the original 38-item debt list,
+   surfaced while designing that fix.** The sprint's own "concurrent
+   reservation" test scenario (two Agents racing for the same stock)
+   doesn't exercise §8.22's arithmetic bug at all — it's a
+   check-then-act race in `AddToCartAction` (no transaction, no row
+   lock between reading `available()` and writing the new reservation).
+   Fixed alongside §8.22 since it's the same neighborhood and squarely
+   fits "production-ready": `InventoryRepositoryInterface` gained
+   `findByProductForUpdate()` (a `lockForUpdate()` read), and
+   `AddToCartAction`'s reserve step now runs inside its own
+   `DB::transaction()` using it, so two concurrent reservations against
+   the same Product serialize instead of both reading the same
+   `available()` snapshot and over-reserving past `quantityOnHand`.
+3. **The N+1 on the permission-check hot path** (old §8's item 5) —
+   `EloquentMemberRoleRepository::findRolesForMember()` was `1 + 2N`
+   queries for N roles (a `findById()` call per role id, each 2 queries
+   of its own). Fixed with a new batch method,
+   `RoleRepositoryInterface::findByIds()` (one `whereIn` + one
+   eager-loaded `permissions` query, regardless of N) —
+   `findRolesForMember()` now calls it once instead of looping.
+4. **Per-agent MCP rate limiting** — no middleware layer exists on
+   `mcp/*` routes (`AgentAuthenticationService` resolves the Agent
+   inside the controller itself, not via a Guard), so this is an
+   explicit Action call (`EnforceRateLimitAction`, `App\Core\Application\Actions`)
+   right after the Agent is resolved in `MCPGatewayController`, using
+   Laravel's `RateLimiter` facade directly (no `RateLimiter::for()`/
+   middleware registration needed — there's no middleware pipeline to
+   hook into). Keyed `"mcp-agent:{$agentId}"`, 100/minute default
+   (`config/mcp.php`, `MCP_RATE_LIMIT_PER_MINUTE`). A new exception,
+   `RateLimitExceededException`, deliberately implements neither Core
+   marker interface (same reasoning `WooCommerceApiException` gives for
+   its own case) — `MCPExceptionHandler` got one new dedicated match arm,
+   `TOO_MANY_REQUESTS`/429.
+5. **CI coverage reporting** — `.github/workflows/tests.yml` already
+   existed (HANDOFF's old "no CI actually running" note meant
+   unverified-on-the-remote, not "file doesn't exist" — the request
+   assumed the latter). Edited in place: `coverage: none` → `coverage: pcov`
+   (the CI runner installs the real PCOV extension via `setup-php`; no
+   composer package makes this possible locally — **`pcov/pcov` is not
+   an installable Composer package**, PCOV is a PHP extension, and this
+   dev environment has neither PCOV nor Xdebug installed, so the actual
+   coverage percentage has never been measured here, only in CI).
+   `phpunit.xml` gained a `<coverage>` block. The CI gate
+   (`--min=60`) is a conservative placeholder, not a measured baseline —
+   raise it once a real CI run reports the actual number (the workflow
+   uploads the report as an artifact for exactly this).
+6. **A real Laravel scheduler** (old §8.23/§8.27) — this Laravel version
+   (^12.0) has no `app/Console/Kernel.php`; `Schedule::command()` calls
+   were added directly to `routes/console.php` instead (already wired
+   via `bootstrap/app.php`'s `withRouting(commands: ...)`). Two new
+   commands, both requiring a new shared primitive neither Core nor any
+   module had before — `TenantRepositoryInterface::all()` (cross-tenant
+   iteration; nothing before this batch job ever needed to list every
+   Tenant):
+   - `loyalty:expire-points` (daily, 02:00) — `BulkExpirePointsAction`
+     (new) lists every LoyaltyAccount for a tenant
+     (`LoyaltyAccountRepositoryInterface::allForTenant()`, new) and calls
+     the existing, already-tested `ExpirePointsAction` once per account
+     (that Action's own docblock already called this "the natural unit a
+     future scheduled job would iterate").
+   - `commerce:check-abandoned-carts` (hourly) — `MarkCartsAbandonedAction`
+     (new) finds every Cart idle past 24h
+     (`CartRepositoryInterface::findStaleActive()`, new, using the
+     `updated_at` Eloquent already tracked) and calls `Cart::abandon()`
+     — an entity mutator that has existed since Phase 3 with **zero
+     callers until this sprint** — then dispatches a new event,
+     `CartWasAbandoned` (Commerce's own, carrying only identifiers, same
+     shape `InventoryWasCommitted` established).
+   - This immediately let Workflows' `CartAbandonedListener` — scaffolding
+     since Phase 3.3, blocked purely on "no scheduler exists" — get a
+     real `handle(CartWasAbandoned $event)` body (calling
+     `TriggerWorkflowAction`, the same translation `InventoryLowListener`
+     already does for `inventory_low`) and a real
+     `Event::listen()` registration in `WorkflowsServiceProvider::boot()`.
+     `HighValueOrderListener` remains deliberately un-wired — it wasn't
+     in this sprint's scope (see §9).
+7. **`docs/api-reference.md`** (new) — generated by reading all 8
+   modules' own `Interfaces/MCP/*Capabilities.php` manifests directly
+   (the same data each `*CapabilitiesSeeder` registers from), not
+   copied from this file's own §6 table, so its schemas stay accurate to
+   the actual registered `inputSchema`/`outputSchema`/`requiredPermissions`
+   independent of anything written here.
+
+11 new tests across the 4 items that produce test-observable behavior
+(`InventoryConcurrencyTest`, a new `CheckPermissionTest` query-count
+regression, `MCPRateLimitTest`, and 3 scheduler/listener end-to-end
+tests) — CI/coverage/docs were verified by running the actual workflow
+file and command output instead. 470 tests total, zero regressions.
+
 ---
 
 ## 8. Known technical debt (ranked, carried over + Phase 2 additions)
@@ -1585,11 +1787,18 @@ request specified rather than inventing new, more granular ones.
    there are now two ways to place an Order with meaningfully different
    pricing behavior. Worth deciding explicitly, not by accident, if a
    future stage wants to unify them.
-4. **No CI actually running yet.** Unchanged from Phase 1 — verify a GitHub
-   remote/Actions is active before relying on it.
-5. **N+1 query on the permission-check hot path.** Unchanged from Phase 1
-   (`EloquentMemberRoleRepository::findRolesForMember()`).
-6. **No global rate limiting on `routes/mcp.php`.** Unchanged from Phase 1.
+4. **No CI actually running yet** (unverified-on-the-remote, not
+   "doesn't exist" — `.github/workflows/tests.yml` has existed since
+   Phase 1). The Tech Debt Sprint (§7.13) added coverage reporting to it
+   (`coverage: pcov`, `--min=60` placeholder), but whether GitHub
+   Actions is actually enabled for this repo's remote is still
+   unverified — check before relying on it.
+5. ~~**N+1 query on the permission-check hot path.**~~ **Resolved in the
+   Tech Debt Sprint (§7.13).** `RoleRepositoryInterface::findByIds()` (new)
+   batches what used to be a `findById()` call per role id.
+6. ~~**No global rate limiting on `routes/mcp.php`.**~~ **Resolved in the
+   Tech Debt Sprint (§7.13)**, per-agent rather than global —
+   `EnforceRateLimitAction`, 100/min per Agent by default.
 7. **`User` identity path is incomplete.** Unchanged from Phase 1 — every
    single Commerce capability added in Phase 2 hardcodes `MemberType::Agent`
    for the same reason MCPGatewayController always did. If a human User
@@ -1614,8 +1823,14 @@ request specified rather than inventing new, more granular ones.
     should charge *outside* the transaction and only wrap the subsequent DB
     writes, so a slow network call never holds a DB lock. Documented in
     `ProcessPaymentAction`'s own docblock.
-11. **Coverage percentage is unmeasured.** Unchanged from Phase 1 — no
-    Xdebug/PCOV installed.
+11. **Coverage percentage is still unmeasured locally** — the Tech Debt
+    Sprint (§7.13) added the `<coverage>` block to `phpunit.xml` and wired
+    `coverage: pcov` into CI, but this dev environment has neither PCOV
+    nor Xdebug installed (PCOV is a PHP extension, not a Composer
+    package — `composer require pcov/pcov` isn't a real thing), so the
+    actual percentage has only ever been measurable in CI, never here.
+    Check the CI run's uploaded `coverage-report` artifact for the real
+    number, then raise `--min=60` (currently a placeholder) to match it.
 12. **WooCommerce sync is single-currency and un-scheduled.** `WooCommerceConfig::$currency`
     is one value for the whole store (WooCommerce doesn't return a currency
     per product in its REST payload), and `commerce.woocommerce.sync` only
@@ -1662,26 +1877,23 @@ request specified rather than inventing new, more granular ones.
     deliberately non-unified fallback chains" note before changing either;
     they read similarly but intentionally never share code.
 21. **Coverage is unmeasured** for Finance same as everywhere else (§8.11).
-22. **`CheckInventoryAction`'s re-check math breaks for orders larger than
-    half of on-hand stock.** Discovered writing Workflows' own end-to-end
-    test (§7.9), not introduced by it. The re-check inside
-    `PlaceOrderAction` calls `CheckInventoryAction::authorize()` with the
-    Cart item's quantity against `Inventory::available()`, but that
-    Quantity was *already reserved* by `AddToCartAction` earlier in the
-    same flow — `available()` already has it subtracted out, so the
-    re-check is really asking "is there `available()` *more* than what's
-    already held," not "is the already-held amount still valid." Ordering
-    ≥ half of on-hand stock always fails this even though nothing is
-    actually wrong. Needs either a re-check that compares against
-    `quantityOnHand` directly (the semantically correct question — "can
-    this reservation still be fulfilled") or a way to tell
-    `CheckInventoryAction` "this quantity is already reserved by the Cart
-    being checked out, don't double-count it."
-23. **No scheduled/cron mechanism exists anywhere in this codebase** —
-    the actual blocker for `CartAbandonedListener` (§7.9), and for any
-    future "N hours/days have passed" business rule generally. Laravel's
-    own scheduler (`routes/console.php` / `Schedule::command()`) has
-    never been touched.
+22. ~~**`CheckInventoryAction`'s re-check math breaks for orders larger
+    than half of on-hand stock.**~~ **Resolved in the Tech Debt Sprint
+    (§7.13).** `CheckInventoryAction` gained `executeCommit()`/
+    `authorizeCommit()`, checking `quantityOnHand` directly instead of
+    `available()` — the correct question for a re-check on a quantity
+    already reserved by the same Cart. `PlaceOrderAction` now calls
+    `authorizeCommit()`. A related, previously-undocumented reservation
+    race condition (concurrent `AddToCartAction` calls over-reserving
+    past `quantityOnHand`) was found and fixed alongside it, via
+    `InventoryRepositoryInterface::findByProductForUpdate()` (row
+    locking) + wrapping the reservation in `DB::transaction()`.
+23. ~~**No scheduled/cron mechanism exists anywhere in this codebase**~~ —
+    **Resolved in the Tech Debt Sprint (§7.13).** `routes/console.php`
+    now has two real `Schedule::command()` entries
+    (`loyalty:expire-points` daily, `commerce:check-abandoned-carts`
+    hourly) — the actual blocker for `CartAbandonedListener` (§7.9),
+    which is now wired for real.
 24. **`WorkflowAction`'s `notify_agent` type doesn't deliver anywhere.**
     No Notification/Inbox system exists in Core — "notifying" currently
     means rendering the message template and recording it in the
@@ -1700,10 +1912,11 @@ request specified rather than inventing new, more granular ones.
     the oldest still-flagged batch first regardless of which batch a
     Customer's redemptions actually drew down. Tenant-favoring, not
     wrong, but a precise implementation is real future work.
-27. **No scheduling mechanism exists anywhere in this codebase** (same
-    item as §8.23, hit again) — the actual blocker for running
-    `ExpirePointsAction` automatically, same as `CartAbandonedListener`.
-    Both would be unlocked by the same piece of infrastructure.
+27. ~~**No scheduling mechanism exists anywhere in this codebase**~~ (same
+    item as §8.23) — **Resolved in the Tech Debt Sprint (§7.13)**, and it
+    did unlock both at once as predicted: `ExpirePointsAction` now runs
+    daily via `BulkExpirePointsAction`/`loyalty:expire-points`, and
+    `CartAbandonedListener` is wired for real.
 28. **No `crm.tag.*`-style admin surface for Rewards** — no
     `UpdateRewardAction`/deactivate operation exists; a Reward, once
     created, can only be read or listed, never edited or retired.
@@ -1774,25 +1987,26 @@ request specified rather than inventing new, more granular ones.
 
 Phase 2 (Commerce, all 6 Stages) and Phase 3 (CRM, Finance, Workflows,
 Loyalty, Reporting — all 5 Stages) are fully complete. Phase 4
-(Shipping & Logistics) has one Stage done — Shipping Foundation.
-Candidates worth raising with whoever's driving scope next, roughly in
-order of how much they'd reuse what already exists:
+(Shipping & Logistics) has one Stage done — Shipping Foundation. The
+Tech Debt Sprint (§7.13) ran between Shipping's Stage 1 and whatever
+comes next, closing the scheduler gap and the `CheckInventoryAction`
+re-check bug that used to top this list. Candidates worth raising with
+whoever's driving scope next, roughly in order of how much they'd reuse
+what already exists:
 
-- **A scheduling mechanism** (§8.23/§8.27) — unlocks *two* things at
-  once: `CartAbandonedListener` (Workflows) and running
-  `ExpirePointsAction` automatically (Loyalty) — the highest-leverage
-  single piece of infrastructure available right now, since it's the
-  same blocker in two different modules, and nothing in this codebase
-  has ever used Laravel's own scheduler.
-- **Wire `HighValueOrderListener`** (§7.9) — genuinely the cheapest
-  possible next increment in the entire codebase right now: the event it
-  needs (`OrderWasPlaced`) already exists, the Listener class already
-  exists, only `Event::listen()` in `WorkflowsServiceProvider::boot()`
-  and a Workflow row are missing.
-- **Fix `CheckInventoryAction`'s re-check math** (§8.22) — a real,
-  previously-undiscovered bug affecting any Order for ≥ half of a
-  Product's on-hand stock, found while building Workflows' own Stage,
-  not by it.
+- **Measure real test coverage from a CI run** — the Tech Debt Sprint
+  (§7.13) wired `coverage: pcov` into `.github/workflows/tests.yml` but
+  could only set a conservative placeholder gate (`--min=60`), since no
+  coverage driver exists in this dev environment to measure the real
+  number locally. Cheapest possible next increment: push, read the
+  uploaded `coverage-report` artifact, raise the gate to match reality.
+- **Wire `HighValueOrderListener`** (§7.9) — still genuinely the cheapest
+  possible next increment in the entire codebase: the event it needs
+  (`OrderWasPlaced`) already exists, the Listener class already exists,
+  only `Event::listen()` in `WorkflowsServiceProvider::boot()` and a
+  Workflow row are missing. (`CartAbandonedListener`, the other half of
+  this same "scaffolded Listener" pattern, got wired for real in §7.13 —
+  this is the one that's left.)
 - **Phase 4's next Shipping stage** — Shipping Zones/per-region rates
   (§8.37), partial/multi-shipment fulfillment (§8.35), folding
   `shipping_cost` into Commerce's own checkout total (§8.36), or a

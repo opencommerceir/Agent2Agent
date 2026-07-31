@@ -8,6 +8,7 @@ use App\Core\Domain\Exceptions\Contracts\ConflictExceptionInterface;
 use App\Core\Domain\Exceptions\Contracts\NotFoundExceptionInterface;
 use App\Core\Domain\Exceptions\InvalidAgentTokenException;
 use App\Core\Domain\Exceptions\PermissionDeniedException;
+use App\Core\Domain\Exceptions\RateLimitExceededException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -42,6 +43,11 @@ final class MCPExceptionHandler
             $e instanceof AgentNotActiveException => $this->respond('UNAUTHORIZED', $e->getMessage(), 401),
 
             $e instanceof PermissionDeniedException => $this->respond('FORBIDDEN', $e->getMessage(), 403),
+
+            // Neither 404- nor 409-shaped (§3.2) — its own dedicated code,
+            // same reasoning WooCommerceApiException's docblock gives for
+            // not implementing either Core marker interface.
+            $e instanceof RateLimitExceededException => $this->respond('TOO_MANY_REQUESTS', $e->getMessage(), 429),
 
             $e instanceof CapabilityNotFoundException,
             $e instanceof NotFoundExceptionInterface => $this->respond('NOT_FOUND', $e->getMessage(), 404),

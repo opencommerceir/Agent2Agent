@@ -17,6 +17,26 @@ class EloquentRoleRepository implements RoleRepositoryInterface
         return $model ? $this->toEntity($model) : null;
     }
 
+    /**
+     * One `whereIn` query (+ the eager-loaded `permissions` query = 2
+     * total) regardless of how many ids are passed in — replaces what
+     * used to be a findById() call per id in
+     * EloquentMemberRoleRepository::findRolesForMember() (1 + 2N
+     * queries for N roles; now a constant 1 + 2).
+     */
+    public function findByIds(array $ids): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+
+        return RoleModel::with('permissions')
+            ->whereIn('id', $ids)
+            ->get()
+            ->map(fn ($model) => $this->toEntity($model))
+            ->all();
+    }
+
     public function findBySlug(int $tenantId, string $slug): ?RoleEntity
     {
         $model = RoleModel::with('permissions')

@@ -37,10 +37,16 @@ use RuntimeException;
  * Inventory handling is the two-phase model Inventory::commit()
  * documents: every item's quantity was already soft-reserved when it was
  * added to the Cart; placing the Order converts that hold into an actual
- * stock reduction. CheckInventoryAction re-validates first as a guard
- * against inventory having been adjusted downward since the Cart was
- * built (e.g. a manual correction) — defense in depth, same reasoning as
- * AddToCartAction.
+ * stock reduction. CheckInventoryAction::authorizeCommit() re-validates
+ * first as a guard against inventory having been adjusted downward since
+ * the Cart was built (e.g. a manual correction) — defense in depth, same
+ * reasoning as AddToCartAction. Deliberately *not* authorize()/execute()
+ * (checked against available()): that quantity is already reserved by
+ * this same Cart, so re-checking it against available() would
+ * double-subtract it and wrongly reject any Order for >= half of
+ * on-hand stock (HANDOFF §8.22) — authorizeCommit() checks quantityOnHand
+ * directly instead, the correct question for "can this already-reserved
+ * quantity still be committed."
  *
  * The whole operation is one DB transaction: Cart, Inventory and Order
  * all change together or not at all.
@@ -104,7 +110,7 @@ final class PlaceOrderAction
             $orderItems = [];
 
             foreach ($cart->items() as $cartItem) {
-                $this->checkInventory->authorize($cartItem->productId(), $tenantId, $cartItem->quantity());
+                $this->checkInventory->authorizeCommit($cartItem->productId(), $tenantId, $cartItem->quantity());
                 $orderItems[] = OrderItem::fromCartItem($cartItem);
             }
 

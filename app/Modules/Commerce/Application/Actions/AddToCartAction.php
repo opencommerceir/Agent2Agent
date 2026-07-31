@@ -7,11 +7,13 @@ use App\Modules\Commerce\Application\DTOs\CartData;
 use App\Modules\Commerce\Domain\Entities\Cart;
 use App\Modules\Commerce\Domain\Events\InventoryReserved;
 use App\Modules\Commerce\Domain\Events\ItemAddedToCart;
+use App\Modules\Commerce\Domain\Exceptions\InsufficientInventoryException;
 use App\Modules\Commerce\Domain\Exceptions\ProductNotFoundException;
 use App\Modules\Commerce\Domain\Repositories\CartRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\InventoryRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\ProductRepositoryInterface;
 use App\Modules\Commerce\Domain\ValueObjects\Quantity;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 
 /**
@@ -22,9 +24,15 @@ use Illuminate\Support\Facades\Event;
  * out of scope here.
  *
  * CheckInventoryAction::authorize() gives an early, clearly-worded
- * failure; Inventory::reserve() then re-checks as the entity's own
- * invariant (defense in depth, not redundant busywork — see that
- * entity's docblock).
+ * failure before touching the database; the actual read-check-write of
+ * the reservation happens inside its own DB::transaction() using
+ * findByProductForUpdate() (a row lock), so two concurrent Agents
+ * reserving against the same product serialize instead of both reading
+ * the same available() snapshot and over-reserving past quantityOnHand.
+ * Inventory::reserve() re-checks as the entity's own invariant inside
+ * that locked transaction — the authoritative enforcement, not redundant
+ * busywork (see that entity's docblock); the early authorize() call is
+ * only a fast, clearly-worded rejection for the common (non-racing) case.
  */
 final class AddToCartAction
 {
@@ -53,9 +61,16 @@ final class AddToCartAction
 
         $this->checkInventory->authorize($productId, $tenantId, $requestedQuantity);
 
-        $inventory = $this->inventories->findByProduct($productId, $tenantId);
-        $inventory->reserve($requestedQuantity);
-        $this->inventories->save($inventory);
+        DB::transaction(function () use ($productId, $tenantId, $requestedQuantity): void {
+            $inventory = $this->inventories->findByProductForUpdate($productId, $tenantId);
+
+            if (! $inventory) {
+                throw new InsufficientInventoryException("Product [{$productId}] has no inventory record.");
+            }
+
+            $inventory->reserve($requestedQuantity);
+            $this->inventories->save($inventory);
+        });
 
         Event::dispatch(new InventoryReserved($productId, $tenantId, $requestedQuantity));
 

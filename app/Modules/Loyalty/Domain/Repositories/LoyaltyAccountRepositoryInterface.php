@@ -23,6 +23,18 @@ interface LoyaltyAccountRepositoryInterface
 
     public function customerHasAccount(int $customerId, int $tenantId): bool;
 
+    /**
+     * Added for BulkExpirePointsAction (the scheduled `loyalty:expire-points`
+     * command, HANDOFF §8.23/§8.27): ExpirePointsAction itself only ever
+     * processes one LoyaltyAccount at a time (its own docblock already
+     * calls this "the natural unit a future scheduled job would iterate
+     * accounts and call this once per account") — nothing before this
+     * could enumerate every account for a tenant to iterate over.
+     *
+     * @return list<LoyaltyAccount>
+     */
+    public function allForTenant(int $tenantId): array;
+
     public function save(LoyaltyAccount $account): LoyaltyAccount;
 
     public function saveRedemption(Redemption $redemption): Redemption;

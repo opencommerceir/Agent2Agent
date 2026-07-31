@@ -8,6 +8,17 @@ interface RoleRepositoryInterface
 {
     public function findById(int $id): ?Role;
 
+    /**
+     * Batch lookup by id, permissions eager-loaded in the same query —
+     * exists specifically so findRolesForMember() can resolve N role ids
+     * in one round trip instead of calling findById() in a loop (the
+     * fixed N+1: see EloquentRoleRepository::findByIds()'s own docblock).
+     *
+     * @param list<int> $ids
+     * @return list<Role>
+     */
+    public function findByIds(array $ids): array;
+
     public function findBySlug(int $tenantId, string $slug): ?Role;
 
     public function save(Role $role): Role;

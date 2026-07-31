@@ -17,6 +17,7 @@ use App\Core\Application\DTOs\OrganizationData;
 use App\Core\Application\DTOs\TenantData;
 use App\Core\Domain\ValueObjects\MemberType;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class CheckPermissionTest extends TestCase
@@ -85,6 +86,44 @@ class CheckPermissionTest extends TestCase
 
         $this->assertFalse($checkPermission->execute(MemberType::Agent, $agent->id, $tenant->id, 'commerce.products.read'));
         $this->assertDatabaseMissing('member_roles', ['member_type' => 'agent', 'member_id' => $agent->id]);
+    }
+
+    /**
+     * Regression guard for the N+1 fix in
+     * EloquentMemberRoleRepository::findRolesForMember() (was 1 + 2N
+     * queries for N roles — a findById() call per role id — now a
+     * constant 1 + 2 regardless of N, via RoleRepositoryInterface::findByIds()).
+     * Asserts the query count itself stays flat between 1 role and 5
+     * roles, not just that the answer is still correct.
+     */
+    public function test_execute_queryCountStaysConstantRegardlessOfRoleCount(): void
+    {
+        [$tenant, , $agent] = $this->makeTenantOrgAgent();
+
+        $permission = app(CreatePermissionAction::class)->execute('commerce.products.read');
+        $roleOne = app(CreateRoleAction::class)->execute($tenant->id, 'Role One', 'role-one-'.uniqid());
+        app(AssignPermissionToRoleAction::class)->execute($roleOne->id, $permission->id);
+        app(AssignRoleToMemberAction::class)->execute(MemberType::Agent, $agent->id, $roleOne->id);
+
+        $checkPermission = app(CheckPermissionAction::class);
+
+        DB::enableQueryLog();
+        $this->assertTrue($checkPermission->execute(MemberType::Agent, $agent->id, $tenant->id, 'commerce.products.read'));
+        $queryCountForOneRole = count(DB::getQueryLog());
+        DB::disableQueryLog();
+        DB::flushQueryLog();
+
+        for ($i = 2; $i <= 5; $i++) {
+            $role = app(CreateRoleAction::class)->execute($tenant->id, "Role {$i}", 'role-'.$i.'-'.uniqid());
+            app(AssignRoleToMemberAction::class)->execute(MemberType::Agent, $agent->id, $role->id);
+        }
+
+        DB::enableQueryLog();
+        $this->assertTrue($checkPermission->execute(MemberType::Agent, $agent->id, $tenant->id, 'commerce.products.read'));
+        $queryCountForFiveRoles = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        $this->assertSame($queryCountForOneRole, $queryCountForFiveRoles);
     }
 
     /**

@@ -4,6 +4,7 @@ namespace App\Modules\Workflows;
 
 use App\Core\Application\DTOs\AuthContext;
 use App\Core\Application\Services\CapabilityHandlerRegistry;
+use App\Modules\Commerce\Domain\Events\CartWasAbandoned;
 use App\Modules\Commerce\Domain\Events\InventoryWasCommitted;
 use App\Modules\Workflows\Application\Actions\CreateWorkflowAction;
 use App\Modules\Workflows\Application\Actions\GetWorkflowAction;
@@ -11,6 +12,7 @@ use App\Modules\Workflows\Application\Actions\ListWorkflowLogsAction;
 use App\Modules\Workflows\Application\Actions\ListWorkflowsAction;
 use App\Modules\Workflows\Application\Actions\TriggerWorkflowAction;
 use App\Modules\Workflows\Application\DTOs\WorkflowData;
+use App\Modules\Workflows\Application\Listeners\CartAbandonedListener;
 use App\Modules\Workflows\Application\Listeners\InventoryLowListener;
 use App\Modules\Workflows\Domain\Repositories\WorkflowRepositoryInterface;
 use App\Modules\Workflows\Infrastructure\Repositories\EloquentWorkflowRepository;
@@ -29,11 +31,12 @@ use Illuminate\Support\ServiceProvider;
  * This module introduces the platform's first real Domain Event Listener
  * wired across a module boundary — every event dispatched since Phase 1
  * had zero registered listeners until now (`Event::listen()` calls
- * simply didn't exist anywhere in this codebase). Only
- * `InventoryLowListener` is actually registered below;
- * `CartAbandonedListener`/`HighValueOrderListener` exist as documented
- * scaffolding (see their own docblocks) and are deliberately not
- * `Event::listen()`'d to anything this stage.
+ * simply didn't exist anywhere in this codebase). `InventoryLowListener`
+ * and, since the Tech Debt Sprint's scheduler mechanism (HANDOFF
+ * §8.23/§8.27), `CartAbandonedListener` are both registered below.
+ * `HighValueOrderListener` still exists as documented scaffolding (see
+ * its own docblock) and remains deliberately not `Event::listen()`'d to
+ * anything — it wasn't in that sprint's scope.
  *
  * Capability *handler* registration lives here (pure in-memory, safe on
  * every boot); capability *description* registration follows Commerce's/
@@ -50,6 +53,7 @@ class WorkflowsServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Event::listen(InventoryWasCommitted::class, InventoryLowListener::class);
+        Event::listen(CartWasAbandoned::class, CartAbandonedListener::class);
 
         $handlers = $this->app->make(CapabilityHandlerRegistry::class);
 
