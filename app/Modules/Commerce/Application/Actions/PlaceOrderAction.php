@@ -6,6 +6,7 @@ use App\Core\Domain\ValueObjects\MemberType;
 use App\Modules\Commerce\Application\DTOs\OrderData;
 use App\Modules\Commerce\Domain\Entities\Order;
 use App\Modules\Commerce\Domain\Entities\OrderItem;
+use App\Modules\Commerce\Domain\Events\InventoryWasCommitted;
 use App\Modules\Commerce\Domain\Events\OrderWasConfirmed;
 use App\Modules\Commerce\Domain\Events\OrderWasPlaced;
 use App\Modules\Commerce\Domain\Exceptions\CartNotFoundException;
@@ -111,6 +112,8 @@ final class PlaceOrderAction
                 $inventory = $this->inventories->findByProduct($orderItem->productId(), $tenantId);
                 $inventory->commit($orderItem->quantity());
                 $this->inventories->save($inventory);
+
+                Event::dispatch(new InventoryWasCommitted($orderItem->productId(), $tenantId, $orderItem->quantity()));
             }
 
             $currency = $orderItems[0]->unitPrice()->currency();

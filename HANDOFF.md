@@ -2,14 +2,17 @@
 
 **Status: Phase 1 (Core + MCP Gateway) and Phase 2 (Commerce, all 6
 Stages) are complete. Phase 3 (Domain Expansion) is under way: Stage 1
-(CRM Foundation) and Stage 2 (Finance — per-tenant tax rates, Invoices)
-are both complete, and Finance now supplies Commerce's own checkout
-pricing with real tax rates through an Interface Commerce itself owns
-(§7.8) — the tax-rate tech debt flagged since Phase 2 §8.1 is resolved.
-353 tests passing, zero known regressions. Next up: whatever Phase 3's
-next module turns out to be (AI Workflows? more Finance — invoice PDF
-export, payment reconciliation?), or any deferred item in §8/§9 if more
-polish is wanted first.**
+(CRM Foundation), Stage 2 (Finance — per-tenant tax rates, Invoices), and
+Stage 3 (Workflows — event-driven automation) are all complete. Finance
+supplies Commerce's own checkout pricing with real tax rates through an
+Interface Commerce itself owns (§7.8) — the tax-rate tech debt flagged
+since Phase 2 §8.1 is resolved. Workflows introduces the platform's first
+real cross-module Domain Event Listener (§7.9) and the "Low Stock Alert"
+automation end to end: Commerce places an Order, stock drops below a
+tenant-configured threshold, and a Workflow reacts — no polling, no
+manual trigger required. 377 tests passing, zero known regressions. Next
+up: wiring CartAbandoned/HighValueOrder (both scaffolded, neither wired —
+§7.9), another Phase 3 module, or any deferred item in §8/§9.**
 
 This file is a working-state snapshot for picking up development in a new
 session. It assumes you've already read `CLAUDE.md` and `docs/*.md` (the
@@ -17,9 +20,9 @@ project's standing rules) — this document is "what actually got built and
 why," not a repeat of the architecture doctrine.
 
 If you are a fresh Claude Code session reading this: read this whole file
-before touching code. Section 9 (Phase 2 detail) and section 10 (technical
-debt) are the parts most likely to save you from repeating a mistake or
-re-deciding something that was already deliberately decided.
+before touching code. Section 7 (stage-by-stage detail) and Section 8
+(technical debt) are the parts most likely to save you from repeating a
+mistake or re-deciding something that was already deliberately decided.
 
 ---
 
@@ -41,7 +44,7 @@ added so Domain Modules can opt an exception into the MCP error envelope
 | Agent Registry | `Domain/Entities/Agent.php`, `AgentToken.php`, related Actions | Unchanged since Phase 1. |
 | Permission System | `Domain/Entities/{Permission,Role,MemberRole}.php`, `CheckPermissionAction` | Unchanged since Phase 1. |
 | Capability Registry | `Domain/Entities/Capability.php`, related Actions | Unchanged since Phase 1. Still strict 3-segment `domain.resource.action` names. |
-| **Capability Execution** | `Application/Services/CapabilityHandlerRegistry.php`, `CapabilityExecutionService.php` | **Handler contract changed in Phase 2**: `callable(array $input, AuthContext $context): array` — was `callable(array $input): array` in Phase 1, then briefly `callable(array $input, int $tenantId): array` early in Phase 2 before Cart ownership needed the Agent's own id too. See §9.2/§9.3 for the full history — do not re-litigate this, it was already widened twice and settled. |
+| **Capability Execution** | `Application/Services/CapabilityHandlerRegistry.php`, `CapabilityExecutionService.php` | **Handler contract changed in Phase 2**: `callable(array $input, AuthContext $context): array` — was `callable(array $input): array` in Phase 1, then briefly `callable(array $input, int $tenantId): array` early in Phase 2 before Cart ownership needed the Agent's own id too. See §7.2/§7.3 for the full history — do not re-litigate this, it was already widened twice and settled. |
 | **AuthContext** | `Application/DTOs/AuthContext.php` | New in Phase 2. `{tenantId: int, agentId: int}`, built via `AuthContext::forAgent(AgentData $agent)`. Passed explicitly into every handler — never resolved from a container/global. Every Commerce Domain Repository interface and Application Action still takes plain `int $tenantId`/`int $agentId` scalars, not `AuthContext` itself — only `CommerceServiceProvider`'s handler closures unpack it. Do not push `AuthContext` down into Domain/Application signatures; that would invert the dependency direction (Domain must not depend on an Application-layer DTO). |
 | **Marker interfaces** | `Domain/Exceptions/Contracts/{NotFoundExceptionInterface,ConflictExceptionInterface}.php` | New in Phase 2. `MCPExceptionHandler` matches on these interfaces (404 / 409) in addition to its own concrete exception classes — this is how Commerce's exceptions (`ProductNotFoundException`, `InsufficientInventoryException`, etc.) get mapped to the right HTTP status **without Core importing anything from `App\Modules\Commerce`**. Any new Domain Module exception that should map to 404/409 implements one of these; Core is never touched again for this. |
 | MCP Gateway | `Interfaces/HTTP/Controllers/MCP/*`, `Exceptions/MCPExceptionHandler.php` | Routes unchanged: `POST /mcp/v1/execute`, `GET /mcp/v1/capabilities`. Error envelope gained a new code: `CONFLICT` (409), used for business-rule rejections (insufficient stock, payment declined, invalid coupon, invalid order-status transition) that are neither a validation error nor a missing resource. |
@@ -99,6 +102,25 @@ that makes the second direction safe is `Commerce\Application\Services\TaxRatePr
 `FinanceServiceProvider` binds over Commerce's own harmless default
 (`NullTaxRateProvider`). Commerce still has zero references to
 `App\Modules\Finance\*` anywhere in its own code.
+
+### `app/Modules/Workflows/` — **new in Phase 3. Event-driven automation ("when X happens and Y is true, do Z") — Phase 3, Stage 3, and the first module to attach a real Listener to another module's Domain Event.**
+
+See §7.9 for the full detail. 4 Domain Entities (`Workflow`,
+`WorkflowRule`, `WorkflowAction`, and `WorkflowLog` — the last one added
+unprompted, see §7.9), 3 Value Objects (`WorkflowStatus`, `EventType`,
+`Threshold`), 2 domain events, 2 exceptions, 1 Repository interface
+(owns `WorkflowLog` persistence too), 7 Application Actions (5 wired to
+MCP — see §6, one added unprompted alongside `WorkflowLog`), 3 Listeners
+(only `InventoryLowListener` actually registered — `CartAbandonedListener`/
+`HighValueOrderListener` are documented, unwired scaffolding), 4 Eloquent
+models, 1 Eloquent repository, 4 migrations. Required one small, additive
+change to Commerce itself: a new `InventoryWasCommitted` Domain Event
+(dispatched from `PlaceOrderAction`) — no event previously existed for
+"stock actually went down," only `InventoryReserved` (the soft-hold
+side). `InventoryLowListener` reacts to it using Commerce's
+`InventoryRepositoryInterface`/`ProductRepositoryInterface` (Interfaces,
+never Commerce's Models), the same Dependency Inversion direction
+CRM/Finance already established.
 
 ### `app/Modules/Demo/` — unchanged since Phase 1
 
@@ -219,6 +241,35 @@ app/Modules/Finance/               new in Phase 3
                                    TaxRateProviderInterface + registers 8
                                    capability handlers (see §6)
 
+app/Modules/Workflows/            new in Phase 3
+├── Domain/
+│   ├── Entities/                 Workflow, WorkflowRule, WorkflowAction, WorkflowLog
+│   │                             (WorkflowLog added unprompted, see §7.9)
+│   ├── ValueObjects/             WorkflowStatus, EventType, Threshold
+│   ├── Events/                   WorkflowWasTriggered, WorkflowActionExecuted
+│   ├── Services/                 WorkflowEvaluator (pure, framework-free)
+│   ├── Repositories/              WorkflowRepositoryInterface (owns WorkflowLog
+│   │                              persistence too, same shape CRM's
+│   │                              TicketRepositoryInterface has)
+│   └── Exceptions/                WorkflowNotFoundException, InvalidWorkflowException
+├── Application/
+│   ├── Actions/                  7 Actions — 5 wired to MCP (§6/§7.9);
+│   │                              ListWorkflowLogsAction added unprompted
+│   │                              alongside WorkflowLog
+│   └── Listeners/                InventoryLowListener (the only one actually
+│                                  registered — reacts to Commerce's new
+│                                  InventoryWasCommitted event), CartAbandonedListener,
+│                                  HighValueOrderListener (both documented,
+│                                  unwired scaffolding, §7.9)
+│   └── DTOs/                     WorkflowData, WorkflowRuleData, WorkflowActionData,
+│                                  WorkflowLogData (added alongside WorkflowLog)
+├── Infrastructure/
+│   ├── Models/                    4 Eloquent models
+│   └── Repositories/               1 Eloquent repository implementation
+└── WorkflowsServiceProvider.php  binds 1 Repository interface +
+                                   Event::listen()s InventoryLowListener +
+                                   registers 5 capability handlers (see §6)
+
 app/Modules/Demo/                  unchanged since Phase 1
 
 packages/opencommerce-sdk/         unchanged since Phase 1
@@ -238,8 +289,10 @@ database/
 │   │                                   are stored in the existing `products` table, keyed by SKU)
 │   ├── 2026_07_31_000021-000025                  (Phase 3.1 — tickets, ticket_comments,
 │   │                                               customer_notes, tags, customer_tag pivot)
-│   └── 2026_07_31_000026-000028                  (Phase 3.2 — tax_rates, invoices, invoice_items)
-└── seeders/{DemoCapabilitiesSeeder,CommerceCapabilitiesSeeder,CRMCapabilitiesSeeder,FinanceCapabilitiesSeeder}.php
+│   ├── 2026_07_31_000026-000028                  (Phase 3.2 — tax_rates, invoices, invoice_items)
+│   └── 2026_07_31_000029-000032                  (Phase 3.3 — workflows, workflow_rules,
+│                                                   workflow_actions, workflow_logs)
+└── seeders/{DemoCapabilitiesSeeder,CommerceCapabilitiesSeeder,CRMCapabilitiesSeeder,FinanceCapabilitiesSeeder,WorkflowsCapabilitiesSeeder}.php
 
 tests/
 ├── Fixtures/            woocommerce-products-response.json (Stage 6 — reference payload)
@@ -254,8 +307,14 @@ tests/
 ├── Feature/Finance/     4 files — full MCP scenario + tenant isolation +
 │                        the Commerce<->Finance tax integration (both fallback
 │                        directions) + CreateInvoiceAction's own fallback chain
+├── Unit/Workflows/      4 files — Workflow, WorkflowEvaluator (the important
+│                        one — every condition type + AND-combination + inactive
+│                        guard), WorkflowLog, Threshold, all framework-free PHPUnit
+├── Feature/Workflows/   2 files — full real-Order-triggers-real-Listener
+│                        scenario (no event faking) + tenant isolation +
+│                        the one un-wired Action exercised directly
 ├── Unit/Core/, Unit/MCP/, Feature/Core/, Feature/MCP/, Feature/Demo/, Unit/Demo/   unchanged since Phase 1
-└── 353 tests total, 792 assertions, ~7s runtime (`php artisan test`)
+└── 377 tests total, 845 assertions, ~6s runtime (`php artisan test`)
 ```
 
 ---
@@ -316,6 +375,75 @@ each):
    optional-but-typed yet. If you add a genuinely optional field, leave it
    out of the schema and read it defensively (`$input['x'] ?? null`) in the
    handler/Action.
+
+What Phase 3 *added* on top of that (see §7.7–§7.9 for the full reasoning
+behind each) — these are the ones that matter most once more than one
+Domain Module exists:
+
+8. **Module -> Module dependency, one direction: depend on the other
+   module's Domain Repository *Interface*, never its Infrastructure/Model
+   or concrete Exception classes.** CRM depends on Commerce's
+   `CustomerRepositoryInterface`; Finance depends on Commerce's
+   `OrderRepositoryInterface`/`ProductRepositoryInterface`; Workflows'
+   `InventoryLowListener` depends on Commerce's
+   `InventoryRepositoryInterface`/`ProductRepositoryInterface`. In every
+   case, the *returned Domain Entity* (e.g. Commerce's `Order`) is fine to
+   read from — that's the published contract's return type, not a
+   forbidden concrete dependency. What's forbidden is importing the other
+   module's Eloquent Model, or throwing/catching the other module's
+   concrete Exception class.
+9. **A cross-module "does this exist" check always throws the *calling*
+   module's own exception, never the depended-upon module's.** CRM's own
+   `CustomerNotFoundException`, Finance's own `OrderNotFoundException` —
+   both exist specifically so the calling module never imports the other
+   module's concrete exception type, even though both happen to implement
+   the same Core marker interface and produce an identical 404. See CRM's
+   `CustomerNotFoundException` docblock for the fullest explanation.
+10. **A two-way Module -> Module integration goes through an Interface the
+    *depended-upon* module defines for itself, not one the dependency
+    provides.** Commerce needed a real tax rate from Finance, but Commerce
+    defines `TaxRateProviderInterface` (in its own `Application/Services`)
+    and binds a harmless no-op default (`NullTaxRateProvider`); Finance's
+    ServiceProvider rebinds it to a real implementation
+    (`CommerceTaxRateProvider`) only if Finance happens to be installed.
+    This is the exact same shape `PaymentGatewayInterface` already
+    established — "the module that needs something defines the shape of
+    what it needs," never "the module that provides something reaches
+    into the consumer." Requires the provider's ServiceProvider to be
+    registered *after* the consumer's in `bootstrap/providers.php` — safe
+    regardless of `boot()` order, because Laravel runs every provider's
+    `register()` before any `boot()` runs (§7.8 spells out the exact
+    mechanics).
+11. **A Domain Event Listener that reacts across a module boundary
+    depends on the emitting module's Repository Interfaces the same as
+    any other cross-module Action would** — a Listener is not a special
+    case. `InventoryLowListener` re-fetches current state through
+    `InventoryRepositoryInterface` rather than trusting whatever the
+    event payload happens to carry, since events deliberately carry only
+    identifiers (§7.9). If the event you need to react to doesn't exist
+    yet, adding it is a small, additive, backward-compatible change to
+    the emitting module (`InventoryWasCommitted` was added this way) —
+    check first whether a close-enough event already exists before adding
+    a new one.
+12. **A missing piece the request implies but doesn't literally list (an
+    Entity, a Repository method, an Action) gets added unprompted when
+    skipping it would mean either bypassing an established convention or
+    letting a real failure surface ugly** — always with a clear docblock
+    explaining the gap and pointing to the precedent. `DiscountRepositoryInterface`
+    (Phase 2), `TagNotFoundException` (CRM), `OrderNotFoundException`
+    (Finance), and `WorkflowLog`+`ListWorkflowLogsAction` (Workflows) are
+    the four examples so far — grep this file for "added unprompted" to
+    find all of them and the exact reasoning each time.
+13. **A capability or permission name that would need 2 or 4
+    dot-separated segments gets restructured to exactly 3**, keeping the
+    same semantic grouping the request specified rather than inventing
+    new, more granular ones — `CapabilityName`/`PermissionKey` both
+    enforce this (HANDOFF gotcha #2) and it has come up in every single
+    module added so far (WooCommerce, CRM, Finance, Workflows all needed
+    at least one rename). Check every new capability/permission name
+    against this *before* writing any code that references it — it's
+    always cheaper to catch before the ServiceProvider/Seeder/tests are
+    all written against the wrong name.
 
 ---
 
@@ -396,10 +524,10 @@ cd packages/opencommerce-sdk; composer install; cd ../..
 
 # Database
 php artisan migrate
-php artisan db:seed   # runs Demo-, Commerce-, CRM-, and FinanceCapabilitiesSeeder
+php artisan db:seed   # runs Demo-, Commerce-, CRM-, Finance-, and WorkflowsCapabilitiesSeeder
 
 # Tests
-php artisan test                                                  # full app suite — 353 tests, ~7s
+php artisan test                                                  # full app suite — 377 tests, ~6s
 cd packages/opencommerce-sdk; vendor/bin/phpunit tests; cd ../..   # SDK's own suite (unaffected by Phase 2)
 
 # Manual/live verification
@@ -420,7 +548,7 @@ end to end.
 
 ---
 
-## 6. The 28 MCP capabilities that exist right now
+## 6. The 33 MCP capabilities that exist right now
 
 | Capability | Phase/Stage | Permission | Notes |
 |---|---|---|---|
@@ -452,6 +580,11 @@ end to end.
 | `finance.invoice.get` | P3.2 | `finance.invoices.read` | Tenant-scoped by `findById()`, same shape as `crm.ticket.get`. |
 | `finance.invoice.list` | P3.2 | `finance.invoices.read` | Optional `status`/`customer_id`. |
 | `finance.tax.calculate` | P3.2 | `finance.tax.read` | Strict — an unconfigured region 404s, no fallback (contrast with `finance.invoice.create`'s region handling). |
+| `workflow.definition.create` | P3.3 | `workflow.definitions.manage` | Renamed from the requested `workflow.create` — 2 segments, see §7.9. Requires ≥1 rule and ≥1 action. |
+| `workflow.definition.get` | P3.3 | `workflow.definitions.read` | Renamed from `workflow.get` — same reason. |
+| `workflow.definition.list` | P3.3 | `workflow.definitions.read` | Renamed from `workflow.list` — same reason. Optional `status`/`event_type`. |
+| `workflow.event.trigger` | P3.3 | `workflow.definitions.execute` | Renamed from `workflow.trigger` — same reason. Same code path `InventoryLowListener` calls internally. |
+| `workflow.log.list` | P3.3 | `workflow.definitions.read` | Already 3 segments, unchanged. Optional `workflow_id`/`limit`. |
 
 **Deliberately NOT wired to MCP** despite the underlying Action existing and
 being fully tested (see §8.2 for why, and the same reasoning each time):
@@ -460,7 +593,8 @@ being fully tested (see §8.2 for why, and the same reasoning each time):
 `UpdateOrderStatusAction`, `GetCustomerOrdersAction` (no
 `commerce.customer.orders`), `GetPaymentAction` (no `commerce.payment.get`),
 CRM's `UpdateTicketAction`, `GetCustomerNotesAction`, `CreateTagAction`,
-`AssignTagToCustomerAction` (§7.7), and Finance's `UpdateTaxRateAction` (§7.8).
+`AssignTagToCustomerAction` (§7.7), Finance's `UpdateTaxRateAction` (§7.8),
+and Workflows' `UpdateWorkflowAction` (§7.9).
 Every one of these is a one-capability-definition-plus-one-handler-closure
 addition if a future stage actually needs it through MCP — nothing about
 them is unfinished, they were just never asked for at the MCP layer.
@@ -780,6 +914,88 @@ Product's SKU/Category's slug being immutable-after-creation), only
 `ratePercentage`/`isActive`. Exercised directly in
 `tests/Feature/Finance/UpdateTaxRateActionTest.php`.
 
+### 7.9 Phase 3, Stage 3 — Workflows (event-driven automation)
+
+Entities: `Workflow` (aggregate root — rules/actions frozen at creation,
+same Immutable Order Items shape Order/Invoice already establish),
+`WorkflowRule` (`conditionType`/`field`/`Threshold` — no `id` on the
+Domain Entity, same HANDOFF gotcha #10 shape every other child entity in
+this codebase has), `WorkflowAction` (`actionType`/`parameters`, same
+shape), `WorkflowLog` (see below). VOs: `WorkflowStatus`
+(active/inactive/paused), `EventType` (inventory_low/cart_abandoned/
+order_high_value), `Threshold` (a non-negative int wrapper). Domain
+Service: `WorkflowEvaluator` — pure, framework-free, the same shape
+Commerce's `PricingService`/Finance's `TaxCalculationService` already
+establish. A Workflow's rules are **AND-combined** (every rule must
+match, not just one) — not explicitly specified, a deliberate, documented
+default; an empty rule set never matches (`CreateWorkflowAction` already
+refuses to create one, `WorkflowEvaluator::evaluate()` guards it too).
+
+**`WorkflowLog` (Entity + Model + DTO + `ListWorkflowLogsAction`) wasn't
+in the original request** — added unprompted for the same reason CRM's
+`TagNotFoundException`/Finance's `OrderNotFoundException` were: the
+request named `workflow_logs` (a table), `workflow.log.list` (a
+capability), and exactly one Repository interface for the whole module —
+something has to give that table and capability a structured shape, and
+per this stage's own established convention (CRM's
+`TicketRepositoryInterface` owns `TicketComment`, Finance's
+`InvoiceRepositoryInterface` owns `InvoiceItem`), the natural owner is
+`WorkflowRepositoryInterface::saveLog()`/`listLogs()`, not a second,
+dedicated Repository interface.
+
+**The platform's first real cross-module Domain Event Listener.** Every
+event dispatched since Phase 1 (`ProductWasCreated`, `OrderWasPlaced`,
+`InvoiceWasCreated`, ...) had zero registered listeners — `Event::listen()`
+simply never appeared anywhere in this codebase until
+`WorkflowsServiceProvider::boot()`. `InventoryLowListener::handle()`
+reacts to a **new** Commerce event, `InventoryWasCommitted` (dispatched
+from `PlaceOrderAction`'s commit loop) — added this stage because no
+event previously existed for "stock actually went down," only
+`InventoryReserved` (the soft-hold side; see that new event's own
+docblock). The Listener depends on Commerce's
+`InventoryRepositoryInterface`/`ProductRepositoryInterface` — Interfaces,
+never Commerce's Infrastructure/Model classes — the identical Dependency
+Inversion direction CRM/Finance already established, just triggered by
+an Event instead of a direct Action call.
+
+**Two Listeners exist as deliberate, documented, unwired scaffolding** —
+`CartAbandonedListener` and `HighValueOrderListener` — per this stage's
+explicit scope ("فعلاً فقط یک Workflow ساده پیاده‌سازی می‌کنیم"). Neither
+is registered via `Event::listen()`. `CartAbandonedListener` has a real
+technical gap blocking it (cart abandonment is a time-based condition —
+"idle for 24h" — which needs a scheduled job polling Carts, not an Event
+Listener; no scheduling mechanism exists anywhere in this codebase yet).
+`HighValueOrderListener` has **no** technical blocker at all — Commerce's
+`OrderWasPlaced` event already exists and already carries everything
+needed (see that Listener's own docblock for the exact `handle()` this
+would be) — it is unwired purely because this stage's scope named only
+Low Stock Alert as functional.
+
+**Capability and permission names were renamed from the request** —
+`workflow.create/get/list/trigger` were all 2 segments; `CapabilityName`
+requires exactly 3 (HANDOFF gotcha #2, hit again the same way
+WooCommerce's/CRM's capabilities hit it). Renamed to
+`workflow.definition.create/get/list` and `workflow.event.trigger`
+(`workflow.log.list` was already compliant). Permissions
+(`workflows.manage/read/execute`, also 2 segments — `PermissionKey` has
+the identical requirement) became `workflow.definitions.manage/read/execute`,
+keeping the exact same 3 permission groupings the request specified.
+
+**A real, pre-existing Commerce quirk surfaced while writing this
+stage's own end-to-end test, not introduced by this stage**:
+`CheckInventoryAction`'s re-check inside `PlaceOrderAction` validates a
+Cart item's quantity against `Inventory::available()` — which already
+has *that same Cart's own reservation* subtracted out. Ordering more
+than half of on-hand stock (e.g. 7 of 10) makes that re-check fail even
+though the exact right amount was already correctly reserved earlier by
+`AddToCartAction`. Every existing Commerce/Finance test happens to order
+small-enough quantities to never hit this. Not fixed here — it's a
+pre-existing Commerce behavior, out of scope for a Workflows PR to
+change — but `tests/Feature/Workflows/WorkflowsCapabilityTest.php`'s own
+docblock documents the exact numbers (6 on hand, order 3) chosen to stay
+under that ceiling while still crossing the Low Stock Alert's `<5`
+threshold once committed. Flagged in §8 as a debt item worth a real fix.
+
 ---
 
 ## 8. Known technical debt (ranked, carried over + Phase 2 additions)
@@ -883,35 +1099,80 @@ Product's SKU/Category's slug being immutable-after-creation), only
     deliberately non-unified fallback chains" note before changing either;
     they read similarly but intentionally never share code.
 21. **Coverage is unmeasured** for Finance same as everywhere else (§8.11).
+22. **`CheckInventoryAction`'s re-check math breaks for orders larger than
+    half of on-hand stock.** Discovered writing Workflows' own end-to-end
+    test (§7.9), not introduced by it. The re-check inside
+    `PlaceOrderAction` calls `CheckInventoryAction::authorize()` with the
+    Cart item's quantity against `Inventory::available()`, but that
+    Quantity was *already reserved* by `AddToCartAction` earlier in the
+    same flow — `available()` already has it subtracted out, so the
+    re-check is really asking "is there `available()` *more* than what's
+    already held," not "is the already-held amount still valid." Ordering
+    ≥ half of on-hand stock always fails this even though nothing is
+    actually wrong. Needs either a re-check that compares against
+    `quantityOnHand` directly (the semantically correct question — "can
+    this reservation still be fulfilled") or a way to tell
+    `CheckInventoryAction` "this quantity is already reserved by the Cart
+    being checked out, don't double-count it."
+23. **No scheduled/cron mechanism exists anywhere in this codebase** —
+    the actual blocker for `CartAbandonedListener` (§7.9), and for any
+    future "N hours/days have passed" business rule generally. Laravel's
+    own scheduler (`routes/console.php` / `Schedule::command()`) has
+    never been touched.
+24. **`WorkflowAction`'s `notify_agent` type doesn't deliver anywhere.**
+    No Notification/Inbox system exists in Core — "notifying" currently
+    means rendering the message template and recording it in the
+    `WorkflowLog` (`ExecuteWorkflowActionAction`'s own docblock). A real
+    delivery channel (email, Slack, an MCP push mechanism agents poll)
+    would extend that Action's match arm, not replace the templating.
+25. **A Workflow's rules/actions are immutable after creation, with no
+    "add a rule" / "add an action" operation at all** — only
+    name/description/status are editable (`UpdateWorkflowAction`). A
+    workflow builder UI would need a more deliberate redefinition
+    operation than currently exists, the same gap Ticket/Tag's own
+    "structure is frozen, generic fields aren't" shape has elsewhere.
 
 ---
 
 ## 9. What's next
 
-Phase 2 is fully complete (all 6 Stages). Phase 3 has two Stages done —
-CRM Foundation and Finance (per-tenant tax + Invoices). Candidates worth
-raising with whoever's driving scope next, roughly in order of how much
-they'd reuse what already exists:
+Phase 2 is fully complete (all 6 Stages). Phase 3 has three Stages done —
+CRM Foundation, Finance (per-tenant tax + Invoices), and Workflows
+(event-driven automation). Candidates worth raising with whoever's
+driving scope next, roughly in order of how much they'd reuse what
+already exists:
 
-- **Phase 3's next module** — AI Workflows per the project vision, or
-  more Finance (payment reconciliation to auto-mark Invoices Paid,
-  PDF/email export — §8.18/§8.19), or a second CRM stage (Ticket
-  assignment, Tag removal, a `crm.tag.*` MCP surface — §8.15/§8.16).
-  Finance is the first proof that the Module -> Module dependency
-  direction runs *both* ways safely (§7.8) — a template for whichever
-  module needs its own two-way integration next (an Interface the
-  depended-upon module owns, never a direct class import either way).
+- **Wire `HighValueOrderListener`** (§7.9) — genuinely the cheapest
+  possible next increment in the entire codebase right now: the event it
+  needs (`OrderWasPlaced`) already exists, the Listener class already
+  exists, only `Event::listen()` in `WorkflowsServiceProvider::boot()`
+  and a Workflow row are missing.
+- **Fix `CheckInventoryAction`'s re-check math** (§8.22) — a real,
+  previously-undiscovered bug affecting any Order for ≥ half of a
+  Product's on-hand stock, found while building this stage, not by it.
+- **A scheduling mechanism** (§8.23) — unlocks `CartAbandonedListener`
+  and any other "time has passed" business rule; nothing in this
+  codebase has ever used Laravel's scheduler.
+- **Phase 3's next module** — Finance polish (payment reconciliation to
+  auto-mark Invoices Paid, PDF/email export — §8.18/§8.19), a second CRM
+  stage (Ticket assignment, Tag removal, a `crm.tag.*` MCP surface —
+  §8.15/§8.16), real notification delivery for `notify_agent` (§8.24), or
+  a genuinely new domain. Finance is the reference for a two-way
+  Module -> Module integration (§7.8); Workflows is the reference for a
+  Module reacting to another Module's Domain Event (§7.9) — between the
+  two, most integration shapes a new module would need already exist
+  somewhere to copy.
 - **A second real Connector** (Shopify) — `ProductConnectorInterface` and
   the WooCommerce implementation (§7.6) are now a template to follow;
   `ConnectorRegistry` already supports registering more than one by name.
-- **Wire the 12 un-wired capabilities from §6** (7 from Commerce Stages
-  1–5, 4 from CRM, 1 from Finance) if any Agent workflow actually needs
-  cart-removal, order-cancellation, payment lookup, ticket-updating, tag
-  management, or tax-rate updates through MCP — cheapest possible next
-  increment each.
-- **Per-tenant connector credentials** (§8.14) — now the most obviously
+- **Wire the 13 un-wired capabilities from §6** (7 from Commerce Stages
+  1–5, 4 from CRM, 1 from Finance, 1 from Workflows) if any Agent
+  workflow actually needs cart-removal, order-cancellation, payment
+  lookup, ticket-updating, tag management, tax-rate updates, or
+  workflow-updating through MCP — cheapest possible next increment each.
+- **Per-tenant connector credentials** (§8.14) — the most obviously
   "fake"/single-tenant piece remaining (per-tenant tax, §8.1's original
-  concern, is resolved as of this Stage).
+  concern, is resolved as of Phase 3.2).
 - **Order/Customer/Inventory sync out to WooCommerce** (§8.13) —
   `OrderConnectorInterface` still has no implementation.
 - **Shipping** — no shipping cost, address-to-carrier, or fulfillment
@@ -919,7 +1180,7 @@ they'd reuse what already exists:
   today, not on an Order.
 - **A dedicated `capabilities:sync` artisan command**, graduating away from
   the seeder pattern — flagged as an open decision since Phase 1, still
-  open, now with 28 capabilities across four seeders instead of 3.
+  open, now with 33 capabilities across five seeders instead of 3.
 
 Whatever comes next, follow §3's patterns and check §8 before assuming a
 piece of the puzzle doesn't already exist.

@@ -26,5 +26,6 @@ class DatabaseSeeder extends Seeder
         $this->call(CommerceCapabilitiesSeeder::class);
         $this->call(CRMCapabilitiesSeeder::class);
         $this->call(FinanceCapabilitiesSeeder::class);
+        $this->call(WorkflowsCapabilitiesSeeder::class);
     }
 }
