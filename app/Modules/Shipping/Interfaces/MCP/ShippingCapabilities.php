@@ -9,7 +9,7 @@ namespace App\Modules\Shipping\Interfaces\MCP;
  * plain data here, separate from the seeder's idempotency plumbing, the
  * same split every prior module's own capability manifest established.
  *
- * 6 of the 8 requested names were already exactly 3 dot-separated
+ * 6 of the 8 Stage 1 requested names were already exactly 3 dot-separated
  * segments; `shipping.shipment.status.update` and
  * `shipping.tracking.event.add` were both 4 — CapabilityName requires
  * exactly 3 (HANDOFF gotcha #2, hit again here the same way
@@ -17,6 +17,11 @@ namespace App\Modules\Shipping\Interfaces\MCP;
  * `shipping.shipment.transition` and `shipping.tracking.add`,
  * restructuring the same 3 semantic groupings the request specified
  * rather than inventing new, more granular ones.
+ *
+ * Stage 2 (Shipping Provider Connector) added the last 3:
+ * `shipping.provider.rates`/`.fulfill`, `shipping.tracking.sync` — the
+ * requested `shipping.provider.shipment.create` hit gotcha #2 again (4
+ * segments), renamed to `shipping.provider.fulfill`.
  */
 final class ShippingCapabilities
 {
@@ -96,6 +101,33 @@ final class ShippingCapabilities
                 'inputSchema' => ['shipment_id' => 'integer', 'status' => 'string', 'description' => 'string'],
                 'outputSchema' => ['event' => 'array'],
                 'requiredPermissions' => ['shipping.shipments.update'],
+            ],
+            [
+                'name' => 'shipping.provider.rates',
+                'description' => 'Get live rates for a weight/destination from an external shipping provider (or the Mock stand-in)',
+                // provider is optional — defaults to config('shipping.provider').
+                'inputSchema' => ['weight_grams' => 'integer', 'destination' => 'object'],
+                'outputSchema' => ['rates' => 'array'],
+                'requiredPermissions' => ['shipping.providers.read'],
+            ],
+            [
+                'name' => 'shipping.provider.fulfill',
+                'description' => 'Hand an already-created Shipment to an external shipping provider, recording its own tracking number',
+                // provider is optional. Renamed from the requested
+                // shipping.provider.shipment.create — 4 dot-separated
+                // segments, CapabilityName requires exactly 3 (same
+                // treatment shipping.shipment.status.update got in Stage 1).
+                'inputSchema' => ['shipment_id' => 'integer'],
+                'outputSchema' => ['provider_shipment' => 'array'],
+                'requiredPermissions' => ['shipping.providers.create'],
+            ],
+            [
+                'name' => 'shipping.tracking.sync',
+                'description' => "Pull tracking updates from an external shipping provider and fold in whatever is genuinely new — updates the Shipment's own status if the newest event is a legal transition",
+                // provider is optional.
+                'inputSchema' => ['tracking_number' => 'string'],
+                'outputSchema' => ['events' => 'array', 'synced_count' => 'integer'],
+                'requiredPermissions' => ['shipping.providers.sync'],
             ],
         ];
     }

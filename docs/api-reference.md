@@ -200,18 +200,27 @@ Commerce's/Loyalty's own tables directly for aggregate performance
 
 ### Shipping
 
-ShippingMethods, Shipments, and TrackingEvents.
+ShippingMethods, Shipments, and TrackingEvents — plus (Phase 4 Stage 2) a
+real Connector Pattern integration with an external shipping provider
+(`mock` by default; `usps`/`fedex`/`dhl` are modeled, unimplemented future
+intents).
 
 | Capability | Description | Input | Output | Permission |
 |---|---|---|---|---|
 | `shipping.method.create` | Define a ShippingMethod: a base rate, a per-kg rate, and an estimated delivery window. | `name: string, base_rate: integer, rate_per_kg: integer, estimated_days_min: integer, estimated_days_max: integer` | `method: array` | `shipping.methods.create` |
 | `shipping.method.list` | List the tenant's ShippingMethods, optionally filtered by `is_active`. | — | `methods: array` | `shipping.methods.read` |
-| `shipping.rate.calculate` | Preview the shipping cost for a given weight under a given ShippingMethod — no side effects. | `shipping_method_id: integer, weight_grams: integer` | `rate: array` | `shipping.rates.read` |
+| `shipping.rate.calculate` | Preview the shipping cost for a given weight under a given ShippingMethod (local calculator) — no side effects. | `shipping_method_id: integer, weight_grams: integer` | `rate: array` | `shipping.rates.read` |
 | `shipping.shipment.create` | Fulfill an Order with a real Shipment: weighs its Products, prices it, generates a tracking number, and records the assignment on the Order. | `order_id: integer, shipping_method_id: integer` | `shipment: array` | `shipping.shipments.create` |
 | `shipping.shipment.get` | Get a Shipment by id. | `shipment_id: integer` | `shipment: array` | `shipping.shipments.read` |
 | `shipping.shipment.list` | List the tenant's Shipments, optionally filtered by status or `order_id`. | — | `shipments: array` | `shipping.shipments.read` |
 | `shipping.shipment.transition` | Transition a Shipment's authoritative status (`pending` → `in_transit` → `delivered`, or `returned`/`exception`). | `shipment_id: integer, status: string` | `shipment: array` | `shipping.shipments.update` |
 | `shipping.tracking.add` | Append one entry to a Shipment's tracking history — does not itself change the Shipment's own status. | `shipment_id: integer, status: string, description: string` | `event: array` | `shipping.shipments.update` |
+| `shipping.provider.rates` | Get live rates for a weight/destination from an external shipping provider. | `weight_grams: integer, destination: object {street, city, state?, postalCode?, country}` | `rates: array` | `shipping.providers.read` |
+| `shipping.provider.fulfill` | Hand an already-created Shipment to an external provider, recording its own tracking number onto it. | `shipment_id: integer` | `provider_shipment: array` | `shipping.providers.create` |
+| `shipping.tracking.sync` | Pull tracking updates from an external provider and fold in whatever is genuinely new — idempotent, updates the Shipment's own status if the newest event is a legal transition. Looks the Shipment up by its own internal `tracking_number` (from `shipping.shipment.create`), not the provider's. | `tracking_number: string` | `events: array, synced_count: integer` | `shipping.providers.sync` |
+
+`provider` is optional on all three provider capabilities — omitted, it
+defaults to `SHIPPING_PROVIDER` (`.env`, default `mock`).
 
 ---
 

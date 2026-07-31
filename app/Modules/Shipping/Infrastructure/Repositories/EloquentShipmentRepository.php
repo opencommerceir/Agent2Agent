@@ -30,6 +30,16 @@ class EloquentShipmentRepository implements ShipmentRepositoryInterface
             ->exists();
     }
 
+    public function findByTrackingNumber(string $trackingNumber, int $tenantId): ?ShipmentEntity
+    {
+        $model = ShipmentModel::query()
+            ->where('tenant_id', $tenantId)
+            ->where('tracking_number', $trackingNumber)
+            ->first();
+
+        return $model ? $this->toEntity($model) : null;
+    }
+
     public function list(int $tenantId, ?TrackingStatus $status, ?int $orderId, int $limit): array
     {
         $builder = ShipmentModel::query()->where('tenant_id', $tenantId);
@@ -65,6 +75,8 @@ class EloquentShipmentRepository implements ShipmentRepositoryInterface
         $model->shipping_cost_currency = $shipment->shippingCost()->currency();
         $model->shipped_at = $shipment->shippedAt();
         $model->delivered_at = $shipment->deliveredAt();
+        $model->provider_name = $shipment->providerName();
+        $model->provider_tracking_number = $shipment->providerTrackingNumber();
         $model->save();
 
         return $this->toEntity($model);
@@ -108,6 +120,8 @@ class EloquentShipmentRepository implements ShipmentRepositoryInterface
             shippedAt: $model->shipped_at ? DateTimeImmutable::createFromInterface($model->shipped_at) : null,
             deliveredAt: $model->delivered_at ? DateTimeImmutable::createFromInterface($model->delivered_at) : null,
             createdAt: DateTimeImmutable::createFromInterface($model->created_at),
+            providerName: $model->provider_name,
+            providerTrackingNumber: $model->provider_tracking_number,
         );
     }
 

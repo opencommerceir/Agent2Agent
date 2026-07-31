@@ -3,7 +3,8 @@
 **Status: Phase 1 (Core + MCP Gateway), Phase 2 (Commerce, all 6
 Stages), and Phase 3 (Domain Expansion, all 5 Stages — CRM, Finance,
 Workflows, Loyalty, Reporting) are complete. Phase 4 (Shipping &
-Logistics) is under way: Stage 1 (Shipping Foundation) is complete.
+Logistics) is under way: Stage 1 (Shipping Foundation) and Stage 2
+(Shipping Provider Connector, §7.14) are both complete.
 Finance supplies Commerce's own checkout pricing with real tax rates
 through an Interface Commerce itself owns (§7.8). Workflows (§7.9) and
 Loyalty (§7.10) each introduce a real cross-module Domain Event
@@ -35,15 +36,38 @@ See §7.13 for the full detail, including two places where the sprint's
 own brief didn't match the actual code/environment and what was built
 instead.**
 
-470 tests passing, zero known regressions. Next up: another Phase 4
+**Stage 2 (Shipping Provider Connector) demonstrates the Connector
+Pattern (Phase 1, reused for real in Commerce's Stage 6 WooCommerce
+integration) inside Shipping: `ShippingProviderInterface`/
+`ShippingProviderRegistry`/`MockShippingProviderAdapter` mirror
+`ProductConnectorInterface`/`ConnectorRegistry`/`WooCommerceProductConnector`
+file-for-file. Only `mock` has an implementation (no live carrier
+credentials exist, same reasoning every Connector in this codebase
+gives) — `usps`/`fedex`/`dhl` are modeled, unimplemented future intents.
+Fixing a real bug found while building this stage — `AddTrackingEventAction`
+had no way to record a historical `occurredAt`, so every synced tracking
+event silently got "now" instead of the provider's own timestamp,
+breaking `SyncTrackingAction`'s dedup entirely — widened that Action
+with an optional trailing parameter (HANDOFF §3 pattern #6), the same
+kind of pre-existing-gap-discovered-while-building-the-next-thing this
+codebase has hit repeatedly (§7.9/§7.10/§7.12). See §7.14 for the full
+detail, including four places the request's own file layout would have
+duplicated an abstraction or hit a real domain conflict, and what was
+built instead.**
+
+483 tests passing, zero known regressions. Next up: another Phase 4
 Shipping/Logistics stage (Shipping Zones, partial fulfillment, folding
-`shipping_cost` into checkout pricing — §8.37/§8.35/§8.36), wiring
-`HighValueOrderListener` (still scaffolded, still the cheapest available
-increment — §9), or any remaining deferred item in §8/§9. Note:
-`WorkflowsCapabilityTest`'s own docblock still describes working around
-the now-fixed §8.22 ceiling (6-on-hand/order-3, kept under half of
-stock) — harmless (the test still passes either way) but worth a quick
-cleanup pass since the constraint that motivated it is gone.**
+`shipping_cost` into checkout pricing — §8.37/§8.35/§8.36), a real
+carrier implementation of `ShippingProviderInterface` (USPS/FedEx/DHL —
+`MockShippingProviderAdapter` is now the template, the same role
+`WooCommerceProductConnector` played for a second real Commerce
+Connector), wiring `HighValueOrderListener` (still scaffolded, still the
+cheapest available increment — §9), or any remaining deferred item in
+§8/§9. Note: `WorkflowsCapabilityTest`'s own docblock still describes
+working around the now-fixed §8.22 ceiling (6-on-hand/order-3, kept
+under half of stock) — harmless (the test still passes either way) but
+worth a quick cleanup pass since the constraint that motivated it is
+gone.**
 
 This file is a working-state snapshot for picking up development in a new
 session. It assumes you've already read `CLAUDE.md` and `docs/*.md` (the
@@ -469,18 +493,27 @@ app/Modules/Reporting/             new in Phase 3
 app/Modules/Shipping/              new in Phase 4
 ├── Domain/
 │   ├── Entities/                 ShippingMethod, Shipment (state
-│   │                             machine — see §7.12), TrackingEvent
-│   │                             (immutable, owned by
+│   │                             machine — see §7.12 — + providerName/
+│   │                             providerTrackingNumber fields and
+│   │                             assignProviderTracking(), §7.14),
+│   │                             TrackingEvent (immutable, owned by
 │   │                              ShipmentRepositoryInterface)
 │   ├── ValueObjects/             Money (Shipping's own, see §7.12),
 │   │                             Weight, TrackingNumber (TRK-XXXXXXXX),
-│   │                             TrackingStatus, ShippingRate
+│   │                             TrackingStatus, ShippingRate (+ optional
+│   │                             serviceName/serviceCode, §7.14), +
+│   │                             ShippingProviderName (enum, §7.14), +
+│   │                             Address (Shipping's own, §7.14)
 │   ├── Services/                 ShippingRateCalculator (pure,
 │   │                              framework-free — base_rate +
-│   │                              weight_kg*rate_per_kg)
+│   │                              weight_kg*rate_per_kg), +
+│   │                              ShippingProviderInterface (§7.14 —
+│   │                              mirrors Commerce's ConnectorInterface/
+│   │                              ProductConnectorInterface)
 │   ├── Repositories/              ShippingMethodRepositoryInterface,
 │   │                              ShipmentRepositoryInterface (owns
-│   │                              TrackingEvent persistence too)
+│   │                              TrackingEvent persistence too, +
+│   │                              findByTrackingNumber(), §7.14)
 │   ├── Events/                   ShipmentWasCreated, ShipmentStatusChanged,
 │   │                             TrackingEventWasAdded (none have a
 │   │                              registered Listener this stage)
@@ -489,18 +522,45 @@ app/Modules/Shipping/              new in Phase 4
 │                                  InvalidWeightException (all 3
 │                                  requested) + OrderNotFoundException
 │                                  (added unprompted, same reasoning
-│                                  Finance's/Loyalty's own were — §7.12)
+│                                  Finance's/Loyalty's own were — §7.12),
+│                                  + ShippingProviderException (implements
+│                                  neither marker interface, §7.14) and
+│                                  ShippingProviderNotFoundException
+│                                  (NotFoundExceptionInterface, §7.14)
 ├── Application/
-│   ├── Actions/                  9 Actions — all 8 requested
-│   │                              capabilities wired (§6/§7.12)
+│   ├── Actions/                  9 Actions — all 8 Stage 1 requested
+│   │                              capabilities wired (§6/§7.12), +
+│   │                              GetProviderRatesAction/
+│   │                              CreateProviderShipmentAction/
+│   │                              SyncTrackingAction (§7.14);
+│   │                              AddTrackingEventAction gained an
+│   │                              optional occurredAt param (§7.14)
+│   ├── Services/                 ShippingHttpClientInterface (mirrors
+│   │                              WooCommerceClientInterface),
+│   │                              ShippingProviderConfig (mirrors
+│   │                              WooCommerceConfig),
+│   │                              ShippingProviderRegistry (mirrors
+│   │                              ConnectorRegistry — all new, §7.14)
 │   └── DTOs/                     ShippingMethodData, ShipmentData,
-│                                  TrackingEventData, ShippingRateData
+│                                  TrackingEventData, ShippingRateData, +
+│                                  ProviderRateData, ProviderShipmentData,
+│                                  ProviderTrackingEventData (§7.14)
 ├── Infrastructure/
 │   ├── Models/                    ShippingMethod, Shipment, TrackingEvent
+│   ├── Http/                      MockShippingHttpClient (§7.14, tests only)
+│   ├── Providers/                 MockShippingProviderAdapter (§7.14 —
+│   │                              the one real ShippingProviderInterface
+│   │                              implementation this stage)
 │   └── Repositories/               EloquentShippingMethodRepository,
 │                                  EloquentShipmentRepository (2)
-└── ShippingServiceProvider.php   binds 2 Repository interfaces +
-                                   registers 8 capability handlers (see §6)
+└── ShippingServiceProvider.php   binds 2 Repository interfaces + (§7.14)
+                                   ShippingProviderRegistry/
+                                   ShippingHttpClientInterface, registers
+                                   'mock' into the registry, and registers
+                                   11 capability handlers (see §6)
+
+config/shipping.php                new in Stage 2 — SHIPPING_PROVIDER*
+                                   env vars (mirrors config/commerce.php)
 
 app/Modules/Demo/                  unchanged since Phase 1
 
@@ -527,14 +587,19 @@ database/
 │   ├── 2026_07_31_000033-000036                  (Phase 3.4 — loyalty_accounts, point_transactions,
 │   │                                               rewards, redemptions)
 │   ├── 2026_07_31_000037-000038                  (Phase 3.5 — reports, report_results)
-│   └── 2026_07_31_000039-000042                  (Phase 4.1 — shipping_methods, shipments,
-│                                                   tracking_events, +orders shipping cols —
-│                                                   the first later-module migration to
-│                                                   alter an earlier module's own table, §7.12)
+│   ├── 2026_07_31_000039-000042                  (Phase 4.1 — shipping_methods, shipments,
+│   │                                               tracking_events, +orders shipping cols —
+│   │                                               the first later-module migration to
+│   │                                               alter an earlier module's own table, §7.12)
+│   └── 2026_08_01_000043                          (Phase 4.2 — +shipments.provider_name/
+│                                                   provider_tracking_number, both nullable,
+│                                                   no FK, §7.14)
 └── seeders/{DemoCapabilitiesSeeder,CommerceCapabilitiesSeeder,CRMCapabilitiesSeeder,FinanceCapabilitiesSeeder,WorkflowsCapabilitiesSeeder,LoyaltyCapabilitiesSeeder,ReportingCapabilitiesSeeder,ShippingCapabilitiesSeeder}.php
 
 tests/
-├── Fixtures/            woocommerce-products-response.json (Stage 6 — reference payload)
+├── Fixtures/            woocommerce-products-response.json (Stage 6 — reference payload),
+│                        shipping-rates-response.json, tracking-updates-response.json
+│                        (Phase 4 Stage 2, §7.14 — reference payloads)
 ├── Unit/Commerce/       ~32 files — VOs, Entities, Domain Services, all framework-free PHPUnit
 ├── Feature/Commerce/    ~27 files — Actions against real sqlite :memory: DB, MCP HTTP end-to-end
 ├── Unit/CRM/            5 files — Ticket (incl. state machine), TicketComment,
@@ -576,7 +641,9 @@ tests/
 ├── Unit/Shipping/       4 files — Weight, TrackingNumber, ShippingRateCalculator,
 │                        and Shipment's own state machine (every legal
 │                        and illegal transition, incl. Exception's
-│                        recoverability), all framework-free PHPUnit
+│                        recoverability), all framework-free PHPUnit, +
+│                        MockShippingProviderAdapterTest/
+│                        ShippingProviderRegistryTest (§7.14, 2 more files)
 ├── Feature/Shipping/    1 file — a real Order with 2 Products (2500g
 │                        combined) -> real ShippingMethod -> rate
 │                        preview -> real Shipment (real tracking number,
@@ -584,7 +651,10 @@ tests/
 │                        verified via a direct OrderRepositoryInterface
 │                        read) -> status transition -> tracking event ->
 │                        tenant isolation -> status-filtered listing +
-│                        invalid transition/nonexistent-order/forbidden
+│                        invalid transition/nonexistent-order/forbidden, +
+│                        ShippingProviderCapabilityTest (§7.14 — rates ->
+│                        fulfill -> sync -> idempotent resync -> simulated
+│                        provider failure -> tenant isolation)
 ├── Unit/Core/, Unit/MCP/, Feature/Demo/, Unit/Demo/   unchanged since Phase 1
 ├── Feature/Core/        + MCPRateLimitTest (Tech Debt Sprint, §7.13) +
 │                        a new query-count regression test in
@@ -598,7 +668,7 @@ tests/
 ├── Feature/Workflows/   + CartAbandonedListenerTest (Tech Debt Sprint,
 │                        §7.13 — real CartWasAbandoned event, no faking,
 │                        dispatched by the real scheduled command)
-└── 470 tests total, 1097 assertions, ~8s runtime (`php artisan test`)
+└── 483 tests total, 1147 assertions, ~10s runtime (`php artisan test`)
 ```
 
 ---
@@ -865,7 +935,7 @@ end to end.
 
 ---
 
-## 6. The 54 MCP capabilities that exist right now
+## 6. The 57 MCP capabilities that exist right now
 
 | Capability | Phase/Stage | Permission | Notes |
 |---|---|---|---|
@@ -923,6 +993,9 @@ end to end.
 | `shipping.shipment.list` | P4.1 | `shipping.shipments.read` | Optional `status`/`order_id`. |
 | `shipping.shipment.transition` | P4.1 | `shipping.shipments.update` | Renamed from the requested `shipping.shipment.status.update` — 4 segments, see §7.12. |
 | `shipping.tracking.add` | P4.1 | `shipping.shipments.update` | Renamed from the requested `shipping.tracking.event.add` — same reason. Does not itself change the Shipment's own status. |
+| `shipping.provider.rates` | P4.2 | `shipping.providers.read` | Live rates from an external provider (`mock` by default) — `provider` optional. |
+| `shipping.provider.fulfill` | P4.2 | `shipping.providers.create` | Renamed from the requested `shipping.provider.shipment.create` — 4 segments, see §7.14. Records the provider's own tracking number onto the Shipment. |
+| `shipping.tracking.sync` | P4.2 | `shipping.providers.sync` | Looks the Shipment up by its own internal `tracking_number` (not the provider's). Idempotent — a re-sync adds 0 events. |
 
 **Deliberately NOT wired to MCP** despite the underlying Action existing and
 being fully tested (see §8.2 for why, and the same reasoning each time):
@@ -1761,6 +1834,110 @@ regression, `MCPRateLimitTest`, and 3 scheduler/listener end-to-end
 tests) — CI/coverage/docs were verified by running the actual workflow
 file and command output instead. 470 tests total, zero regressions.
 
+### 7.14 Phase 4, Stage 2 — Shipping Provider Connector
+
+Entities: none new — this stage adds a second, independent path
+alongside Stage 1's local `ShippingRateCalculator`, not a new aggregate.
+VOs: `ShippingProviderName` (enum `mock|usps|fedex|dhl` — only `Mock` has
+an implementation; the rest are modeled-but-unfulfilled, same shape
+`RewardType::FreeProduct`/`EventType::CartAbandoned` already have),
+Shipping's own `Address` (a deliberate duplicate of Commerce's, identical
+reasoning Shipping's own `Money` docblock already gives — this is also a
+first, narrow step on §8.37's "no Address concept anywhere in Shipping"
+gap, scoped only to what `getRates()` needs). `ShippingRate` (existing
+VO) gained two new optional trailing fields, `serviceName`/`serviceCode`
+(HANDOFF §3 pattern #6) — `null` for the local-calculator path, populated
+for a provider quote. `Shipment` gained two new nullable fields,
+`providerName`/`providerTrackingNumber`, and one new mutator,
+`assignProviderTracking()` — see that method's own docblock for why the
+provider's tracking number is stored as a plain string, never forced
+through the existing `TrackingNumber` VO's strict `TRK-XXXXXXXX` format.
+
+**The Connector Pattern (Phase 1, reused for real in Commerce's Stage 6
+WooCommerce integration), demonstrated a second time, inside Shipping.**
+`ShippingProviderInterface` (`getName()`/`isConnected()`/`getRates()`/
+`createShipment()`/`getTrackingUpdates()`) mirrors `ConnectorInterface`/
+`ProductConnectorInterface` exactly; `ShippingProviderRegistry`
+(Application layer — see correction below) mirrors `ConnectorRegistry`;
+`ShippingHttpClientInterface` + `MockShippingHttpClient` mirror
+`WooCommerceClientInterface` + `MockWooCommerceHttpClient`; the one real
+adapter, `MockShippingProviderAdapter`, mirrors `WooCommerceProductConnector`.
+No real carrier client exists this stage (no live USPS/FedEx/DHL
+credentials, the same "needs live credentials to test honestly"
+reasoning every Connector in this codebase gives) — unlike WooCommerce's
+own Stage 6, which built both a real and a mock client, this stage is
+Mock-only by explicit request.
+
+**Four places where the request's literal file layout would have
+duplicated an abstraction or hit a real domain conflict** — each caught
+during planning, not after shipping, the same discipline the Tech Debt
+Sprint (§7.13) applied to its own two mismatches:
+1. **One adapter class, not two.** The request asked for both an
+   `Application/Services/MockShippingProvider` and an
+   `Infrastructure/Providers/MockShippingProviderAdapter`. The established
+   Connector precedent has exactly one adapter class per provider
+   (`WooCommerceProductConnector` is the only class implementing
+   `ProductConnectorInterface`) — building a second, wrapping
+   Application-layer class would have been pure ceremony. Built **one**:
+   `MockShippingProviderAdapter`, depending on `ShippingHttpClientInterface`.
+2. **`ShippingProviderRegistry` lives in `Application/Services`, not
+   `Domain/Services`** — `ConnectorRegistry`, the exact precedent this
+   stage follows, lives there (a plain in-memory lookup, no domain rule
+   to protect).
+3. **`getTrackingUpdates()` returns a new DTO, `ProviderTrackingEventData`,
+   never `TrackingEvent` itself.** `TrackingEvent::record()` requires the
+   *local* `shipmentId` — something a provider structurally cannot know
+   (it only ever sees a `TrackingNumber`). Identical reasoning
+   `WooCommerceProductConnector` already demonstrates by returning
+   `UCPProduct` rather than Commerce's own persisted `Product` entity.
+   `SyncTrackingAction` (which does know the local Shipment) is the one
+   place these become real `TrackingEvent` rows.
+4. **The provider's tracking number is a plain string in two new
+   columns, never overwriting `Shipment`'s own `TrackingNumber`.**
+   Coincidentally, the request's own mock fixture already returns
+   `TRK-XXXXXXXX`-shaped values, so `createShipment(): TrackingNumber` is
+   honestly satisfiable *for Mock* today — but `usps`/`fedex`/`dhl` are
+   real future intents whose tracking numbers will never match that
+   regex. `Shipment::assignProviderTracking()`'s own docblock has the
+   full reasoning.
+
+**A real bug, not in the request, found while building `SyncTrackingAction`**:
+`AddTrackingEventAction` had no way to record a historical `occurredAt`
+at all — every call defaulted to `new DateTimeImmutable()` ("now"). Since
+`shipping.tracking.add` (an Agent reporting an update as it happens) is
+the only caller before this stage, "now" was always correct and the gap
+was invisible. `SyncTrackingAction` needed to reuse this same Action
+(Actions composing Actions, HANDOFF §3 pattern #3) but supply the
+*provider's own* timestamp — without a real `occurredAt` parameter, every
+synced event silently got "now," which broke the `(status, occurredAt)`
+dedup key entirely (a re-sync would re-add both events every time, since
+"now" is never the same value twice). Widened `AddTrackingEventAction`
+with an optional trailing `occurredAt` parameter (HANDOFF §3 pattern #6)
+— `shipping.tracking.add` is completely unaffected (still omits it,
+still defaults to now).
+
+`SyncTrackingAction`'s status-update step (after adding new events, apply
+the newest one's status via the existing `UpdateShipmentStatusAction`)
+deliberately catches and silently swallows `InvalidArgumentException` —
+covers both "already this status" (not in `Shipment::changeStatus()`'s
+own `ALLOWED_TRANSITIONS` map for its current state) and a genuinely
+illegal transition. A re-sync must be idempotent; a provider replaying or
+reordering its own event history is normal, not an error.
+
+**Capability naming hit gotcha #2 again**: the requested
+`shipping.provider.shipment.create` was 4 dot-separated segments;
+renamed to `shipping.provider.fulfill`, the same restructuring treatment
+`shipping.shipment.status.update` got in Stage 1.
+
+New tests: `tests/Unit/Shipping/MockShippingProviderAdapterTest.php` (7 —
+name/health-check, 3 rates matching the fixture, a valid `TrackingNumber`,
+2 tracking events matching the fixture, simulated-failure throwing
+`ShippingProviderException`), `tests/Unit/Shipping/ShippingProviderRegistryTest.php`
+(3 — register/get/not-found), `tests/Feature/Shipping/ShippingProviderCapabilityTest.php`
+(3 — the full rates → fulfill → sync → idempotent-resync → simulated-failure
+→ tenant-isolation scenario, plus unregistered-provider and
+missing-permission cases). 483 tests total, zero regressions.
+
 ---
 
 ## 8. Known technical debt (ranked, carried over + Phase 2 additions)
@@ -1987,13 +2164,19 @@ file and command output instead. 470 tests total, zero regressions.
 
 Phase 2 (Commerce, all 6 Stages) and Phase 3 (CRM, Finance, Workflows,
 Loyalty, Reporting — all 5 Stages) are fully complete. Phase 4
-(Shipping & Logistics) has one Stage done — Shipping Foundation. The
-Tech Debt Sprint (§7.13) ran between Shipping's Stage 1 and whatever
-comes next, closing the scheduler gap and the `CheckInventoryAction`
+(Shipping & Logistics) has two Stages done — Shipping Foundation and the
+Shipping Provider Connector (§7.14). The Tech Debt Sprint (§7.13) ran
+between the two, closing the scheduler gap and the `CheckInventoryAction`
 re-check bug that used to top this list. Candidates worth raising with
 whoever's driving scope next, roughly in order of how much they'd reuse
 what already exists:
 
+- **A real carrier implementation of `ShippingProviderInterface`** (USPS/
+  FedEx/DHL) — `MockShippingProviderAdapter` (§7.14) is now the template,
+  the same role `WooCommerceProductConnector` played for Commerce's own
+  second real Connector; `ShippingProviderRegistry` already supports
+  registering more than one by name, and `ShippingProviderName` already
+  has the enum cases waiting.
 - **Measure real test coverage from a CI run** — the Tech Debt Sprint
   (§7.13) wired `coverage: pcov` into `.github/workflows/tests.yml` but
   could only set a conservative placeholder gate (`--min=60`), since no
@@ -2008,7 +2191,8 @@ what already exists:
   this same "scaffolded Listener" pattern, got wired for real in §7.13 —
   this is the one that's left.)
 - **Phase 4's next Shipping stage** — Shipping Zones/per-region rates
-  (§8.37), partial/multi-shipment fulfillment (§8.35), folding
+  (§8.37 — Shipping's own new `Address` VO from §7.14 is a first step, not
+  the full feature), partial/multi-shipment fulfillment (§8.35), folding
   `shipping_cost` into Commerce's own checkout total (§8.36), or a
   first-class Product weight field replacing the `attributes` bag
   (§8.34). Shipping is the reference for a module writing data back onto
@@ -2021,8 +2205,8 @@ what already exists:
   §8.15/§8.16), real notification delivery for `notify_agent` (§8.24), or
   actual caching for `ReportResult` (§8.31 — `expires_at` already exists
   on the schema, nothing checks it yet).
-- **A second real Connector** (Shopify) — `ProductConnectorInterface` and
-  the WooCommerce implementation (§7.6) are now a template to follow;
+- **A second real product Connector** (Shopify) — `ProductConnectorInterface`
+  and the WooCommerce implementation (§7.6) are now a template to follow;
   `ConnectorRegistry` already supports registering more than one by name.
 - **Wire the 16 un-wired capabilities from §6** (7 from Commerce Stages
   1–5, 4 from CRM, 1 from Finance, 1 from Workflows, 1 from Loyalty, 2

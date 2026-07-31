@@ -50,6 +50,8 @@ final class Shipment
         private ?DateTimeImmutable $shippedAt,
         private ?DateTimeImmutable $deliveredAt,
         private readonly DateTimeImmutable $createdAt,
+        private ?string $providerName = null,
+        private ?string $providerTrackingNumber = null,
     ) {
     }
 
@@ -74,6 +76,24 @@ final class Shipment
             deliveredAt: null,
             createdAt: new DateTimeImmutable(),
         );
+    }
+
+    /**
+     * Records which external provider fulfilled this Shipment and its own
+     * tracking number/reference — a plain string, deliberately never
+     * forced through the `TrackingNumber` VO's strict `TRK-XXXXXXXX`
+     * format, since a real provider's tracking number won't match it
+     * (`ShippingProviderInterface::createShipment()`'s own docblock has
+     * the full reasoning). Additive/nullable, same "widen with new state"
+     * shape `Order::assignShipping()` already established (HANDOFF §3
+     * pattern #6/#14) — this module's own `trackingNumber` (our internal
+     * reference, generated at CreateShipmentAction time) is completely
+     * unaffected.
+     */
+    public function assignProviderTracking(string $providerName, string $providerTrackingNumber): void
+    {
+        $this->providerName = $providerName;
+        $this->providerTrackingNumber = $providerTrackingNumber;
     }
 
     public function changeStatus(TrackingStatus $newStatus): void
@@ -150,5 +170,15 @@ final class Shipment
     public function createdAt(): DateTimeImmutable
     {
         return $this->createdAt;
+    }
+
+    public function providerName(): ?string
+    {
+        return $this->providerName;
+    }
+
+    public function providerTrackingNumber(): ?string
+    {
+        return $this->providerTrackingNumber;
     }
 }

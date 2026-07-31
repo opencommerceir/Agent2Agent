@@ -6,16 +6,24 @@ use App\Core\Application\DTOs\AuthContext;
 use App\Core\Application\Services\CapabilityHandlerRegistry;
 use App\Modules\Shipping\Application\Actions\AddTrackingEventAction;
 use App\Modules\Shipping\Application\Actions\CalculateShippingRateAction;
+use App\Modules\Shipping\Application\Actions\CreateProviderShipmentAction;
 use App\Modules\Shipping\Application\Actions\CreateShipmentAction;
 use App\Modules\Shipping\Application\Actions\CreateShippingMethodAction;
+use App\Modules\Shipping\Application\Actions\GetProviderRatesAction;
 use App\Modules\Shipping\Application\Actions\GetShipmentAction;
 use App\Modules\Shipping\Application\Actions\ListShipmentsAction;
 use App\Modules\Shipping\Application\Actions\ListShippingMethodsAction;
+use App\Modules\Shipping\Application\Actions\SyncTrackingAction;
 use App\Modules\Shipping\Application\Actions\UpdateShipmentStatusAction;
 use App\Modules\Shipping\Application\DTOs\ShipmentData;
 use App\Modules\Shipping\Application\DTOs\ShippingMethodData;
+use App\Modules\Shipping\Application\Services\ShippingHttpClientInterface;
+use App\Modules\Shipping\Application\Services\ShippingProviderConfig;
+use App\Modules\Shipping\Application\Services\ShippingProviderRegistry;
 use App\Modules\Shipping\Domain\Repositories\ShipmentRepositoryInterface;
 use App\Modules\Shipping\Domain\Repositories\ShippingMethodRepositoryInterface;
+use App\Modules\Shipping\Infrastructure\Http\MockShippingHttpClient;
+use App\Modules\Shipping\Infrastructure\Providers\MockShippingProviderAdapter;
 use App\Modules\Shipping\Infrastructure\Repositories\EloquentShipmentRepository;
 use App\Modules\Shipping\Infrastructure\Repositories\EloquentShippingMethodRepository;
 use Illuminate\Support\ServiceProvider;
@@ -36,6 +44,12 @@ use Illuminate\Support\ServiceProvider;
  * every boot); capability *description* registration follows the
  * established seeder pattern instead (ShippingCapabilitiesSeeder), same
  * RefreshDatabase-ordering reason documented there.
+ *
+ * Stage 2 (Shipping Provider Connector) added the module's own Connector
+ * Pattern demonstration — `ShippingProviderRegistry`/`ShippingHttpClientInterface`/
+ * `MockShippingProviderAdapter` mirror Commerce's own
+ * `ConnectorRegistry`/`WooCommerceClientInterface`/`WooCommerceProductConnector`
+ * exactly (see `MockShippingProviderAdapter`'s own docblock).
  */
 class ShippingServiceProvider extends ServiceProvider
 {
@@ -43,10 +57,17 @@ class ShippingServiceProvider extends ServiceProvider
     {
         $this->app->bind(ShippingMethodRepositoryInterface::class, EloquentShippingMethodRepository::class);
         $this->app->bind(ShipmentRepositoryInterface::class, EloquentShipmentRepository::class);
+
+        $this->app->singleton(ShippingProviderRegistry::class);
+
+        $this->app->bind(ShippingHttpClientInterface::class, fn () => new MockShippingHttpClient());
     }
 
     public function boot(): void
     {
+        $providers = $this->app->make(ShippingProviderRegistry::class);
+        $providers->register('mock', new MockShippingProviderAdapter($this->app->make(ShippingHttpClientInterface::class)));
+
         $handlers = $this->app->make(CapabilityHandlerRegistry::class);
 
         $handlers->register('shipping.method.create', function (array $input, AuthContext $context) {
@@ -123,5 +144,32 @@ class ShippingServiceProvider extends ServiceProvider
 
             return ['event' => $event->toArray()];
         });
+
+        $handlers->register('shipping.provider.rates', function (array $input, AuthContext $context) {
+            $rates = $this->app->make(GetProviderRatesAction::class)->execute(
+                $context->tenantId,
+                $input['provider'] ?? ShippingProviderConfig::fromConfig()->defaultProvider,
+                (int) $input['weight_grams'],
+                $input['destination'],
+            );
+
+            return ['rates' => array_map(fn ($rate) => $rate->toArray(), $rates)];
+        });
+
+        $handlers->register('shipping.provider.fulfill', function (array $input, AuthContext $context) {
+            $providerShipment = $this->app->make(CreateProviderShipmentAction::class)->execute(
+                $context->tenantId,
+                $input['provider'] ?? ShippingProviderConfig::fromConfig()->defaultProvider,
+                (int) $input['shipment_id'],
+            );
+
+            return ['provider_shipment' => $providerShipment->toArray()];
+        });
+
+        $handlers->register('shipping.tracking.sync', fn (array $input, AuthContext $context) => $this->app->make(SyncTrackingAction::class)->execute(
+            $context->tenantId,
+            $input['provider'] ?? ShippingProviderConfig::fromConfig()->defaultProvider,
+            $input['tracking_number'],
+        ));
     }
 }

@@ -23,6 +23,13 @@ interface ShipmentRepositoryInterface
     public function trackingNumberExists(string $trackingNumber, int $tenantId): bool;
 
     /**
+     * Added for `shipping.tracking.sync` (Phase 4 Stage 2): the capability
+     * takes a `tracking_number`, not a `shipment_id` — nothing before this
+     * could look a Shipment up by anything other than its own id.
+     */
+    public function findByTrackingNumber(string $trackingNumber, int $tenantId): ?Shipment;
+
+    /**
      * @return list<Shipment>
      */
     public function list(int $tenantId, ?TrackingStatus $status, ?int $orderId, int $limit): array;

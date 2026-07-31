@@ -1,0 +1,25 @@
+{
+  "rates": [
+    {
+      "service_name": "Standard Shipping",
+      "service_code": "STANDARD",
+      "total_price": 7.50,
+      "currency": "USD",
+      "delivery_days": 5
+    },
+    {
+      "service_name": "Express Shipping",
+      "service_code": "EXPRESS",
+      "total_price": 15.00,
+      "currency": "USD",
+      "delivery_days": 2
+    },
+    {
+      "service_name": "Overnight Shipping",
+      "service_code": "OVERNIGHT",
+      "total_price": 25.00,
+      "currency": "USD",
+      "delivery_days": 1
+    }
+  ]
+}
