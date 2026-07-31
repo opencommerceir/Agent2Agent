@@ -24,6 +24,10 @@ final class OrderData
         public readonly int $totalAmount,
         public readonly string $totalCurrency,
         public readonly ?string $notes,
+        public readonly ?int $shippingMethodId = null,
+        public readonly ?int $shipmentId = null,
+        public readonly ?int $shippingCostAmount = null,
+        public readonly ?string $shippingCostCurrency = null,
     ) {
     }
 
@@ -47,6 +51,10 @@ final class OrderData
             totalAmount: $order->total()->amount(),
             totalCurrency: $order->total()->currency(),
             notes: $order->notes(),
+            shippingMethodId: $order->shippingMethodId(),
+            shipmentId: $order->shipmentId(),
+            shippingCostAmount: $order->shippingCost()?->amount(),
+            shippingCostCurrency: $order->shippingCost()?->currency(),
         );
     }
 
@@ -70,6 +78,10 @@ final class OrderData
             'totalAmount' => $this->totalAmount,
             'totalCurrency' => $this->totalCurrency,
             'notes' => $this->notes,
+            'shippingMethodId' => $this->shippingMethodId,
+            'shipmentId' => $this->shipmentId,
+            'shippingCostAmount' => $this->shippingCostAmount,
+            'shippingCostCurrency' => $this->shippingCostCurrency,
         ];
     }
 }

@@ -45,6 +45,9 @@ final class Order
         private readonly Money $total,
         private readonly ?string $notes,
         private readonly DateTimeImmutable $createdAt,
+        private ?int $shippingMethodId = null,
+        private ?int $shipmentId = null,
+        private ?Money $shippingCost = null,
     ) {
     }
 
@@ -144,6 +147,44 @@ final class Order
         }
 
         $this->status = $newStatus;
+    }
+
+    /**
+     * Phase 4, Stage 1 (Shipping) — additive, backward-compatible
+     * widening exactly like Stage 4's `customerId`/Stage 5's
+     * `tax`/`discount`/`total` before it (HANDOFF §3 pattern #6): every
+     * Order placed before Shipping existed, and every Order this module
+     * doesn't touch, simply has all three fields null. Called by
+     * Shipping's own `CreateShipmentAction` after both a real
+     * ShippingMethod and a real Shipment already exist for this Order —
+     * Shipping depends on Commerce's `OrderRepositoryInterface` (the
+     * established one-directional Module -> Module Dependency Inversion
+     * CRM/Finance/Workflows/Loyalty already established) to fetch the
+     * Order, call this, and `save()` it back through that same
+     * Interface. Commerce's own Domain/Application layers never
+     * reference Shipping — this method only stores IDs and an amount,
+     * exactly as opaque to Commerce as `customerId` already is.
+     */
+    public function assignShipping(int $shippingMethodId, int $shipmentId, Money $shippingCost): void
+    {
+        $this->shippingMethodId = $shippingMethodId;
+        $this->shipmentId = $shipmentId;
+        $this->shippingCost = $shippingCost;
+    }
+
+    public function shippingMethodId(): ?int
+    {
+        return $this->shippingMethodId;
+    }
+
+    public function shipmentId(): ?int
+    {
+        return $this->shipmentId;
+    }
+
+    public function shippingCost(): ?Money
+    {
+        return $this->shippingCost;
     }
 
     public function id(): ?int

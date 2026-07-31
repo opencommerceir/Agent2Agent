@@ -1,29 +1,30 @@
 # OpenCommerce Platform — Session Handoff
 
-**Status: Phase 1 (Core + MCP Gateway) and Phase 2 (Commerce, all 6
-Stages) are complete. Phase 3 (Domain Expansion) is under way: Stage 1
-(CRM Foundation), Stage 2 (Finance — per-tenant tax rates, Invoices),
-Stage 3 (Workflows — event-driven automation), Stage 4 (Loyalty Program
-— points, Rewards, Redemptions), and Stage 5 (Reporting — read-only
-analytics across Commerce/Loyalty) are all complete. Finance supplies
-Commerce's own checkout pricing with real tax rates through an Interface
-Commerce itself owns (§7.8) — the tax-rate tech debt flagged since Phase
-2 §8.1 is resolved. Workflows introduces the platform's first real
-cross-module Domain Event Listener (§7.9) and the "Low Stock Alert"
-automation end to end. Loyalty adds the platform's *second* real
-cross-module Domain Event Listener (§7.10): every placed Order with a
-Customer automatically earns that Customer 1 point per dollar, no MCP
-call required, and Customers can then redeem points for Rewards.
-Reporting is the platform's first read-only module (§7.11) — Sales, Top
-Products, Top Customers, Revenue, and Loyalty reports, computed via
-SQL-level aggregates (not PHP loops), and the first, deliberate,
-documented exception to the Module -> Module "depend on an Interface,
-never a Model" rule (a CQRS-style Read Model querying Commerce's/
-Loyalty's Eloquent Models directly — see SalesQueryBuilder's own
-docblock). 434 tests passing, zero known regressions. Next up: wiring
-CartAbandoned/HighValueOrder (both scaffolded, neither wired — §7.9), a
-scheduling mechanism to unlock both that and real point expiration
-(§7.10/§8.23), another Phase 3 module, or any deferred item in §8/§9.**
+**Status: Phase 1 (Core + MCP Gateway), Phase 2 (Commerce, all 6
+Stages), and Phase 3 (Domain Expansion, all 5 Stages — CRM, Finance,
+Workflows, Loyalty, Reporting) are complete. Phase 4 (Shipping &
+Logistics) is under way: Stage 1 (Shipping Foundation) is complete.
+Finance supplies Commerce's own checkout pricing with real tax rates
+through an Interface Commerce itself owns (§7.8). Workflows (§7.9) and
+Loyalty (§7.10) each introduce a real cross-module Domain Event
+Listener. Reporting (§7.11) is the platform's first read-only module
+and the first deliberate, documented exception to the Module -> Module
+"depend on an Interface, never a Model" rule (a CQRS-style Read Model
+querying Commerce's/Loyalty's Eloquent Models directly for aggregate
+performance). Shipping (§7.12) is Phase 4's first module and the
+**first time a later module's migration alters an earlier module's own
+table**: Commerce's `Order` entity gained an additive, backward-compatible
+`assignShipping()` (three new nullable fields — `shippingMethodId`/
+`shipmentId`/`shippingCost`) so a Shipment can write its assignment back
+onto the Order it fulfills, the same Dependency-Inversion direction
+every prior cross-module integration used, just flowing one field
+further than before — see `Order::assignShipping()`'s own docblock for
+the full reasoning and the alternative that was considered and rejected.
+459 tests passing, zero known regressions. Next up: another Phase 4
+Shipping/Logistics stage, wiring CartAbandoned/HighValueOrder (both
+scaffolded, neither wired — §7.9), a scheduling mechanism to unlock both
+that and real point expiration (§7.10/§8.23), or any deferred item in
+§8/§9.**
 
 This file is a working-state snapshot for picking up development in a new
 session. It assumes you've already read `CLAUDE.md` and `docs/*.md` (the
@@ -77,6 +78,18 @@ implementation backed by a real Guzzle HTTP client
 configured out of the box (same "needs live credentials to test honestly"
 reasoning HANDOFF has always given) — `MockWooCommerceHttpClient`
 (Infrastructure/Http) stands in for one in every test.
+
+**One widening in Phase 4, Stage 1 (Shipping — see §7.12):** `Order`
+gained `shippingMethodId`/`shipmentId`/`shippingCost` (all nullable,
+default null) and one new mutator, `assignShipping()` — an additive,
+backward-compatible change, the exact same shape `customerId`
+(Stage 4)/`tax`/`discount`/`total` (Stage 5) were each added, just
+authored by a later module (Shipping) instead of by Commerce's own next
+stage. `OrderData`/`EloquentOrderRepository`/the `orders` table all grew
+the matching 3-4 fields/columns to carry it. This is the *only* piece of
+Commerce any Phase 3/4 module has ever needed to modify directly (every
+other cross-module integration so far only ever added a new Interface,
+a new Event, or a brand new table).
 
 ### `app/Modules/CRM/` — **new in Phase 3. Support Tickets, Ticket Comments, Customer Notes, and Tags — Phase 3's first Domain Module, built on Phase 1/2's infrastructure without changing either.**
 
@@ -165,6 +178,25 @@ writes to another module's table). Every *entity detail* lookup
 (a product's name, a customer's full name) still goes through the
 proper Repository Interface, exactly as CRM/Finance/Workflows/Loyalty
 already established — only the aggregate math itself bypasses it.
+
+### `app/Modules/Shipping/` — **new in Phase 4. ShippingMethods, Shipments, and TrackingEvents — Phase 4's first module and the first to write data back onto Commerce's own Order.**
+
+See §7.12 for the full detail. 3 Domain Entities (`ShippingMethod`,
+`Shipment`, `TrackingEvent`), 5 Value Objects (`Money` — Shipping's own,
+same reasoning Finance's duplicate `Money` has —, `Weight`,
+`TrackingNumber`, `TrackingStatus`, `ShippingRate`), 4 exceptions (3
+requested + 1 added unprompted, `OrderNotFoundException`, same reasoning
+Finance's/Loyalty's own additions had), 2 Repository interfaces (one
+owns `TrackingEvent` persistence too), 1 pure Domain Service
+(`ShippingRateCalculator`), 3 domain events, 9 Application Actions (all
+8 requested capabilities wired — see §6), 4 DTOs, 3 Eloquent models, 2
+Eloquent repositories, 4 migrations (3 new tables + 1 that alters
+Commerce's own `orders` table). Depends on Commerce's
+`OrderRepositoryInterface`/`ProductRepositoryInterface` — the
+established one-directional Module -> Module Dependency Inversion — and
+additionally calls a new mutator Commerce's own `Order` entity gained
+for this stage, `assignShipping()` (see Commerce's own section above
+and §7.12 for the full reasoning).
 
 ### `app/Modules/Demo/` — unchanged since Phase 1
 
@@ -390,6 +422,42 @@ app/Modules/Reporting/             new in Phase 3
                                    Event::listen() at all (this module
                                    reacts to nothing, it only reads)
 
+app/Modules/Shipping/              new in Phase 4
+├── Domain/
+│   ├── Entities/                 ShippingMethod, Shipment (state
+│   │                             machine — see §7.12), TrackingEvent
+│   │                             (immutable, owned by
+│   │                              ShipmentRepositoryInterface)
+│   ├── ValueObjects/             Money (Shipping's own, see §7.12),
+│   │                             Weight, TrackingNumber (TRK-XXXXXXXX),
+│   │                             TrackingStatus, ShippingRate
+│   ├── Services/                 ShippingRateCalculator (pure,
+│   │                              framework-free — base_rate +
+│   │                              weight_kg*rate_per_kg)
+│   ├── Repositories/              ShippingMethodRepositoryInterface,
+│   │                              ShipmentRepositoryInterface (owns
+│   │                              TrackingEvent persistence too)
+│   ├── Events/                   ShipmentWasCreated, ShipmentStatusChanged,
+│   │                             TrackingEventWasAdded (none have a
+│   │                              registered Listener this stage)
+│   └── Exceptions/                ShippingMethodNotFoundException,
+│                                  ShipmentNotFoundException,
+│                                  InvalidWeightException (all 3
+│                                  requested) + OrderNotFoundException
+│                                  (added unprompted, same reasoning
+│                                  Finance's/Loyalty's own were — §7.12)
+├── Application/
+│   ├── Actions/                  9 Actions — all 8 requested
+│   │                              capabilities wired (§6/§7.12)
+│   └── DTOs/                     ShippingMethodData, ShipmentData,
+│                                  TrackingEventData, ShippingRateData
+├── Infrastructure/
+│   ├── Models/                    ShippingMethod, Shipment, TrackingEvent
+│   └── Repositories/               EloquentShippingMethodRepository,
+│                                  EloquentShipmentRepository (2)
+└── ShippingServiceProvider.php   binds 2 Repository interfaces +
+                                   registers 8 capability handlers (see §6)
+
 app/Modules/Demo/                  unchanged since Phase 1
 
 packages/opencommerce-sdk/         unchanged since Phase 1
@@ -414,8 +482,12 @@ database/
 │   │                                               workflow_actions, workflow_logs)
 │   ├── 2026_07_31_000033-000036                  (Phase 3.4 — loyalty_accounts, point_transactions,
 │   │                                               rewards, redemptions)
-│   └── 2026_07_31_000037-000038                  (Phase 3.5 — reports, report_results)
-└── seeders/{DemoCapabilitiesSeeder,CommerceCapabilitiesSeeder,CRMCapabilitiesSeeder,FinanceCapabilitiesSeeder,WorkflowsCapabilitiesSeeder,LoyaltyCapabilitiesSeeder,ReportingCapabilitiesSeeder}.php
+│   ├── 2026_07_31_000037-000038                  (Phase 3.5 — reports, report_results)
+│   └── 2026_07_31_000039-000042                  (Phase 4.1 — shipping_methods, shipments,
+│                                                   tracking_events, +orders shipping cols —
+│                                                   the first later-module migration to
+│                                                   alter an earlier module's own table, §7.12)
+└── seeders/{DemoCapabilitiesSeeder,CommerceCapabilitiesSeeder,CRMCapabilitiesSeeder,FinanceCapabilitiesSeeder,WorkflowsCapabilitiesSeeder,LoyaltyCapabilitiesSeeder,ReportingCapabilitiesSeeder,ShippingCapabilitiesSeeder}.php
 
 tests/
 ├── Fixtures/            woocommerce-products-response.json (Stage 6 — reference payload)
@@ -457,8 +529,20 @@ tests/
 │                        report-side math re-derived in the test) +
 │                        tenant isolation on GetReportAction (exercised
 │                        directly, not wired to MCP) + invalid date range
+├── Unit/Shipping/       4 files — Weight, TrackingNumber, ShippingRateCalculator,
+│                        and Shipment's own state machine (every legal
+│                        and illegal transition, incl. Exception's
+│                        recoverability), all framework-free PHPUnit
+├── Feature/Shipping/    1 file — a real Order with 2 Products (2500g
+│                        combined) -> real ShippingMethod -> rate
+│                        preview -> real Shipment (real tracking number,
+│                        real Order.assignShipping() write-back,
+│                        verified via a direct OrderRepositoryInterface
+│                        read) -> status transition -> tracking event ->
+│                        tenant isolation -> status-filtered listing +
+│                        invalid transition/nonexistent-order/forbidden
 ├── Unit/Core/, Unit/MCP/, Feature/Core/, Feature/MCP/, Feature/Demo/, Unit/Demo/   unchanged since Phase 1
-└── 434 tests total, 989 assertions, ~7s runtime (`php artisan test`)
+└── 459 tests total, 1050 assertions, ~8s runtime (`php artisan test`)
 ```
 
 ---
@@ -668,10 +752,10 @@ cd packages/opencommerce-sdk; composer install; cd ../..
 
 # Database
 php artisan migrate
-php artisan db:seed   # runs Demo-, Commerce-, CRM-, Finance-, Workflows-, Loyalty-, and ReportingCapabilitiesSeeder
+php artisan db:seed   # runs Demo-, Commerce-, CRM-, Finance-, Workflows-, Loyalty-, Reporting-, and ShippingCapabilitiesSeeder
 
 # Tests
-php artisan test                                                  # full app suite — 434 tests, ~7s
+php artisan test                                                  # full app suite — 459 tests, ~8s
 cd packages/opencommerce-sdk; vendor/bin/phpunit tests; cd ../..   # SDK's own suite (unaffected by Phase 2)
 
 # Manual/live verification
@@ -692,7 +776,7 @@ end to end.
 
 ---
 
-## 6. The 46 MCP capabilities that exist right now
+## 6. The 54 MCP capabilities that exist right now
 
 | Capability | Phase/Stage | Permission | Notes |
 |---|---|---|---|
@@ -742,6 +826,14 @@ end to end.
 | `report.customers.top` | P3.5 | `reporting.customers.read` | Optional `limit` (default 10). Ranked by total spent, fully in SQL. |
 | `report.revenue.generate` | P3.5 | `reporting.revenue.read` | Only counts Orders with ≥1 `completed` Payment. `netRevenue` excludes tax (§7.11). |
 | `report.loyalty.generate` | P3.5 | `reporting.loyalty.read` | `activeAccounts` is a current-balance snapshot, not date-range-scoped (§7.11). |
+| `shipping.method.create` | P4.1 | `shipping.methods.create` | |
+| `shipping.method.list` | P4.1 | `shipping.methods.read` | Optional `is_active`. |
+| `shipping.rate.calculate` | P4.1 | `shipping.rates.read` | Pure preview, no side effects. |
+| `shipping.shipment.create` | P4.1 | `shipping.shipments.create` | Weighs the Order's Products (via `attributes['weight_grams']`, §7.12), prices it, generates a tracking number, and writes the assignment onto the Order. |
+| `shipping.shipment.get` | P4.1 | `shipping.shipments.read` | |
+| `shipping.shipment.list` | P4.1 | `shipping.shipments.read` | Optional `status`/`order_id`. |
+| `shipping.shipment.transition` | P4.1 | `shipping.shipments.update` | Renamed from the requested `shipping.shipment.status.update` — 4 segments, see §7.12. |
+| `shipping.tracking.add` | P4.1 | `shipping.shipments.update` | Renamed from the requested `shipping.tracking.event.add` — same reason. Does not itself change the Shipment's own status. |
 
 **Deliberately NOT wired to MCP** despite the underlying Action existing and
 being fully tested (see §8.2 for why, and the same reasoning each time):
@@ -1369,6 +1461,104 @@ least one of (§6).
 already exactly 3 dot-separated segments, the second stage in a row
 (after Loyalty) where this didn't come up.
 
+### 7.12 Phase 4, Stage 1 — Shipping (ShippingMethods, Shipments, TrackingEvents)
+
+Entities: `ShippingMethod` (a tenant-defined carrier/tier, no
+update/deactivate method — same "structure frozen, not requested"
+shape Loyalty's `Reward` has), `Shipment` (state machine — see below),
+`TrackingEvent` (immutable audit log entry, no `tenant_id` of its own,
+inherited through `shipment_id` — same shape `order_items`/
+`ticket_comments`/`workflow_rules` already have). VOs: `Money`
+(Shipping's own, deliberately a second, separate class from Commerce's —
+identical reasoning to Finance's own `Money` docblock: depending on
+Commerce's Repository *Interfaces* is fine, importing its concrete
+`Money` VO would be a direct Domain-layer dependency on another
+module's class), `Weight` (non-negative grams, HANDOFF gotcha #4
+applied to a physical unit instead of money), `TrackingNumber`
+(`TRK-XXXXXXXX`, random — not date-based like `OrderNumber`/
+`InvoiceNumber`, since a tracking number has no "which day" component
+worth encoding), `TrackingStatus`, `ShippingRate` (a computed cost +
+the method's own estimated delivery window — never persisted on its
+own, `CalculateShippingRateAction` is a preview, no side effects, the
+same "preview vs. durable apply" split `CalculatePricingAction`/
+`ApplyCouponAction` establish, HANDOFF §3 item 4). Domain Service:
+`ShippingRateCalculator` — pure, framework-free, the same shape
+Commerce's `PricingService`/Loyalty's `PointsCalculationService`
+already establish (rule §d.2: `base_rate + (weight_kg × rate_per_kg)`,
+rounded to the nearest cent).
+
+**Shipment's state machine** (rule §d.3: "pending → in_transit →
+delivered (یا returned/exception)"): `Delivered`/`Returned` are the only
+true terminal states; `Exception` is deliberately **recoverable**
+(`Exception -> InTransit`/`Returned` are both allowed) — a real-world
+carrier problem can be resolved and the shipment resumes transit, unlike
+a delivery that already happened or a package that was already sent
+back. `changeStatus()` also stamps `shipped_at`/`delivered_at` the first
+time the Shipment ever reaches `InTransit`/`Delivered`, mirroring
+Order's own `confirm()`/`cancel()` pattern of a transition carrying its
+own side effect. `AddTrackingEventAction` deliberately does **not** call
+`changeStatus()` — a `TrackingEvent` is a carrier-reported log entry
+("arrived at sorting facility"), while `Shipment.status` is the
+authoritative current state, changed only through
+`UpdateShipmentStatusAction`'s own transition validation; keeping the
+two independent means logging many intermediate carrier updates never
+has to also satisfy the Shipment's own state-machine rules.
+
+**Weight comes from `Product.attributes['weight_grams']`, not a
+first-class Product field.** Commerce's `Product` entity has no
+dedicated Weight concept — `CreateShipmentAction` reads the free-form
+`attributes` bag Phase 1 already established for exactly this kind of
+ad-hoc, module-specific data, defaulting to 0 grams for a Product with
+none set (not an error — plenty of legitimate Products, e.g. a digital
+good or one created before Shipping existed, may never need one).
+Adding a first-class `weight` column to `products` was considered and
+rejected: it would mean modifying Commerce's own migration/Domain Entity
+for a concern only Shipping currently has a use for, where the existing
+extension point already covers it.
+
+**The first later-module migration to alter an earlier module's own
+table.** Every prior cross-module integration (Finance's
+`TaxRateProviderInterface`, Workflows'/Loyalty's Listeners) only ever
+added a new Interface, a new Event, or a brand-new table — none of them
+touched an existing table belonging to a different module. Shipping's
+`CreateShipmentAction` needs to record which Shipment/ShippingMethod
+fulfills an Order, and — after considering the alternative (leaving
+`orders` completely untouched and only ever answering "what ships this
+Order" via `shipping.shipment.list`'s own `order_id` filter, entirely
+Shipping-side) — the literal, explicit request asks for
+`shipping_method_id`/`shipment_id`/`shipping_cost` to live on the Order
+itself, the same way `customer_id` (Stage 4) does. The chosen
+implementation keeps this as narrow as possible: `Order` gained one new
+mutator, `assignShipping()`, and three new nullable, backward-compatible
+fields (HANDOFF §3 pattern #6 — the exact same "widen with optional
+trailing state" shape `customerId`/`tax`/`discount`/`total` already
+used); Commerce's Domain/Application layers otherwise never reference
+Shipping at all. `2026_07_31_000042_add_shipping_to_orders_table.php`
+adds the 4 columns with **no FK constraint** on `shipping_method_id`/
+`shipment_id` — the identical "cross-module reference through an
+Interface, not a database-level FK" reasoning `shipments.order_id` has
+in the other direction (that migration's own docblock). This is a real,
+accepted coupling — a future rename of `orders.shipping_cost_amount`
+would need Shipping's own `EloquentOrderRepository` usage sites touched
+too — not a hidden one, and it's isolated to exactly the 4 files this
+paragraph names.
+
+**One exception wasn't in the original request's list of 3** — added
+unprompted for the same reason Finance's `OrderNotFoundException`/
+Loyalty's `CustomerNotFoundException` were: `CreateShipmentAction`
+validates an `order_id` against Commerce's `OrderRepositoryInterface`
+(Dependency Inversion), and must throw its own exception type rather
+than Commerce's concrete one.
+
+**Two capability names needed renaming** — `shipping.shipment.status.update`
+and `shipping.tracking.event.add` were both 4 dot-separated segments;
+`CapabilityName` requires exactly 3 (HANDOFF gotcha #2, hit again the
+same way WooCommerce's/CRM's/Workflows' capabilities hit it — the first
+time in 3 stages this has come up again after Loyalty/Reporting didn't
+need it). Renamed to `shipping.shipment.transition` and
+`shipping.tracking.add`, restructuring the same 3 semantic groupings the
+request specified rather than inventing new, more granular ones.
+
 ---
 
 ## 8. Known technical debt (ranked, carried over + Phase 2 additions)
@@ -1545,24 +1735,55 @@ already exactly 3 dot-separated segments, the second stage in a row
     Category (Stage 1) and `Inventory`'s current stock levels (Stage 2)
     are both untouched by any report so far, a natural next report type
     if inventory/catalog analytics are ever wanted.
+34. **Weight lives in `Product.attributes['weight_grams']`, an untyped,
+    unvalidated free-form bag entry** (§7.12) — nothing stops a Product
+    from having `weight_grams` set to a string, a negative number, or
+    left out entirely (silently treated as 0). `CreateShipmentAction`
+    casts defensively but there is no `InvalidWeightException` raised
+    for a bad Product attribute today, only for a negative `Weight` VO
+    constructed directly. A first-class Product field (or at least a
+    validated attribute schema) is the real fix if this becomes load-bearing.
+35. **No per-Order-item shipment splitting** — one Shipment always
+    covers 100% of one Order; there is no concept of partial
+    fulfillment (some items ship now, the rest later in a second
+    Shipment). `shipments.order_id` is a plain int specifically because
+    of this 1:1-per-fulfillment assumption — a real multi-shipment Order
+    would need to revisit that.
+36. **No shipping-cost inclusion in Commerce's own checkout pricing.**
+    `PricingService`'s `Total = Subtotal + Tax − Discount` formula still
+    has no shipping term — `Order.shipping_cost` is populated only
+    *after* the Order is placed and shipped, never as part of
+    `commerce.checkout.calculate`/`.process`'s own upfront total. A
+    Customer paying at checkout time still doesn't see shipping cost
+    baked into what they're charged.
+37. **No Shipping Zones/per-region rates** — every `ShippingMethod`
+    charges the same `base_rate`/`rate_per_kg` regardless of
+    destination; there is no address/zone concept anywhere in Shipping
+    (Commerce's own `Address` VO, added in Stage 4, still only lives on
+    Customer, not on an Order or Shipment — HANDOFF's own "Shipping"
+    bullet in §9 flagged this before this stage existed).
+38. **`shipping.method.create`'s `currency` input isn't in its own
+    inputSchema** — it's read defensively (`$input['currency'] ?? 'USD'`)
+    the same "optional field simply omitted from inputSchema" convention
+    HANDOFF §3 pattern #7 established, but it means a caller can't
+    discover it exists without reading this file or the source.
 
 ---
 
 ## 9. What's next
 
-Phase 2 is fully complete (all 6 Stages). Phase 3 has five Stages done —
-CRM Foundation, Finance (per-tenant tax + Invoices), Workflows
-(event-driven automation), Loyalty (points, Rewards, Redemptions), and
-Reporting (read-only analytics). Candidates worth raising with whoever's
-driving scope next, roughly in order of how much they'd reuse what
-already exists:
+Phase 2 (Commerce, all 6 Stages) and Phase 3 (CRM, Finance, Workflows,
+Loyalty, Reporting — all 5 Stages) are fully complete. Phase 4
+(Shipping & Logistics) has one Stage done — Shipping Foundation.
+Candidates worth raising with whoever's driving scope next, roughly in
+order of how much they'd reuse what already exists:
 
-- **A scheduling mechanism** (§8.23/§8.27) — now unlocks *two* things at
+- **A scheduling mechanism** (§8.23/§8.27) — unlocks *two* things at
   once: `CartAbandonedListener` (Workflows) and running
   `ExpirePointsAction` automatically (Loyalty) — the highest-leverage
   single piece of infrastructure available right now, since it's the
-  same blocker in two different modules.
-
+  same blocker in two different modules, and nothing in this codebase
+  has ever used Laravel's own scheduler.
 - **Wire `HighValueOrderListener`** (§7.9) — genuinely the cheapest
   possible next increment in the entire codebase right now: the event it
   needs (`OrderWasPlaced`) already exists, the Listener class already
@@ -1570,42 +1791,40 @@ already exists:
   and a Workflow row are missing.
 - **Fix `CheckInventoryAction`'s re-check math** (§8.22) — a real,
   previously-undiscovered bug affecting any Order for ≥ half of a
-  Product's on-hand stock, found while building this stage, not by it.
-- **A scheduling mechanism** (§8.23) — unlocks `CartAbandonedListener`
-  and any other "time has passed" business rule; nothing in this
-  codebase has ever used Laravel's scheduler.
-- **Phase 3's next module** — Finance polish (payment reconciliation to
-  auto-mark Invoices Paid, PDF/email export — §8.18/§8.19), a second CRM
-  stage (Ticket assignment, Tag removal, a `crm.tag.*` MCP surface —
+  Product's on-hand stock, found while building Workflows' own Stage,
+  not by it.
+- **Phase 4's next Shipping stage** — Shipping Zones/per-region rates
+  (§8.37), partial/multi-shipment fulfillment (§8.35), folding
+  `shipping_cost` into Commerce's own checkout total (§8.36), or a
+  first-class Product weight field replacing the `attributes` bag
+  (§8.34). Shipping is the reference for a module writing data back onto
+  an earlier module's own entity (§7.12) — the same
+  `Order::assignShipping()` shape would extend to any future "write a
+  result back onto Commerce" need.
+- **Phase 3 polish** — Finance (payment reconciliation to auto-mark
+  Invoices Paid, PDF/email export — §8.18/§8.19), a second CRM stage
+  (Ticket assignment, Tag removal, a `crm.tag.*` MCP surface —
   §8.15/§8.16), real notification delivery for `notify_agent` (§8.24), or
-  a genuinely new domain. Finance is the reference for a two-way
-  Module -> Module integration (§7.8); Workflows is the reference for a
-  Module reacting to another Module's Domain Event (§7.9) — between the
-  two, most integration shapes a new module would need already exist
-  somewhere to copy.
+  actual caching for `ReportResult` (§8.31 — `expires_at` already exists
+  on the schema, nothing checks it yet).
 - **A second real Connector** (Shopify) — `ProductConnectorInterface` and
   the WooCommerce implementation (§7.6) are now a template to follow;
   `ConnectorRegistry` already supports registering more than one by name.
 - **Wire the 16 un-wired capabilities from §6** (7 from Commerce Stages
   1–5, 4 from CRM, 1 from Finance, 1 from Workflows, 1 from Loyalty, 2
-  from Reporting) if any Agent workflow actually needs cart-removal,
-  order-cancellation, payment lookup, ticket-updating, tag management,
-  tax-rate updates, workflow-updating, points-expiration, or saved-report
-  retrieval through MCP — cheapest possible next increment each.
-- **Wire actual caching for ReportResult** (§8.31) — `expires_at`
-  already exists on the schema; a `Generate*ReportAction` could check
-  for a still-fresh prior result before recomputing.
+  from Reporting — Shipping wired all 8 of its own) if any Agent workflow
+  actually needs cart-removal, order-cancellation, payment lookup,
+  ticket-updating, tag management, tax-rate updates, workflow-updating,
+  points-expiration, or saved-report retrieval through MCP — cheapest
+  possible next increment each.
 - **Per-tenant connector credentials** (§8.14) — the most obviously
   "fake"/single-tenant piece remaining (per-tenant tax, §8.1's original
   concern, is resolved as of Phase 3.2).
 - **Order/Customer/Inventory sync out to WooCommerce** (§8.13) —
   `OrderConnectorInterface` still has no implementation.
-- **Shipping** — no shipping cost, address-to-carrier, or fulfillment
-  concept exists anywhere yet; `Address` (Stage 4) only lives on Customer
-  today, not on an Order.
 - **A dedicated `capabilities:sync` artisan command**, graduating away from
   the seeder pattern — flagged as an open decision since Phase 1, still
-  open, now with 33 capabilities across five seeders instead of 3.
+  open, now with 54 capabilities across eight seeders instead of 3.
 
 Whatever comes next, follow §3's patterns and check §8 before assuming a
 piece of the puzzle doesn't already exist.

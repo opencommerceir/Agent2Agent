@@ -28,6 +28,10 @@ class Order extends Model
         'total_amount',
         'total_currency',
         'notes',
+        'shipping_method_id',
+        'shipment_id',
+        'shipping_cost_amount',
+        'shipping_cost_currency',
     ];
 
     public function items(): HasMany

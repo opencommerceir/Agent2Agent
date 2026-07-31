@@ -83,6 +83,10 @@ class EloquentOrderRepository implements OrderRepositoryInterface
         $model->total_amount = $order->total()->amount();
         $model->total_currency = $order->total()->currency();
         $model->notes = $order->notes();
+        $model->shipping_method_id = $order->shippingMethodId();
+        $model->shipment_id = $order->shipmentId();
+        $model->shipping_cost_amount = $order->shippingCost()?->amount();
+        $model->shipping_cost_currency = $order->shippingCost()?->currency();
         $model->save();
 
         if ($isNew) {
@@ -123,6 +127,11 @@ class EloquentOrderRepository implements OrderRepositoryInterface
             total: Money::fromAmount($model->total_amount, $model->total_currency),
             notes: $model->notes,
             createdAt: DateTimeImmutable::createFromInterface($model->created_at),
+            shippingMethodId: $model->shipping_method_id,
+            shipmentId: $model->shipment_id,
+            shippingCost: $model->shipping_cost_amount !== null
+                ? Money::fromAmount($model->shipping_cost_amount, $model->shipping_cost_currency)
+                : null,
         );
     }
 }

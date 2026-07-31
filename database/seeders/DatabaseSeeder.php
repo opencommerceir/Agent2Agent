@@ -29,5 +29,6 @@ class DatabaseSeeder extends Seeder
         $this->call(WorkflowsCapabilitiesSeeder::class);
         $this->call(LoyaltyCapabilitiesSeeder::class);
         $this->call(ReportingCapabilitiesSeeder::class);
+        $this->call(ShippingCapabilitiesSeeder::class);
     }
 }
