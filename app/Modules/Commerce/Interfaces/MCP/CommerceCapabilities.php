@@ -128,6 +128,22 @@ final class CommerceCapabilities
                 'outputSchema' => ['coupon' => 'array'],
                 'requiredPermissions' => ['commerce.coupons.create'],
             ],
+            [
+                'name' => 'commerce.woocommerce.sync',
+                'description' => 'Sync products from the connected WooCommerce store into the catalog',
+                // page and limit are both optional — same reasoning as
+                // commerce.order.place's notes field.
+                'inputSchema' => [],
+                'outputSchema' => ['result' => 'array'],
+                'requiredPermissions' => ['commerce.connectors.sync'],
+            ],
+            [
+                'name' => 'commerce.woocommerce.get',
+                'description' => 'Fetch a single product directly from the connected WooCommerce store by its external id',
+                'inputSchema' => ['external_id' => 'string'],
+                'outputSchema' => ['product' => 'array'],
+                'requiredPermissions' => ['commerce.connectors.read'],
+            ],
         ];
     }
 }

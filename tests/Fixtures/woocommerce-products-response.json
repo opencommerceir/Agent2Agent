@@ -1,0 +1,42 @@
+{
+    "data": [
+        {
+            "id": 123,
+            "name": "WooCommerce T-Shirt",
+            "slug": "woo-tshirt",
+            "type": "simple",
+            "status": "publish",
+            "price": "29.99",
+            "regular_price": "29.99",
+            "description": "A beautiful t-shirt from WooCommerce",
+            "short_description": "Premium cotton t-shirt",
+            "sku": "WOO-TSHIRT-001",
+            "stock_quantity": 50,
+            "manage_stock": true,
+            "categories": [
+                {"id": 9, "name": "Clothing", "slug": "clothing"}
+            ],
+            "images": [
+                {"id": 100, "src": "https://example.com/tshirt.jpg"}
+            ]
+        },
+        {
+            "id": 124,
+            "name": "WooCommerce Mug",
+            "slug": "woo-mug",
+            "type": "simple",
+            "status": "publish",
+            "price": "14.99",
+            "regular_price": "14.99",
+            "description": "A ceramic mug from WooCommerce",
+            "short_description": null,
+            "sku": "WOO-MUG-001",
+            "stock_quantity": 100,
+            "manage_stock": true,
+            "categories": [
+                {"id": 10, "name": "Accessories", "slug": "accessories"}
+            ],
+            "images": []
+        }
+    ]
+}

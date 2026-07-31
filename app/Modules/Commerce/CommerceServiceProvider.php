@@ -13,12 +13,14 @@ use App\Modules\Commerce\Application\Actions\CreateCustomerAction;
 use App\Modules\Commerce\Application\Actions\GetCartAction;
 use App\Modules\Commerce\Application\Actions\GetCustomerAction;
 use App\Modules\Commerce\Application\Actions\GetOrderAction;
+use App\Modules\Commerce\Application\Actions\GetWooCommerceProductAction;
 use App\Modules\Commerce\Application\Actions\ListCustomersAction;
 use App\Modules\Commerce\Application\Actions\ListOrdersAction;
 use App\Modules\Commerce\Application\Actions\ListProductsAction;
 use App\Modules\Commerce\Application\Actions\PlaceOrderAction;
 use App\Modules\Commerce\Application\Actions\ProcessPaymentAction;
 use App\Modules\Commerce\Application\Actions\RefundPaymentAction;
+use App\Modules\Commerce\Application\Actions\SyncWooCommerceProductsAction;
 use App\Modules\Commerce\Application\DTOs\CartData;
 use App\Modules\Commerce\Application\DTOs\CouponData;
 use App\Modules\Commerce\Application\DTOs\CustomerData;
@@ -28,6 +30,9 @@ use App\Modules\Commerce\Application\DTOs\PricingData;
 use App\Modules\Commerce\Application\Services\ConnectorRegistry;
 use App\Modules\Commerce\Application\Services\MockPaymentGateway;
 use App\Modules\Commerce\Application\Services\PaymentGatewayInterface;
+use App\Modules\Commerce\Application\Services\WooCommerceClient;
+use App\Modules\Commerce\Application\Services\WooCommerceClientInterface;
+use App\Modules\Commerce\Application\Services\WooCommerceConfig;
 use App\Modules\Commerce\Domain\Repositories\CartRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\CategoryRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\CouponRepositoryInterface;
@@ -37,7 +42,9 @@ use App\Modules\Commerce\Domain\Repositories\InventoryRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\OrderRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\PaymentRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\ProductRepositoryInterface;
+use App\Modules\Commerce\Domain\Services\WooCommerceProductMapper;
 use App\Modules\Commerce\Infrastructure\Connectors\MockProductConnector;
+use App\Modules\Commerce\Infrastructure\Connectors\WooCommerceProductConnector;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentCartRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentCategoryRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentCouponRepository;
@@ -84,12 +91,22 @@ class CommerceServiceProvider extends ServiceProvider
         $this->app->bind(CouponRepositoryInterface::class, EloquentCouponRepository::class);
         $this->app->bind(DiscountRepositoryInterface::class, EloquentDiscountRepository::class);
         $this->app->bind(PaymentGatewayInterface::class, MockPaymentGateway::class);
+
+        $this->app->bind(
+            WooCommerceClientInterface::class,
+            fn () => new WooCommerceClient(WooCommerceConfig::fromConfig()),
+        );
     }
 
     public function boot(): void
     {
         $connectors = $this->app->make(ConnectorRegistry::class);
         $connectors->registerProductConnector('mock', new MockProductConnector());
+        $connectors->registerProductConnector('woocommerce', new WooCommerceProductConnector(
+            $this->app->make(WooCommerceClientInterface::class),
+            new WooCommerceProductMapper(),
+            WooCommerceConfig::fromConfig()->currency,
+        ));
 
         $handlers = $this->app->make(CapabilityHandlerRegistry::class);
 
@@ -220,6 +237,22 @@ class CommerceServiceProvider extends ServiceProvider
             );
 
             return ['coupon' => $coupon->toArray()];
+        });
+
+        $handlers->register('commerce.woocommerce.sync', function (array $input, AuthContext $context) {
+            $result = $this->app->make(SyncWooCommerceProductsAction::class)->execute(
+                tenantId: $context->tenantId,
+                page: isset($input['page']) ? (int) $input['page'] : 1,
+                limit: isset($input['limit']) ? (int) $input['limit'] : 20,
+            );
+
+            return ['result' => $result->toArray()];
+        });
+
+        $handlers->register('commerce.woocommerce.get', function (array $input, AuthContext $context) {
+            $product = $this->app->make(GetWooCommerceProductAction::class)->execute($input['external_id']);
+
+            return ['product' => $product->toArray()];
         });
     }
 }
