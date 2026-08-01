@@ -2,6 +2,7 @@
 
 namespace App\Modules\Notifications\Application\Actions;
 
+use App\Core\Domain\ValueObjects\Language;
 use App\Modules\Notifications\Application\DTOs\NotificationTemplateData;
 use App\Modules\Notifications\Domain\Entities\NotificationTemplate;
 use App\Modules\Notifications\Domain\Repositories\NotificationTemplateRepositoryInterface;
@@ -22,6 +23,7 @@ final class CreateTemplateAction
         string $subjectTemplate,
         string $bodyTemplate,
         array $variables = [],
+        string $language = 'en',
     ): NotificationTemplateData {
         $template = NotificationTemplate::create(
             tenantId: $tenantId,
@@ -30,6 +32,7 @@ final class CreateTemplateAction
             subjectTemplate: $subjectTemplate,
             bodyTemplate: $bodyTemplate,
             variables: $variables,
+            language: Language::from($language),
         );
 
         $template = $this->templates->save($template);

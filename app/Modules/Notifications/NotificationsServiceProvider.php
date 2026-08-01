@@ -90,7 +90,7 @@ class NotificationsServiceProvider extends ServiceProvider
             $variables = $input['variables'] ?? [];
 
             $template = $this->app->make(NotificationTemplateRepositoryInterface::class)
-                ->findActive($context->tenantId, $type, $channelType);
+                ->findActive($context->tenantId, $type, $channelType, $context->language);
 
             if (! $template) {
                 throw new TemplateNotFoundException(
@@ -126,6 +126,11 @@ class NotificationsServiceProvider extends ServiceProvider
                 subjectTemplate: $input['subject_template'],
                 bodyTemplate: $input['body_template'],
                 variables: $input['variables'] ?? [],
+                // Optional, omitted from inputSchema (HANDOFF §3 pattern
+                // #7) — defaults to 'en'. Registering a second language for
+                // the same type+channel is calling this capability again
+                // with a different `language`, not a nested payload.
+                language: $input['language'] ?? 'en',
             );
 
             return ['template' => $template->toArray()];

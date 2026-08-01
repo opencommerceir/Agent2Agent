@@ -15,6 +15,7 @@ final class NotificationTemplateData
         public readonly string $bodyTemplate,
         public readonly array $variables,
         public readonly bool $isActive,
+        public readonly string $language,
     ) {
     }
 
@@ -29,6 +30,7 @@ final class NotificationTemplateData
             bodyTemplate: $template->bodyTemplate(),
             variables: $template->variables(),
             isActive: $template->isActive(),
+            language: $template->language()->value,
         );
     }
 
@@ -46,6 +48,7 @@ final class NotificationTemplateData
             'bodyTemplate' => $this->bodyTemplate,
             'variables' => $this->variables,
             'isActive' => $this->isActive,
+            'language' => $this->language,
         ];
     }
 }

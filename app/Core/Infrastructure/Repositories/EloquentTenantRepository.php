@@ -4,6 +4,7 @@ namespace App\Core\Infrastructure\Repositories;
 
 use App\Core\Domain\Entities\Tenant as TenantEntity;
 use App\Core\Domain\Repositories\TenantRepositoryInterface;
+use App\Core\Domain\ValueObjects\Language;
 use App\Core\Domain\ValueObjects\TenantStatus;
 use App\Core\Infrastructure\Models\Tenant as TenantModel;
 use DateTimeImmutable;
@@ -46,6 +47,7 @@ class EloquentTenantRepository implements TenantRepositoryInterface
         $model->name = $tenant->name();
         $model->slug = $tenant->slug();
         $model->status = $tenant->status()->value;
+        $model->default_language = $tenant->defaultLanguage()->value;
         $model->save();
 
         return $this->toEntity($model);
@@ -59,6 +61,7 @@ class EloquentTenantRepository implements TenantRepositoryInterface
             slug: $model->slug,
             status: TenantStatus::from($model->status),
             createdAt: DateTimeImmutable::createFromInterface($model->created_at),
+            defaultLanguage: Language::from($model->default_language),
         );
     }
 }

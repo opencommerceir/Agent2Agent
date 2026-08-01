@@ -2,6 +2,7 @@
 
 namespace App\Core\Domain\Entities;
 
+use App\Core\Domain\ValueObjects\Language;
 use App\Core\Domain\ValueObjects\TenantStatus;
 use DateTimeImmutable;
 
@@ -17,6 +18,7 @@ final class Tenant
         private string $slug,
         private TenantStatus $status,
         private readonly DateTimeImmutable $createdAt,
+        private Language $defaultLanguage = Language::English,
     ) {
     }
 
@@ -39,6 +41,17 @@ final class Tenant
     public function suspend(): void
     {
         $this->status = TenantStatus::Suspended;
+    }
+
+    /**
+     * Phase 4 Stage 4 (i18n) — the tier LanguageDetector falls back to
+     * when a request carries neither a ?lang= query parameter nor a
+     * recognized Accept-Language header, and the tier an event Listener
+     * (no Request at all) uses exclusively.
+     */
+    public function changeDefaultLanguage(Language $language): void
+    {
+        $this->defaultLanguage = $language;
     }
 
     public function id(): ?int
@@ -64,6 +77,11 @@ final class Tenant
     public function createdAt(): DateTimeImmutable
     {
         return $this->createdAt;
+    }
+
+    public function defaultLanguage(): Language
+    {
+        return $this->defaultLanguage;
     }
 
     public function isActive(): bool

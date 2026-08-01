@@ -43,7 +43,10 @@ final class NotificationsCapabilities
             ],
             [
                 'name' => 'notification.template.create',
-                'description' => 'Create a NotificationTemplate: a subject/body pair with {{variable}} placeholders for a given type+channel',
+                'description' => 'Create a NotificationTemplate: a subject/body pair with {{variable}} placeholders for a given type+channel+language',
+                // language is optional, defaults to 'en' (Phase 4 Stage 4,
+                // i18n) — call this again with a different language to
+                // register a second translation for the same type+channel.
                 'inputSchema' => ['type' => 'string', 'channel' => 'string', 'subject_template' => 'string', 'body_template' => 'string'],
                 'outputSchema' => ['template' => 'array'],
                 'requiredPermissions' => ['notifications.templates.manage'],

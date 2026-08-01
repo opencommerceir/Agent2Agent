@@ -1,0 +1,33 @@
+{
+  "dashboard": {
+    "title": "داشبورد OpenCommerce",
+    "welcome": "خوش آمدید، :name",
+    "total_tenants": "تعداد مستأجران",
+    "total_agents": "تعداد Agentها",
+    "total_orders": "تعداد سفارشات"
+  },
+  "tenants": {
+    "create": "ایجاد مستأجر",
+    "edit": "ویرایش مستأجر",
+    "delete": "حذف مستأجر",
+    "name": "نام مستأجر",
+    "domain": "دامنه"
+  },
+  "agents": {
+    "create": "ایجاد Agent",
+    "edit": "ویرایش Agent",
+    "status": "وضعیت",
+    "active": "فعال",
+    "inactive": "غیرفعال"
+  },
+  "common": {
+    "save": "ذخیره",
+    "cancel": "انصراف",
+    "delete": "حذف",
+    "edit": "ویرایش",
+    "create": "ایجاد",
+    "back": "بازگشت",
+    "actions": "عملیات",
+    "confirm_delete": "آیا مطمئن هستید که می‌خواهید این مورد را حذف کنید؟"
+  }
+}

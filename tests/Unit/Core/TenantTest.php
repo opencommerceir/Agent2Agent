@@ -3,6 +3,7 @@
 namespace Tests\Unit\Core;
 
 use App\Core\Domain\Entities\Tenant;
+use App\Core\Domain\ValueObjects\Language;
 use App\Core\Domain\ValueObjects\TenantStatus;
 use PHPUnit\Framework\TestCase;
 
@@ -55,5 +56,21 @@ class TenantTest extends TestCase
         $tenant->suspend();
 
         $this->assertFalse($tenant->isActive());
+    }
+
+    public function test_register_defaultsToEnglishLanguage(): void
+    {
+        $tenant = Tenant::register('Acme Inc', 'acme-inc');
+
+        $this->assertSame(Language::English, $tenant->defaultLanguage());
+    }
+
+    public function test_changeDefaultLanguage_updatesIt(): void
+    {
+        $tenant = Tenant::register('Acme Inc', 'acme-inc');
+
+        $tenant->changeDefaultLanguage(Language::Persian);
+
+        $this->assertSame(Language::Persian, $tenant->defaultLanguage());
     }
 }

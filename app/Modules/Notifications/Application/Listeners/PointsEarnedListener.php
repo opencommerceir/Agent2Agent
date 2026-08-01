@@ -2,6 +2,7 @@
 
 namespace App\Modules\Notifications\Application\Listeners;
 
+use App\Core\Application\Services\LanguageDetector;
 use App\Modules\Loyalty\Domain\Events\PointsWereEarned;
 use App\Modules\Notifications\Application\Actions\SendNotificationAction;
 use App\Modules\Notifications\Domain\Repositories\NotificationTemplateRepositoryInterface;
@@ -17,7 +18,9 @@ use App\Modules\Notifications\Domain\ValueObjects\RecipientType;
  * needed). Always an in_app notification (no email/phone concept for
  * this one, per this stage's own example) — the Recipient value is the
  * Customer's own id (InAppSender never reads it; the persisted
- * Notification row itself is what an in-app UI polls).
+ * Notification row itself is what an in-app UI polls). Same
+ * Tenant-default-language detection as ShipmentStatusChangedListener (see
+ * that class's own docblock).
  */
 final class PointsEarnedListener
 {
@@ -25,6 +28,7 @@ final class PointsEarnedListener
         private readonly NotificationTemplateRepositoryInterface $templates,
         private readonly TemplateRenderer $renderer,
         private readonly SendNotificationAction $sendNotification,
+        private readonly LanguageDetector $languageDetector,
     ) {
     }
 
@@ -32,7 +36,12 @@ final class PointsEarnedListener
     {
         $account = $event->account;
 
-        $template = $this->templates->findActive($account->tenantId(), NotificationType::PointsEarned, ChannelType::InApp);
+        $template = $this->templates->findActive(
+            $account->tenantId(),
+            NotificationType::PointsEarned,
+            ChannelType::InApp,
+            $this->languageDetector->detectForTenant($account->tenantId()),
+        );
 
         if (! $template) {
             return;

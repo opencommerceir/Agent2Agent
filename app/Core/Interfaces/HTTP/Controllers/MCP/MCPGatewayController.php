@@ -8,6 +8,7 @@ use App\Core\Application\Actions\GetCapabilityAction;
 use App\Core\Application\DTOs\AuthContext;
 use App\Core\Application\Services\AgentAuthenticationService;
 use App\Core\Application\Services\CapabilityExecutionService;
+use App\Core\Application\Services\LanguageDetector;
 use App\Core\Application\Services\MCPResponseFormatter;
 use App\Core\Domain\ValueObjects\MemberType;
 use App\Core\Interfaces\HTTP\Requests\MCP\ExecuteCapabilityRequest;
@@ -38,6 +39,7 @@ final class MCPGatewayController extends Controller
         private readonly GetCapabilityAction $getCapability,
         private readonly CheckPermissionAction $checkPermission,
         private readonly CapabilityExecutionService $capabilityExecution,
+        private readonly LanguageDetector $languageDetector,
         private readonly MCPResponseFormatter $response,
     ) {
     }
@@ -57,7 +59,8 @@ final class MCPGatewayController extends Controller
             $this->checkPermission->authorize(MemberType::Agent, $agent->id, $agent->tenantId, $permissionKey);
         }
 
-        $execution = $this->capabilityExecution->execute($capability, $input, AuthContext::forAgent($agent));
+        $language = $this->languageDetector->detect($request, $agent->tenantId);
+        $execution = $this->capabilityExecution->execute($capability, $input, AuthContext::forAgent($agent, $language));
 
         return $this->response->success($execution['result'], [
             'capability' => $capabilityName,

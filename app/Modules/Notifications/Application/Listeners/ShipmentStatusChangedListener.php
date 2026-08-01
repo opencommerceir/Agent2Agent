@@ -2,6 +2,7 @@
 
 namespace App\Modules\Notifications\Application\Listeners;
 
+use App\Core\Application\Services\LanguageDetector;
 use App\Modules\Commerce\Domain\Repositories\CustomerRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\OrderRepositoryInterface;
 use App\Modules\Notifications\Application\Actions\SendNotificationAction;
@@ -25,6 +26,13 @@ use App\Modules\Shipping\Domain\Events\ShipmentStatusChanged;
  * tenant: both are genuinely normal states, not errors. Variables:
  * `{{order_number}}`, `{{tracking_number}}`, `{{status}}`,
  * `{{customer_name}}`.
+ *
+ * Language (Phase 4 Stage 4, i18n): a Listener reacts to a Domain Event,
+ * not an HTTP request, so there's no query/header to detect from — it uses
+ * LanguageDetector::detectForTenant(), the Tenant-default-or-English tier
+ * only. No per-Customer language preference exists in this codebase yet
+ * (§9 candidate); this is the same signal every other language-aware call
+ * site in this module uses until one does.
  */
 final class ShipmentStatusChangedListener
 {
@@ -34,6 +42,7 @@ final class ShipmentStatusChangedListener
         private readonly NotificationTemplateRepositoryInterface $templates,
         private readonly TemplateRenderer $renderer,
         private readonly SendNotificationAction $sendNotification,
+        private readonly LanguageDetector $languageDetector,
     ) {
     }
 
@@ -56,6 +65,7 @@ final class ShipmentStatusChangedListener
             $shipment->tenantId(),
             NotificationType::ShipmentStatusChanged,
             ChannelType::Email,
+            $this->languageDetector->detectForTenant($shipment->tenantId()),
         );
 
         if (! $template) {

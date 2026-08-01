@@ -2,6 +2,7 @@
 
 namespace App\Modules\Notifications\Domain\Entities;
 
+use App\Core\Domain\ValueObjects\Language;
 use App\Modules\Notifications\Domain\ValueObjects\ChannelType;
 use App\Modules\Notifications\Domain\ValueObjects\NotificationType;
 use DateTimeImmutable;
@@ -12,6 +13,19 @@ use DateTimeImmutable;
  * `variables` is a plain documentation list of the names a caller may
  * substitute — nothing enforces every listed name actually appears in
  * either template string, or vice versa.
+ *
+ * $language (Phase 4 Stage 4, i18n) means a tenant registers one
+ * NotificationTemplate row per Language it wants to support for the same
+ * type+channel — not a single row holding a nested translations map, the
+ * shape this stage's own request illustrated. Keeping one language per row
+ * is the same "widen with an optional trailing field" shape (HANDOFF §3
+ * pattern #6) every prior extension of an existing Entity in this codebase
+ * has used, and needs no restructuring of subjectTemplate/bodyTemplate,
+ * NotificationTemplateData, or the Eloquent mapping — registering a second
+ * language is just calling notification.template.create again with a
+ * different `language` input. See
+ * EloquentNotificationTemplateRepository::findActive()'s own docblock for
+ * how the fallback-to-English rule works across these rows.
  */
 final class NotificationTemplate
 {
@@ -25,6 +39,7 @@ final class NotificationTemplate
         private readonly array $variables,
         private readonly bool $isActive,
         private readonly DateTimeImmutable $createdAt,
+        private readonly Language $language = Language::English,
     ) {
     }
 
@@ -36,6 +51,7 @@ final class NotificationTemplate
         string $bodyTemplate,
         array $variables = [],
         bool $isActive = true,
+        Language $language = Language::English,
     ): self {
         return new self(
             id: null,
@@ -47,6 +63,7 @@ final class NotificationTemplate
             variables: $variables,
             isActive: $isActive,
             createdAt: new DateTimeImmutable(),
+            language: $language,
         );
     }
 
@@ -93,5 +110,10 @@ final class NotificationTemplate
     public function createdAt(): DateTimeImmutable
     {
         return $this->createdAt;
+    }
+
+    public function language(): Language
+    {
+        return $this->language;
     }
 }

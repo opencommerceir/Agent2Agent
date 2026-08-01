@@ -4,8 +4,27 @@
 Stages), and Phase 3 (Domain Expansion, all 5 Stages — CRM, Finance,
 Workflows, Loyalty, Reporting) are complete. Phase 4 (Shipping &
 Logistics) is under way: Stage 1 (Shipping Foundation), Stage 2
-(Shipping Provider Connector, §7.14), and Stage 3 (Notifications Module,
-§7.15) are all complete.
+(Shipping Provider Connector, §7.14), Stage 3 (Notifications Module,
+§7.15), and Stage 4 (Multi-language Support / i18n Infrastructure,
+§7.16) are all complete.
+
+**Stage 4 (i18n Infrastructure, §7.16) was deliberately scoped down from
+its own request during planning: the request bundled a JSON-based i18n
+backend (Language detection, translated MCP errors, multi-language
+Notification Templates) together with a full 8-page, human-login Admin
+Dashboard (Tailwind/Alpine, Tenants/Agents/Products/Orders management).
+Building the Dashboard first requires a human-authentication architecture
+this codebase has never had — every identity path so far (§8.7) is
+Agent-bearer-token-only, with no session Guard, no login flow, and no
+tie between Laravel's own stock `User` model (unused scaffolding) and
+Core's real tenancy model (`OrganizationMember`). Shipping that decision
+silently would have meant either building throwaway auth or quietly
+picking an architecture the user hadn't actually approved. Raised as a
+scope question before writing any code; the user chose to split it: this
+stage delivers only the i18n backend below, and the Dashboard becomes its
+own future stage once built on a session Guard backed by a real
+`OrganizationMember` (decision recorded here for whoever picks up that
+stage) with Alpine.js for interactivity.**
 Finance supplies Commerce's own checkout pricing with real tax rates
 through an Interface Commerce itself owns (§7.8). Workflows (§7.9) and
 Loyalty (§7.10) each introduce a real cross-module Domain Event
@@ -76,9 +95,33 @@ permission names that hit the usual 3-segment gotcha, and keeping
 `NotificationDispatcher` a pure Domain decision function instead of a
 Repository-querying one. See §7.15 for the full detail.**
 
-497 tests passing, zero known regressions. Next up: another Phase 4
-Shipping/Logistics stage (Shipping Zones, partial fulfillment, folding
-`shipping_cost` into checkout pricing — §8.37/§8.35/§8.36), a real
+**Stage 4 (i18n Infrastructure, §7.16) builds a small, custom JSON-based
+translation subsystem in Core (`Language` enum, `TranslationServiceInterface`/
+`TranslationLoaderInterface` + their one implementation each, `LanguageDetector`)
+— deliberately not Laravel's own `__()`/flat-JSON translator, since the
+request's own `lang/{code}/{group}.json`-per-group, dot-path-addressable
+shape doesn't match what Laravel's built-in JSON translation feature
+expects. `LanguageDetector` implements the requested priority order
+(query `?lang=` -> `Accept-Language` header -> Tenant's own new
+`default_language` column -> English), threaded into every Capability
+handler via a new `AuthContext::$language` field (the same "widen the
+MCP boundary DTO" shape §3 pattern #1 already established) and into
+`MCPExceptionHandler` (now container-resolved, not `new`'d, specifically
+so it can take this constructor dependency) as a purely additive
+`error.localized_message` field — `error.message` itself is untouched, so
+no existing test needed to change. Notifications' `NotificationTemplate`
+gained an optional trailing `language` field (one row per Language per
+type+channel, not the nested translations-blob shape the request
+illustrated — see §7.16) with automatic fallback-to-English baked into
+`EloquentNotificationTemplateRepository::findActive()` itself, so every
+caller (3 Listeners + the `notification.message.send` MCP handler) gets
+the fallback for free.**
+
+518 tests passing (497 + 21 new), zero known regressions. Next up: the
+Admin Dashboard stage this stage's own request deferred (§7.16 — needs a
+session Guard backed by `OrganizationMember` decided first), another
+Phase 4 Shipping/Logistics stage (Shipping Zones, partial fulfillment,
+folding `shipping_cost` into checkout pricing — §8.37/§8.35/§8.36), a real
 carrier implementation of `ShippingProviderInterface` (USPS/FedEx/DHL —
 `MockShippingProviderAdapter` is now the template, the same role
 `WooCommerceProductConnector` played for a second real Commerce
@@ -200,8 +243,10 @@ unprompted, see §7.9), 3 Value Objects (`WorkflowStatus`, `EventType`,
 `Threshold`), 2 domain events, 2 exceptions, 1 Repository interface
 (owns `WorkflowLog` persistence too), 7 Application Actions (5 wired to
 MCP — see §6, one added unprompted alongside `WorkflowLog`), 3 Listeners
-(only `InventoryLowListener` actually registered — `CartAbandonedListener`/
-`HighValueOrderListener` are documented, unwired scaffolding), 4 Eloquent
+(`InventoryLowListener` registered from this stage; `CartAbandonedListener`
+was documented, unwired scaffolding until the Tech Debt Sprint's scheduler
+wired it for real, §7.13 — `HighValueOrderListener` remains the one still
+unwired), 4 Eloquent
 models, 1 Eloquent repository, 4 migrations. Required one small, additive
 change to Commerce itself: a new `InventoryWasCommitted` Domain Event
 (dispatched from `PlaceOrderAction`) — no event previously existed for
@@ -263,6 +308,37 @@ additionally calls a new mutator Commerce's own `Order` entity gained
 for this stage, `assignShipping()` (see Commerce's own section above
 and §7.12 for the full reasoning).
 
+**Stage 2 (Shipping Provider Connector, §7.14) added a second capability
+on top of that Stage 1 foundation**: `ShippingProviderInterface`/
+`ShippingProviderRegistry`/`MockShippingProviderAdapter` — the Connector
+Pattern demonstrated a second time (Commerce's Stage 6 WooCommerce
+integration was the first) — plus 2 new nullable `Shipment` fields
+(`providerName`/`providerTrackingNumber`) and a new `Address` VO
+(Shipping's own, for `getRates()`'s destination). Only `mock` has an
+implementation; `usps`/`fedex`/`dhl` are modeled, unimplemented.
+
+### `app/Modules/Notifications/` — **new in Phase 4, Stage 3. The platform's first genuinely cross-cutting Domain Module — reacts to events from Shipping, Commerce, and Loyalty all at once.**
+
+See §7.15 for the full detail. 4 Domain Entities (`Notification`,
+`NotificationTemplate`, `NotificationChannel`, `NotificationPreference`),
+5 Value Objects (`NotificationType`, `ChannelType`, `DeliveryStatus`,
+`Recipient`, `RecipientType`), 3 domain events (`NotificationWasSent`/
+`NotificationFailed` real, `NotificationWasDelivered` modeled-only — see
+§8.40), 4 Repository interfaces (3 requested + `NotificationPreferenceRepositoryInterface`
+added unprompted), 2 pure Domain Services (`NotificationDispatcher`,
+`TemplateRenderer`), 8 Application Actions (all 8 wired to MCP — see
+§6), 4 Senders (`ChannelSenderRegistry` — the third `ConnectorRegistry`-
+shaped registry in this codebase — `EmailSender`/`WebhookSender` real,
+`SmsSender` an explicit stub, `InAppSender` a no-op), 3 real cross-module
+Listeners (`ShipmentStatusChangedListener`, `OrderPlacedNotificationListener`,
+`PointsEarnedListener` — depend on Commerce's/Shipping's/Loyalty's own
+published Repository Interfaces and Domain Events, never their Models),
+4 Eloquent models, 4 Eloquent repositories, 4 migrations. Introduces
+this codebase's first retry-with-exponential-backoff logic
+(`SendNotificationAction`, 3 attempts). CRM's `ticket_created`
+`NotificationType` is modeled but has no Listener yet (§8.42) — nothing
+requested one this stage.
+
 ### `app/Modules/Demo/` — unchanged since Phase 1
 
 Same three demo capabilities. Its `DemoServiceProvider` handler closures were
@@ -287,15 +363,26 @@ app/Core/
 ├── Domain/{Entities,ValueObjects,Events,Repositories,Exceptions,Exceptions/Contracts}/
 │                        + RateLimitExceededException (Tech Debt Sprint, §7.13 —
 │                        implements neither marker interface, same reasoning
-│                        WooCommerceApiException has)
+│                        WooCommerceApiException has), + Language enum
+│                        (Phase 4 Stage 4, §7.16 — `en`/`fa`)
+├── Domain/Services/     new in Phase 4 Stage 4 (§7.16) — TranslationServiceInterface,
+│                        TranslationLoaderInterface (2 Domain contracts, no
+│                        implementation lives here — see Application below)
 ├── Application/{Actions,DTOs,Services,Listeners}/
-│                        + EnforceRateLimitAction (§7.13)
+│                        + EnforceRateLimitAction (§7.13), + SetTenantDefaultLanguageAction,
+│                        TranslationData (DTO), TranslationService, JsonTranslationLoader,
+│                        LanguageDetector (all §7.16)
 ├── Infrastructure/{Models,Repositories}/
 ├── Interfaces/HTTP/{Controllers/MCP,Requests/MCP}/
-├── Exceptions/MCPExceptionHandler.php
-└── CoreServiceProvider.php
+├── Exceptions/MCPExceptionHandler.php   now container-resolved in bootstrap/app.php
+│                        (was `new`'d — §7.16, so its new LanguageDetector/
+│                        TranslationServiceInterface constructor dependencies work)
+└── CoreServiceProvider.php    binds TranslationLoaderInterface/TranslationServiceInterface (§7.16)
 
 config/mcp.php              new in Tech Debt Sprint (§7.13) — MCP_RATE_LIMIT_PER_MINUTE
+
+lang/{en,fa}/{messages,validation,errors}.json   new in Phase 4 Stage 4 (§7.16) —
+                             JsonTranslationLoader's own source files
 
 app/Console/Commands/       new in Tech Debt Sprint (§7.13) — this directory
                              didn't exist before: ExpireLoyaltyPointsCommand,
@@ -590,7 +677,9 @@ app/Modules/Notifications/         new in Phase 4, Stage 3 (§7.15) — the
                                    (Commerce, Loyalty) at once, plus
                                    Shipping's own Domain Event
 ├── Domain/
-│   ├── Entities/                 Notification, NotificationTemplate,
+│   ├── Entities/                 Notification, NotificationTemplate
+│   │                             (+ `language` field, Phase 4 Stage 4, §7.16 —
+│   │                             one row per Language per type+channel),
 │   │                             NotificationChannel, NotificationPreference
 │   ├── ValueObjects/             NotificationType, ChannelType,
 │   │                             DeliveryStatus, Recipient, RecipientType
@@ -602,7 +691,9 @@ app/Modules/Notifications/         new in Phase 4, Stage 3 (§7.15) — the
 │   │                             {{variable}} substitution),
 │   │                             ChannelSenderInterface
 │   ├── Repositories/              NotificationRepositoryInterface,
-│   │                              NotificationTemplateRepositoryInterface,
+│   │                              NotificationTemplateRepositoryInterface
+│   │                              (findActive() gained a Language param +
+│   │                              its own fallback-to-English logic, §7.16),
 │   │                              NotificationChannelRepositoryInterface,
 │   │                              + NotificationPreferenceRepositoryInterface
 │   │                              (added unprompted, §7.15)
@@ -637,7 +728,12 @@ app/Modules/Notifications/         new in Phase 4, Stage 3 (§7.15) — the
 │                                  PointsEarnedListener (reacts to
 │                                  Loyalty's PointsWereEarned) — all 3
 │                                  registered; CRM's ticket_created has no
-│                                  Listener this stage (§8.42)
+│                                  Listener this stage (§8.42). All 3 gained
+│                                  a LanguageDetector dependency in Phase 4
+│                                  Stage 4 (§7.16) — Core's
+│                                  detectForTenant() tier only, since a
+│                                  Listener has no HTTP Request to read a
+│                                  query/header from.
 ├── Infrastructure/
 │   ├── Models/                    4 Eloquent models
 │   └── Repositories/               4 Eloquent repository implementations
@@ -678,10 +774,13 @@ database/
 │   ├── 2026_08_01_000043                          (Phase 4.2 — +shipments.provider_name/
 │   │                                               provider_tracking_number, both nullable,
 │   │                                               no FK, §7.14)
-│   └── 2026_08_01_000044-000047                  (Phase 4.3 — notifications,
-│                                                   notification_templates,
-│                                                   notification_channels,
-│                                                   notification_preferences, §7.15)
+│   ├── 2026_08_01_000044-000047                  (Phase 4.3 — notifications,
+│   │                                               notification_templates,
+│   │                                               notification_channels,
+│   │                                               notification_preferences, §7.15)
+│   └── 2026_08_02_000048-000049                  (Phase 4.4 — +tenants.default_language,
+│                                                   +notification_templates.language, §7.16 —
+│                                                   both additive, default 'en')
 └── seeders/{DemoCapabilitiesSeeder,CommerceCapabilitiesSeeder,CRMCapabilitiesSeeder,FinanceCapabilitiesSeeder,WorkflowsCapabilitiesSeeder,LoyaltyCapabilitiesSeeder,ReportingCapabilitiesSeeder,ShippingCapabilitiesSeeder,NotificationsCapabilitiesSeeder}.php
 
 tests/
@@ -744,9 +843,24 @@ tests/
 │                        fulfill -> sync -> idempotent resync -> simulated
 │                        provider failure -> tenant isolation)
 ├── Unit/Core/, Unit/MCP/, Feature/Demo/, Unit/Demo/   unchanged since Phase 1
+├── Unit/Core/            + TranslationServiceTest (5 — exact match,
+│                        placeholder replace, fallback-to-English +
+│                        wasFallback flag, ultimate fallback-to-the-key-itself
+│                        when missing everywhere; a fake in-memory
+│                        TranslationLoaderInterface, framework-free) +
+│                        2 new TenantTest cases (default language,
+│                        changeDefaultLanguage) — all Phase 4 Stage 4, §7.16
 ├── Feature/Core/        + MCPRateLimitTest (Tech Debt Sprint, §7.13) +
 │                        a new query-count regression test in
-│                        CheckPermissionTest (the N+1 fix)
+│                        CheckPermissionTest (the N+1 fix) +
+│                        LanguageDetectorTest (6 — the full query > header >
+│                        Tenant-default > English priority chain) +
+│                        TenantDefaultLanguageTest (2 — SetTenantDefaultLanguageAction
+│                        persistence + nonexistent-tenant error), both §7.16
+├── Feature/MCP/          + MCPLanguageTest (3 — `error.localized_message`
+│                        via ?lang=, via Accept-Language header, and the
+│                        English default when neither is present; confirms
+│                        `error.message` itself is untouched), §7.16
 ├── Feature/Commerce/    + InventoryConcurrencyTest (§8.22 regression +
 │                        the reservation race fix) +
 │                        MarkAbandonedCartsCommandTest (Tech Debt Sprint,
@@ -770,7 +884,12 @@ tests/
 │                        -> real ShipmentStatusChangedListener -> sent
 │                        Notification -> Preference disabled -> no new
 │                        Notification -> tenant isolation scenario, §7.15)
-└── 497 tests total, 1185 assertions, ~11s runtime (`php artisan test`)
+├── Feature/Notifications/  + NotificationTemplateLanguageTest (3 —
+│                        ?lang= picks the matching translation, a missing
+│                        translation falls back to English, and a Tenant's
+│                        own default_language reaches the capability with
+│                        no query/header at all), §7.16
+└── 518 tests total, 1229 assertions, ~33s runtime (`php artisan test`)
 ```
 
 ---
@@ -926,6 +1045,49 @@ What Phase 4 *added* on top of that (§7.12 has the full reasoning):
     pattern #8 already covers) or "I need to react to something it did"
     (which pattern #11's Listener shape already covers).
 
+What the Tech Debt Sprint and Phase 4 Stages 2–3 *added* on top of that
+(§7.13–§7.15 have the full reasoning):
+
+15. **An in-memory `NameRegistry` (register-by-string-key, throw a
+    Not-Found-marked exception on an unregistered key) is the standard
+    shape for "one of several interchangeable external integrations,
+    picked by name at call time."** `ConnectorRegistry` (Commerce, Phase
+    1/Stage 6) established it; `ShippingProviderRegistry` (§7.14) and
+    `ChannelSenderRegistry` (§7.15) are both the same shape a third and
+    fourth time — plain array keyed by a string/enum value, `register()`/
+    `get()`, bound as a singleton and populated in the owning module's own
+    `ServiceProvider::boot()`. Reach for this, don't invent a new registry
+    shape, the next time a module needs to pick between several named
+    implementations of one Interface.
+16. **A cross-cutting concern with no natural request-scoped middleware
+    pipeline gets enforced as an explicit Action call, not framework
+    middleware.** Per-agent MCP rate limiting (`EnforceRateLimitAction`,
+    §7.13) is called directly inside `MCPGatewayController::execute()`
+    right after the Agent is resolved, specifically because `mcp/*`
+    routes carry no middleware stack at all (`AgentAuthenticationService`
+    resolves identity inside the controller, not a Guard) — building a
+    `throttle:` middleware would have meant re-parsing the bearer token a
+    second time. Same "Explicit Over Magic" reasoning CLAUDE.md already
+    states as a project-wide principle, just concretely precedented now.
+17. **Retry-with-backoff, when needed, lives inside the Action that owns
+    the whole operation, not in the Sender/Client it's retrying** —
+    `SendNotificationAction` (§7.15) loops up to 3 attempts with a small
+    `usleep()`-based exponential backoff around a single
+    `ChannelSenderInterface::send()` call, catching only the one
+    exception type that means "try again" and marking the aggregate's own
+    terminal state (`Sent`/`Failed`) once attempts are exhausted. If a
+    future stage needs retry logic elsewhere, put it at this same level
+    (the Action orchestrating one durable operation), not inside whatever
+    low-level client/adapter it calls.
+18. **A missing piece the request implies but doesn't literally list can
+    also be a whole Repository interface, not just an exception or a
+    child entity** — pattern #12's list grew one more entry:
+    `NotificationPreferenceRepositoryInterface` (§7.15), the first time
+    the "add unprompted" reasoning applied to a full 4th interface (not
+    a single exception class or an owned child record) because the
+    missing aggregate didn't naturally belong to any of the 3 interfaces
+    the request did name.
+
 ---
 
 ## 4. Non-obvious gotchas (learned the hard way — don't repeat these)
@@ -992,7 +1154,19 @@ where noted) plus what Phase 2 specifically taught:
     Connector instance directly into `ConnectorRegistry` with the
     replacement dependency — the same call `boot()` itself makes, just with
     a different argument (see §7.6 and `WooCommerceProductConnector`'s
-    docblock for the full example).
+    docblock for the full example). The same technique applies to
+    `ShippingProviderRegistry`/`ChannelSenderRegistry` (§7.14/§7.15) — it's
+    the general shape for every `NameRegistry`-style class (§3 pattern #15),
+    not just Commerce's own.
+12. **A literal `*/` inside a docblock's own prose silently closes the
+    comment early**, and everything after it becomes real (broken) PHP —
+    caught once already writing `Application/Services/ShippingProviderConfig.php`'s
+    own docblock (§7.14), where "`SHIPPING_PROVIDER*/env vars`" (meant as
+    "`SHIPPING_PROVIDER*` env vars") terminated the comment mid-sentence.
+    The resulting `ParseError` points at wherever the broken code happens
+    to land, not at the docblock itself — if a `ParseError: unexpected
+    identifier` shows up in a file you didn't expect, check every
+    docblock in it for a stray `*/` first.
 
 ---
 
@@ -1008,7 +1182,7 @@ php artisan migrate
 php artisan db:seed   # runs Demo-, Commerce-, CRM-, Finance-, Workflows-, Loyalty-, Reporting-, Shipping-, and NotificationsCapabilitiesSeeder
 
 # Tests
-php artisan test                                                  # full app suite — 497 tests, ~11s
+php artisan test                                                  # full app suite — 518 tests, ~33s
 cd packages/opencommerce-sdk; vendor/bin/phpunit tests; cd ../..   # SDK's own suite (unaffected by Phase 2)
 
 # Manual/live verification
@@ -1116,8 +1290,9 @@ being fully tested (see §8.2 for why, and the same reasoning each time):
 CRM's `UpdateTicketAction`, `GetCustomerNotesAction`, `CreateTagAction`,
 `AssignTagToCustomerAction` (§7.7), Finance's `UpdateTaxRateAction` (§7.8),
 Workflows' `UpdateWorkflowAction` (§7.9), Loyalty's `ExpirePointsAction`
-(§7.10 — the actual blocker is the same "no scheduler exists" gap
-CartAbandonedListener has, HANDOFF §8.23), and Reporting's `GetReportAction`/
+(§7.10 — not MCP-reachable by design, not blocked: it now runs
+automatically via the `loyalty:expire-points` scheduled command,
+§7.13/§8.27), and Reporting's `GetReportAction`/
 `ListReportsAction` (§7.11 — no `report.definition.get/list` capability
 was requested this stage).
 Every one of these is a one-capability-definition-plus-one-handler-closure
@@ -1496,6 +1671,14 @@ needed (see that Listener's own docblock for the exact `handle()` this
 would be) — it is unwired purely because this stage's scope named only
 Low Stock Alert as functional.
 
+*(Update, Tech Debt Sprint, §7.13: the scheduling mechanism this
+paragraph says is missing now exists — `CartAbandonedListener` was wired
+for real once it did, reacting to a new Commerce event,
+`CartWasAbandoned`, dispatched by the scheduled `commerce:check-abandoned-carts`
+command. `HighValueOrderListener` is still exactly as unwired as
+described above — still the cheapest available increment in the
+codebase, §9.)*
+
 **Capability and permission names were renamed from the request** —
 `workflow.create/get/list/trigger` were all 2 segments; `CapabilityName`
 requires exactly 3 (HANDOFF gotcha #2, hit again the same way
@@ -1624,10 +1807,12 @@ which is the tenant-favoring (conservative) outcome, not the
 customer-favoring one a true per-lot ledger would give. Flagged as a
 simplification worth a real fix (§8), not silently broken behavior — no
 point this method ever expires was un-redeemed or not yet due.
-**Not wired to MCP** — and can't usefully run on a schedule yet anyway,
-since **no scheduling mechanism exists anywhere in this codebase**
-(HANDOFF §8.23, unchanged since Workflows' Stage) — the identical blocker
-`CartAbandonedListener` has.
+**Not wired to MCP** by design, not by blocker — a per-account Action like
+this isn't the right MCP shape anyway. *(Update, Tech Debt Sprint, §7.13:
+the scheduling gap this paragraph originally described is resolved —
+`ExpirePointsAction` now runs automatically for every tenant/account via
+`BulkExpirePointsAction` and the scheduled `loyalty:expire-points`
+command, the same scheduler that unblocked `CartAbandonedListener`.)*
 
 **Capability names needed no renaming this stage** — all 8 requested
 names (`loyalty.account.get/create`, `loyalty.points.earn/redeem`,
@@ -2217,6 +2402,155 @@ Order + Shipment → real status change → real `ShipmentStatusChangedListener`
 new Notification → tenant isolation → filtered list; plus a
 missing-permission case). 497 tests total, zero regressions.
 
+### 7.16 Phase 4, Stage 4 — i18n Infrastructure
+
+No new Entities — this stage is infrastructure threaded through existing
+seams, not a new aggregate. New Domain: `ValueObjects/Language` (enum
+`en`/`fa`), `Services/TranslationServiceInterface`,
+`Services/TranslationLoaderInterface` (2 contracts, both Core). New
+Application: `Services/TranslationService` (the one
+`TranslationServiceInterface` implementation), `Services/JsonTranslationLoader`
+(the one `TranslationLoaderInterface` implementation, reads
+`lang/{code}/{group}.json` via `lang_path()`), `Services/LanguageDetector`
+(query `?lang=` -> `Accept-Language` header -> Tenant's own
+`default_language` -> English), `DTOs/TranslationData`,
+`Actions/SetTenantDefaultLanguageAction`. 6 new `lang/{en,fa}/{messages,validation,errors}.json`
+files. 2 additive migrations (`tenants.default_language`,
+`notification_templates.language`, both `default('en')`).
+
+**The request bundled this backend with a full 8-page Admin Dashboard
+(Tailwind/Alpine, human login, Tenants/Agents/Products/Orders/Notifications
+management) — deliberately not built this stage.** Raised as a scope
+question before writing any code, not silently decided either way: every
+identity path this codebase has ever had (§8.7) is Agent-bearer-token-only,
+resolved by hand inside `MCPGatewayController` — there is no session
+Guard, no login flow, and no relationship between Laravel's own stock
+`User` model (scaffolded, never used) and Core's actual tenancy identity
+(`OrganizationMember`). Building 8 human-facing pages on top of that gap
+would have meant either inventing a throwaway auth mechanism just for this
+stage or silently picking "session Guard over `OrganizationMember`" — a
+real architectural decision — without it ever being reviewed. The user
+chose to split the work: this stage ships only the backend below; the
+Dashboard is deferred to its own future stage, to be built on a new
+session Guard backed by `OrganizationMember` (not Laravel's stock `User`)
+with Alpine.js for interactivity — both already decided, so that stage
+can start straight from implementation instead of re-litigating them.
+
+**A custom JSON translation subsystem, not Laravel's own `__()`.** Laravel
+has shipped a JSON translation feature since v9 — but it expects exactly
+one flat `lang/{locale}.json` file keyed by literal source strings
+(`__('I love programming.')`), not this stage's requested
+`lang/{code}/{group}.json`-per-group, dot-path-addressable shape
+(`messages.dashboard.title`, `errors.not_found`). Bending Laravel's own
+translator to a structure it wasn't designed for would have been more
+convoluted than the ~40 lines `JsonTranslationLoader`/`TranslationService`
+actually needed. `TranslationServiceInterface` (Domain) deliberately
+exposes only `translate(): string`, not the richer `TranslationData`-returning
+`resolve()` the concrete `TranslationService` also has — putting `resolve()`
+on the Domain contract would make Domain depend on `TranslationData`
+(an Application-layer DTO), the exact Core/Application-layer violation
+Phase 2's own gotcha (§7.2, "never `use App\Modules\...` inside
+`App\Core`") already taught this codebase to catch before shipping, one
+layer over. A caller that needs the fallback-occurred diagnostic
+(this stage's own fallback tests) type-hints the concrete
+`Application\Services\TranslationService` directly instead.
+
+**`AuthContext` gained a third field, `$language`** — the same "widen the
+MCP boundary DTO" shape §3 pattern #1 already established for
+`tenantId`/`agentId`. `MCPGatewayController` calls
+`LanguageDetector::detect($request, $agent->tenantId)` once, after Agent
+authentication (so the Tenant-default tier has a real tenant to look up),
+and passes the result into `AuthContext::forAgent($agent, $language)`. Any
+handler closure with nothing language-specific to do simply never reads
+`$context->language`, the same way Demo's own handlers already ignore
+`AuthContext`'s other fields entirely (§1).
+
+**`MCPExceptionHandler` is now container-resolved, not `new`'d.**
+`bootstrap/app.php`'s `$exceptions->render()` closure called
+`new MCPExceptionHandler()` directly — the moment this class needed real
+constructor dependencies (`LanguageDetector`, `TranslationServiceInterface`)
+for the first time ever, that stopped being possible. Changed to
+`app(MCPExceptionHandler::class)`. The envelope itself gained exactly one
+new field, `error.localized_message` — a generic, translated label for the
+error *code* (`errors.{code}`, lowercased) in whichever Language
+`LanguageDetector` resolves for the request (query/header tiers only —
+never Tenant-default, since a failed-auth request has no reliably-known
+tenant to look one up for). `error.message` itself — the exception's own,
+possibly domain-specific text (e.g. "Order not found: id=42") — is
+completely untouched, so no existing test asserting on it needed to
+change.
+
+**`NotificationTemplate` gained one Language per row, not a nested
+translations blob.** The request's own example illustrated a single
+Template document holding a `translations: {en: {...}, fa: {...}}` map;
+building that would have meant restructuring the existing one-row-per-
+type+channel Entity/DTO/migration/Eloquent mapping. Instead,
+`NotificationTemplate` gained an optional trailing `language` field
+(default `Language::English` — HANDOFF §3 pattern #6, the same shape every
+prior optional-field addition in this codebase has used), and
+`notification_templates` gained a `language` column (default `'en'`).
+Registering a second translation for the same type+channel is calling
+`notification.template.create` again with a different `language` input,
+not a single richer payload. The fallback-to-English rule lives in exactly
+one place, `EloquentNotificationTemplateRepository::findActive()` itself
+(tries the exact `(tenant, type, channel, language)` row first, retries
+against `Language::English` if that misses and the request wasn't already
+for English) — every caller (the 3 cross-module Listeners +
+`notification.message.send`'s MCP handler) gets the fallback for free
+instead of re-implementing the same two-step lookup four times.
+
+**A Listener has no Request to detect language from.** The 3 Notifications
+Listeners (`ShipmentStatusChangedListener`, `OrderPlacedNotificationListener`,
+`PointsEarnedListener`) all gained a `LanguageDetector` dependency, but
+call its new `detectForTenant(int $tenantId): Language` entry point — the
+Tenant-default-or-English tier only, since an event Listener reacts to a
+Domain Event, not an HTTP request, and has no query parameter or
+`Accept-Language` header to read. No per-Customer language preference
+exists in this codebase yet (a real §9 candidate, the same "modeled/needed
+but not yet built" shape several other stages have left behind) — Tenant
+default is the only signal available today.
+
+**A real gotcha hit while writing this stage's own tests, worth
+flagging for future test-writers**: Symfony's own
+`Illuminate\Http\Request::create()` (and, transitively, Laravel's test
+`postJson()` helper) defaults `Accept-Language` to `"en-us,en;q=0.5"`
+whenever nothing overrides it — a real browser always sends one, but a
+bare Agent/API client (this MCP gateway's actual audience) may not. Any
+test asserting the Tenant-default tier must explicitly pass
+`'Accept-Language' => ''` (or `server: ['HTTP_ACCEPT_LANGUAGE' => '']` for
+a raw `Request::create()`) to simulate a client that truly sends no
+header at all — otherwise the header tier silently wins every time and
+the Tenant-default tier never gets exercised. `LanguageDetectorTest`/
+`NotificationTemplateLanguageTest` both do this explicitly, with a
+docblock note at each call site.
+
+**One naming correction from the request, caught during planning**: the
+request asked for a Domain-layer `Services/TranslationService.php`
+*contract* alongside an Application-layer `Services/TranslationService.php`
+*implementation* — the same class name in both layers. Every other
+outbound port in this codebase (`PaymentGatewayInterface`,
+`TaxRateProviderInterface`, `ShippingProviderInterface`,
+`WooCommerceClientInterface`) uses an `XxxInterface` suffix for the
+contract, reserving the bare name for a concrete class — the request's own
+sibling file, `TranslationLoaderInterface`, already followed this
+convention. Named the Domain contract `TranslationServiceInterface`
+instead, keeping `TranslationService` for the one Application-layer
+implementation.
+
+No new MCP capabilities and no capability/permission renames this stage —
+every change is either a new optional field on an existing
+input/response shape or a new field on `AuthContext` no existing handler
+is forced to read.
+
+New tests: `tests/Unit/Core/TranslationServiceTest.php` (5, framework-free
+via a fake `TranslationLoaderInterface`), 2 new cases in
+`tests/Unit/Core/TenantTest.php`, `tests/Feature/Core/LanguageDetectorTest.php`
+(6 — the full priority chain), `tests/Feature/Core/TenantDefaultLanguageTest.php`
+(2), `tests/Feature/MCP/MCPLanguageTest.php` (3 — `error.localized_message`
+via query/header/neither), `tests/Feature/Notifications/NotificationTemplateLanguageTest.php`
+(3 — matching translation, fallback, Tenant-default propagation). 518
+tests total, zero regressions.
+
 ---
 
 ## 8. Known technical debt (ranked, carried over + Phase 2 additions)
@@ -2350,12 +2684,17 @@ missing-permission case). 497 tests total, zero regressions.
     (`loyalty:expire-points` daily, `commerce:check-abandoned-carts`
     hourly) — the actual blocker for `CartAbandonedListener` (§7.9),
     which is now wired for real.
-24. **`WorkflowAction`'s `notify_agent` type doesn't deliver anywhere.**
-    No Notification/Inbox system exists in Core — "notifying" currently
-    means rendering the message template and recording it in the
-    `WorkflowLog` (`ExecuteWorkflowActionAction`'s own docblock). A real
-    delivery channel (email, Slack, an MCP push mechanism agents poll)
-    would extend that Action's match arm, not replace the templating.
+24. **`WorkflowAction`'s `notify_agent` type doesn't deliver anywhere** —
+    "notifying" currently means rendering the message template and
+    recording it in the `WorkflowLog` (`ExecuteWorkflowActionAction`'s own
+    docblock), nothing more. *(Update, Phase 4 Stage 3, §7.15: a real
+    Notification system now exists — `App\Modules\Notifications`,
+    `SendNotificationAction` specifically — but `ExecuteWorkflowActionAction`'s
+    `notify_agent` match arm has not been wired to call it. This is now a
+    genuinely cheap increment (Workflows would depend on Notifications'
+    own `SendNotificationAction` the same one-directional Module ->
+    Module way every other cross-module call in this codebase works),
+    not "build a delivery channel from scratch" — see §9.)*
 25. **A Workflow's rules/actions are immutable after creation, with no
     "add a rule" / "add an action" operation at all** — only
     name/description/status are editable (`UpdateWorkflowAction`). A
@@ -2458,6 +2797,33 @@ missing-permission case). 497 tests total, zero regressions.
     but nothing dispatches a notification when a CRM Ticket is created;
     not requested this stage, the same "only what's asked for gets
     wired" restraint `HighValueOrderListener` already established.
+43. **The Admin Dashboard this stage's own request asked for was
+    deliberately deferred, not built** (§7.16) — no human-authentication
+    architecture exists anywhere in this codebase yet (§8.7's exact gap);
+    the user chose a session Guard backed by `OrganizationMember` +
+    Alpine.js, but neither is implemented yet. This is the single largest
+    remaining piece of this stage's original request.
+44. **`lang/{en,fa}/validation.json` exists but nothing actually reads it
+    yet** (§7.16) — `MCPRequestValidationService`'s own rejections still
+    throw a plain `InvalidArgumentException` with a hardcoded English
+    message (mapped to `VALIDATION_ERROR` by `MCPExceptionHandler`,
+    unchanged this stage); wiring per-field validation messages through
+    `TranslationServiceInterface` using this file's keys is real,
+    unstarted future work, not a hidden bug — the file was requested and
+    built, just not yet a real dependency of anything.
+45. **No per-Customer/per-Agent language preference exists** (§7.16) —
+    every Notifications Listener uses `LanguageDetector::detectForTenant()`,
+    the Tenant's own single `default_language`, since nothing more granular
+    was requested or exists on `Customer`/`Agent` yet. A real
+    multi-language storefront would want a Customer's own preferred
+    language, not just their tenant's.
+46. **MCP capability *descriptions* (the `commerce.product.search` kind of
+    text in `docs/api-reference.md`/`GET /mcp/v1/capabilities`) are not
+    translated** (§7.16) — only error messages and Notification Templates
+    are multi-language this stage. Translating all 65 capability
+    descriptions across nine `*Capabilities.php` manifests was judged out
+    of scope for an infrastructure stage; the mechanism (`TranslationServiceInterface`)
+    is in place if a future stage wants this.
 
 ---
 
@@ -2465,14 +2831,22 @@ missing-permission case). 497 tests total, zero regressions.
 
 Phase 2 (Commerce, all 6 Stages) and Phase 3 (CRM, Finance, Workflows,
 Loyalty, Reporting — all 5 Stages) are fully complete. Phase 4
-(Shipping & Logistics) has three Stages done — Shipping Foundation, the
-Shipping Provider Connector (§7.14), and the Notifications Module
-(§7.15). The Tech Debt Sprint (§7.13) ran between Stages 1 and 2,
-closing the scheduler gap and the `CheckInventoryAction` re-check bug
-that used to top this list. Candidates worth raising with whoever's
-driving scope next, roughly in order of how much they'd reuse what
-already exists:
+(Shipping & Logistics) has four Stages done — Shipping Foundation, the
+Shipping Provider Connector (§7.14), the Notifications Module (§7.15),
+and the i18n Infrastructure (§7.16). The Tech Debt Sprint (§7.13) ran
+between Stages 1 and 2, closing the scheduler gap and the
+`CheckInventoryAction` re-check bug that used to top this list.
+Candidates worth raising with whoever's driving scope next, roughly in
+order of how much they'd reuse what already exists:
 
+- **The Admin Dashboard** (§7.16/§8.43) — the piece Stage 4's own request
+  asked for and this session deliberately deferred. Needs, in order: a
+  session Guard backed by `OrganizationMember` (decided, not built — no
+  Laravel `Auth::` usage exists anywhere in this codebase yet, only
+  Agent-bearer-token auth), a login flow, then the 8 requested pages
+  (Tailwind + Alpine.js, also decided) — `lang/{en,fa}/messages.json`
+  already has the `dashboard`/`tenants`/`agents`/`common` keys this would
+  consume via `TranslationServiceInterface`.
 - **Wire `HighValueOrderListener` and/or CRM's `ticket_created`
   notification** (§7.9/§7.15/§8.42) — both are the same shape: the event
   already exists, only `Event::listen()` (+ for the latter, a Template)
@@ -2502,22 +2876,28 @@ already exists:
   an earlier module's own entity (§7.12) — the same
   `Order::assignShipping()` shape would extend to any future "write a
   result back onto Commerce" need.
+- **Wire Workflows' `notify_agent` to the real Notifications module**
+  (§8.24) — now that `App\Modules\Notifications`/`SendNotificationAction`
+  exist (§7.15), this is a small, concrete wiring task (Workflows
+  depending on Notifications' Repository/Action the same one-directional
+  way every cross-module call in this codebase works), not "design a
+  delivery mechanism from scratch" the way it read before Stage 3.
 - **Phase 3 polish** — Finance (payment reconciliation to auto-mark
   Invoices Paid, PDF/email export — §8.18/§8.19), a second CRM stage
   (Ticket assignment, Tag removal, a `crm.tag.*` MCP surface —
-  §8.15/§8.16), real notification delivery for `notify_agent` (§8.24), or
-  actual caching for `ReportResult` (§8.31 — `expires_at` already exists
-  on the schema, nothing checks it yet).
+  §8.15/§8.16), or actual caching for `ReportResult` (§8.31 —
+  `expires_at` already exists on the schema, nothing checks it yet).
 - **A second real product Connector** (Shopify) — `ProductConnectorInterface`
   and the WooCommerce implementation (§7.6) are now a template to follow;
   `ConnectorRegistry` already supports registering more than one by name.
 - **Wire the 16 un-wired capabilities from §6** (7 from Commerce Stages
   1–5, 4 from CRM, 1 from Finance, 1 from Workflows, 1 from Loyalty, 2
-  from Reporting — Shipping wired all 8 of its own) if any Agent workflow
-  actually needs cart-removal, order-cancellation, payment lookup,
-  ticket-updating, tag management, tax-rate updates, workflow-updating,
-  points-expiration, or saved-report retrieval through MCP — cheapest
-  possible next increment each.
+  from Reporting — Shipping and Notifications wired all of their own,
+  11 and 8 respectively) if any Agent workflow actually needs
+  cart-removal, order-cancellation, payment lookup, ticket-updating, tag
+  management, tax-rate updates, workflow-updating, points-expiration, or
+  saved-report retrieval through MCP — cheapest possible next increment
+  each.
 - **Per-tenant connector credentials** (§8.14) — the most obviously
   "fake"/single-tenant piece remaining (per-tenant tax, §8.1's original
   concern, is resolved as of Phase 3.2).
@@ -2525,7 +2905,7 @@ already exists:
   `OrderConnectorInterface` still has no implementation.
 - **A dedicated `capabilities:sync` artisan command**, graduating away from
   the seeder pattern — flagged as an open decision since Phase 1, still
-  open, now with 54 capabilities across eight seeders instead of 3.
+  open, now with 65 capabilities across nine seeders instead of 3.
 
 Whatever comes next, follow §3's patterns and check §8 before assuming a
 piece of the puzzle doesn't already exist.

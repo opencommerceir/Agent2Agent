@@ -2,6 +2,7 @@
 
 namespace App\Modules\Notifications\Infrastructure\Repositories;
 
+use App\Core\Domain\ValueObjects\Language;
 use App\Modules\Notifications\Domain\Entities\NotificationTemplate as NotificationTemplateEntity;
 use App\Modules\Notifications\Domain\Repositories\NotificationTemplateRepositoryInterface;
 use App\Modules\Notifications\Domain\ValueObjects\ChannelType;
@@ -18,16 +19,29 @@ class EloquentNotificationTemplateRepository implements NotificationTemplateRepo
         return $model ? $this->toEntity($model) : null;
     }
 
-    public function findActive(int $tenantId, NotificationType $type, ChannelType $channelType): ?NotificationTemplateEntity
+    public function findActive(
+        int $tenantId,
+        NotificationType $type,
+        ChannelType $channelType,
+        Language $language = Language::English,
+    ): ?NotificationTemplateEntity {
+        $model = $this->activeQuery($tenantId, $type, $channelType, $language)->first();
+
+        if ($model === null && $language !== Language::English) {
+            $model = $this->activeQuery($tenantId, $type, $channelType, Language::English)->first();
+        }
+
+        return $model ? $this->toEntity($model) : null;
+    }
+
+    private function activeQuery(int $tenantId, NotificationType $type, ChannelType $channelType, Language $language)
     {
-        $model = NotificationTemplateModel::query()
+        return NotificationTemplateModel::query()
             ->where('tenant_id', $tenantId)
             ->where('type', $type->value)
             ->where('channel_type', $channelType->value)
-            ->where('is_active', true)
-            ->first();
-
-        return $model ? $this->toEntity($model) : null;
+            ->where('language', $language->value)
+            ->where('is_active', true);
     }
 
     public function list(int $tenantId, ?NotificationType $type, ?ChannelType $channelType): array
@@ -61,6 +75,7 @@ class EloquentNotificationTemplateRepository implements NotificationTemplateRepo
         $model->body_template = $template->bodyTemplate();
         $model->variables = $template->variables();
         $model->is_active = $template->isActive();
+        $model->language = $template->language()->value;
         $model->save();
 
         return $this->toEntity($model);
@@ -78,6 +93,7 @@ class EloquentNotificationTemplateRepository implements NotificationTemplateRepo
             variables: $model->variables ?? [],
             isActive: $model->is_active,
             createdAt: DateTimeImmutable::createFromInterface($model->created_at),
+            language: Language::from($model->language),
         );
     }
 }

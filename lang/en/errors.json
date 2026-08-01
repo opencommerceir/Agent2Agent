@@ -1,0 +1,9 @@
+{
+  "unauthorized": "Invalid or expired token",
+  "forbidden": "You do not have permission to perform this action",
+  "not_found": "The requested resource was not found",
+  "validation_error": "The provided data is invalid",
+  "conflict": "A conflict occurred with the current state of the resource",
+  "too_many_requests": "Rate limit exceeded. Please try again later",
+  "internal_error": "An internal error occurred"
+}

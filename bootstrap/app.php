@@ -21,7 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // untouched by this.
         $exceptions->render(function (Throwable $e, Request $request) {
             if (MCPExceptionHandler::handles($request)) {
-                return (new MCPExceptionHandler())->render($e, $request);
+                return app(MCPExceptionHandler::class)->render($e, $request);
             }
 
             return null;

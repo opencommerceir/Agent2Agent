@@ -2,6 +2,7 @@
 
 namespace App\Modules\Notifications\Application\Listeners;
 
+use App\Core\Application\Services\LanguageDetector;
 use App\Modules\Commerce\Domain\Events\OrderWasPlaced;
 use App\Modules\Commerce\Domain\Repositories\CustomerRepositoryInterface;
 use App\Modules\Notifications\Application\Actions\SendNotificationAction;
@@ -16,7 +17,8 @@ use App\Modules\Notifications\Domain\ValueObjects\RecipientType;
  * Reacts to Commerce's own OrderWasPlaced (carries the full Order — no
  * OrderRepositoryInterface lookup needed, unlike ShipmentStatusChangedListener,
  * since the event already carries everything). Same Customer lookup /
- * silent-skip shape.
+ * silent-skip shape. Same Tenant-default-language detection as
+ * ShipmentStatusChangedListener (see that class's own docblock).
  */
 final class OrderPlacedNotificationListener
 {
@@ -25,6 +27,7 @@ final class OrderPlacedNotificationListener
         private readonly NotificationTemplateRepositoryInterface $templates,
         private readonly TemplateRenderer $renderer,
         private readonly SendNotificationAction $sendNotification,
+        private readonly LanguageDetector $languageDetector,
     ) {
     }
 
@@ -42,7 +45,12 @@ final class OrderPlacedNotificationListener
             return;
         }
 
-        $template = $this->templates->findActive($order->tenantId(), NotificationType::OrderPlaced, ChannelType::Email);
+        $template = $this->templates->findActive(
+            $order->tenantId(),
+            NotificationType::OrderPlaced,
+            ChannelType::Email,
+            $this->languageDetector->detectForTenant($order->tenantId()),
+        );
 
         if (! $template) {
             return;

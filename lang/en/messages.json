@@ -1,0 +1,33 @@
+{
+  "dashboard": {
+    "title": "OpenCommerce Dashboard",
+    "welcome": "Welcome, :name",
+    "total_tenants": "Total Tenants",
+    "total_agents": "Total Agents",
+    "total_orders": "Total Orders"
+  },
+  "tenants": {
+    "create": "Create Tenant",
+    "edit": "Edit Tenant",
+    "delete": "Delete Tenant",
+    "name": "Tenant Name",
+    "domain": "Domain"
+  },
+  "agents": {
+    "create": "Create Agent",
+    "edit": "Edit Agent",
+    "status": "Status",
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "back": "Back",
+    "actions": "Actions",
+    "confirm_delete": "Are you sure you want to delete this?"
+  }
+}
