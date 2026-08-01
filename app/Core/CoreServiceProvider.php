@@ -13,6 +13,7 @@ use App\Core\Domain\Repositories\OrganizationRepositoryInterface;
 use App\Core\Domain\Repositories\PermissionRepositoryInterface;
 use App\Core\Domain\Repositories\RoleRepositoryInterface;
 use App\Core\Domain\Repositories\TenantRepositoryInterface;
+use App\Core\Domain\Repositories\UserRepositoryInterface;
 use App\Core\Domain\Services\TranslationLoaderInterface;
 use App\Core\Domain\Services\TranslationServiceInterface;
 use App\Core\Application\Services\CapabilityHandlerRegistry;
@@ -27,6 +28,7 @@ use App\Core\Infrastructure\Repositories\EloquentOrganizationRepository;
 use App\Core\Infrastructure\Repositories\EloquentPermissionRepository;
 use App\Core\Infrastructure\Repositories\EloquentRoleRepository;
 use App\Core\Infrastructure\Repositories\EloquentTenantRepository;
+use App\Core\Infrastructure\Repositories\EloquentUserRepository;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
@@ -49,6 +51,7 @@ class CoreServiceProvider extends ServiceProvider
         $this->app->bind(CapabilityRepositoryInterface::class, EloquentCapabilityRepository::class);
         $this->app->bind(TranslationLoaderInterface::class, JsonTranslationLoader::class);
         $this->app->bind(TranslationServiceInterface::class, TranslationService::class);
+        $this->app->bind(UserRepositoryInterface::class, EloquentUserRepository::class);
 
         // Singleton: every provider that registers a capability handler
         // (see DemoServiceProvider) and CapabilityExecutionService must

@@ -5,8 +5,9 @@ Stages), and Phase 3 (Domain Expansion, all 5 Stages — CRM, Finance,
 Workflows, Loyalty, Reporting) are complete. Phase 4 (Shipping &
 Logistics) is under way: Stage 1 (Shipping Foundation), Stage 2
 (Shipping Provider Connector, §7.14), Stage 3 (Notifications Module,
-§7.15), and Stage 4 (Multi-language Support / i18n Infrastructure,
-§7.16) are all complete.
+§7.15), Stage 4 (Multi-language Support / i18n Infrastructure, §7.16),
+and Stage 5 (Admin Dashboard + Human Authentication, §7.17) are all
+complete.
 
 **Stage 4 (i18n Infrastructure, §7.16) was deliberately scoped down from
 its own request during planning: the request bundled a JSON-based i18n
@@ -20,11 +21,20 @@ tie between Laravel's own stock `User` model (unused scaffolding) and
 Core's real tenancy model (`OrganizationMember`). Shipping that decision
 silently would have meant either building throwaway auth or quietly
 picking an architecture the user hadn't actually approved. Raised as a
-scope question before writing any code; the user chose to split it: this
-stage delivers only the i18n backend below, and the Dashboard becomes its
-own future stage once built on a session Guard backed by a real
-`OrganizationMember` (decision recorded here for whoever picks up that
-stage) with Alpine.js for interactivity.**
+scope question before writing any code; the user chose to split it: that
+stage delivered only the i18n backend, deferring the Dashboard to its own
+stage once a human-auth architecture was decided.**
+
+**Stage 5 (§7.17) built that deferred Dashboard — and, once the concrete
+page list was in hand (Tenants Management does full cross-tenant CRUD),
+the auth architecture actually needed turned out to be a real pivot from
+what Stage 4 tentatively recorded: not `OrganizationMember` (which is
+scoped to *one* Tenant's Organization — the right shape for a future
+business's-own-staff login, a distinct, still-unbuilt feature) but a new,
+platform-level `User` entity with no tenant_id at all, the same
+"Core entity above tenancy" shape only `Tenant` itself had before (§7.17
+explains the full reasoning). This correction is recorded here, not
+buried, since Stage 4's own text pointed the other way.**
 Finance supplies Commerce's own checkout pricing with real tax rates
 through an Interface Commerce itself owns (§7.8). Workflows (§7.9) and
 Loyalty (§7.10) each introduce a real cross-module Domain Event
@@ -117,10 +127,34 @@ illustrated — see §7.16) with automatic fallback-to-English baked into
 caller (3 Listeners + the `notification.message.send` MCP handler) gets
 the fallback for free.**
 
-518 tests passing (497 + 21 new), zero known regressions. Next up: the
-Admin Dashboard stage this stage's own request deferred (§7.16 — needs a
-session Guard backed by `OrganizationMember` decided first), another
-Phase 4 Shipping/Logistics stage (Shipping Zones, partial fulfillment,
+**Stage 5 (Admin Dashboard + Human Auth, §7.17) adds Core's first human,
+password-based identity — `User` (Domain entity + `HashedPassword`/`UserRole`/
+`UserStatus` VOs + a Core-owned `Email` VO, the same "avoid a cross-module
+Domain dependency" duplicate every `Money` VO in this codebase already
+has, §7.8/§7.12), backed by a real Laravel session Guard
+(`App\Core\Infrastructure\Models\User extends Authenticatable`) — replacing
+Laravel's own never-actually-used default scaffold `App\Models\User`
+(deleted, along with its Factory). Deliberately NOT the tenant-scoped
+Role/Permission/`OrganizationMember` RBAC system Agents use for MCP
+capability checks: a Dashboard User manages the platform itself (Tenants
+Management is full cross-tenant CRUD), so `User` is platform-level — no
+tenant_id — gated by a plain `UserRole::Admin`/`Operator` enum and a
+`admin` route middleware, not a per-tenant Role grant. All 8 requested
+pages are real, wired to existing Actions/Repositories (Dashboard
+Controllers hold no business logic, per that rule) — 2 small "missing
+piece implied by the request" Actions (§3 pattern #12) were added along
+the way: `UpdateTenantAction`/`UpdateAgentAction` (neither existed before;
+only `activate()`/`suspend()` mutators did, the same "mutator with no
+Action wired to it yet" gap Cart::abandon() had before §7.13's scheduler).
+Discovered and replaced a dead, never-wired Phase 1 skeleton of
+`Domain\Entities\User` (tenant-scoped, no password at all, zero callers
+anywhere) rather than building alongside it. See §7.17 for the full
+detail, including what this stage's own request asked for but the actual
+domain model can't yet support (Tenant Timezone/Currency, a
+Notification-level language filter).**
+
+551 tests passing (518 + 33 new), zero known regressions. Next up:
+another Phase 4 Shipping/Logistics stage (Shipping Zones, partial fulfillment,
 folding `shipping_cost` into checkout pricing — §8.37/§8.35/§8.36), a real
 carrier implementation of `ShippingProviderInterface` (USPS/FedEx/DHL —
 `MockShippingProviderAdapter` is now the template, the same role
@@ -364,25 +398,75 @@ app/Core/
 │                        + RateLimitExceededException (Tech Debt Sprint, §7.13 —
 │                        implements neither marker interface, same reasoning
 │                        WooCommerceApiException has), + Language enum
-│                        (Phase 4 Stage 4, §7.16 — `en`/`fa`)
+│                        (Phase 4 Stage 4, §7.16 — `en`/`fa`), + User entity
+│                        (Phase 4 Stage 5, §7.17 — platform-level, no
+│                        tenant_id, replaces a dead Phase 1 skeleton of the
+│                        same class) + Email/HashedPassword/UserRole/UserStatus
+│                        VOs + UserWasCreated/UserWasUpdated events +
+│                        UserRepositoryInterface + UserNotFoundException/
+│                        InvalidCredentialsException/InvalidEmailException/
+│                        TenantNotFoundException/AgentNotFoundException
+│                        (all §7.17)
 ├── Domain/Services/     new in Phase 4 Stage 4 (§7.16) — TranslationServiceInterface,
 │                        TranslationLoaderInterface (2 Domain contracts, no
 │                        implementation lives here — see Application below)
 ├── Application/{Actions,DTOs,Services,Listeners}/
 │                        + EnforceRateLimitAction (§7.13), + SetTenantDefaultLanguageAction,
 │                        TranslationData (DTO), TranslationService, JsonTranslationLoader,
-│                        LanguageDetector (all §7.16)
-├── Infrastructure/{Models,Repositories}/
-├── Interfaces/HTTP/{Controllers/MCP,Requests/MCP}/
+│                        LanguageDetector (all §7.16), + CreateUserAction/
+│                        UpdateUserAction/GetUserAction/ListUsersAction/
+│                        AuthenticateUserAction/UserData (DTO) +
+│                        UpdateTenantAction/UpdateAgentAction/
+│                        ChangeAgentStatusAction (all §7.17 — the last 3
+│                        are "missing piece implied by the request" Actions,
+│                        §3 pattern #12, not named in the request itself)
+├── Infrastructure/{Models,Repositories}/   + Models/User (extends
+│                        Authenticatable) + EloquentUserRepository (§7.17)
+├── Interfaces/HTTP/{Controllers/MCP,Requests/MCP}/   +
+│                        Controllers/Auth/{LoginController,LogoutController} +
+│                        Requests/Auth/LoginRequest (§7.17 — the human-login
+│                        counterpart to AgentAuthenticationService/
+│                        AuthenticateAgentAction)
 ├── Exceptions/MCPExceptionHandler.php   now container-resolved in bootstrap/app.php
 │                        (was `new`'d — §7.16, so its new LanguageDetector/
 │                        TranslationServiceInterface constructor dependencies work)
-└── CoreServiceProvider.php    binds TranslationLoaderInterface/TranslationServiceInterface (§7.16)
+└── CoreServiceProvider.php    binds TranslationLoaderInterface/TranslationServiceInterface
+                             (§7.16) + UserRepositoryInterface (§7.17)
 
 config/mcp.php              new in Tech Debt Sprint (§7.13) — MCP_RATE_LIMIT_PER_MINUTE
 
+config/auth.php              AUTH_MODEL now App\Core\Infrastructure\Models\User,
+                             not the deleted default App\Models\User (§7.17)
+
 lang/{en,fa}/{messages,validation,errors}.json   new in Phase 4 Stage 4 (§7.16) —
-                             JsonTranslationLoader's own source files
+                             JsonTranslationLoader's own source files;
+                             messages.json grew `nav`/`auth`/`tenants`/
+                             `agents`/`products`/`orders`/`notifications`/
+                             `settings` keys for the Dashboard (§7.17)
+
+app/helpers.php              new in Phase 4 Stage 5 (§7.17) — the global
+                             `t()`/`dashboard_language()` helpers Blade
+                             views use (registered via composer.json's
+                             `autoload.files`); framework-touching (reads
+                             the session) by design, so it lives outside
+                             any Core/Module class, never inside one
+
+app/Http/Middleware/{Authenticate,RedirectIfAuthenticated,EnsureUserIsAdmin}.php
+                             new in Phase 4 Stage 5 (§7.17) — registered as
+                             the `auth`/`guest`/`admin` route-middleware
+                             aliases in bootstrap/app.php
+
+app/Http/Controllers/{LanguageController,Dashboard/*}.php
+                             new in Phase 4 Stage 5 (§7.17) — see that
+                             section for the full controller list
+
+resources/views/{auth,layouts,dashboard}/*.blade.php
+                             new in Phase 4 Stage 5 (§7.17) — 17 Blade
+                             files across the 8 requested Dashboard pages
+
+routes/web.php                previously just the Laravel default welcome
+                             route; now login/logout/language-switch +
+                             the whole `/dashboard/*` route group (§7.17)
 
 app/Console/Commands/       new in Tech Debt Sprint (§7.13) — this directory
                              didn't exist before: ExpireLoyaltyPointsCommand,
@@ -778,9 +862,14 @@ database/
 │   │                                               notification_templates,
 │   │                                               notification_channels,
 │   │                                               notification_preferences, §7.15)
-│   └── 2026_08_02_000048-000049                  (Phase 4.4 — +tenants.default_language,
-│                                                   +notification_templates.language, §7.16 —
-│                                                   both additive, default 'en')
+│   ├── 2026_08_02_000048-000049                  (Phase 4.4 — +tenants.default_language,
+│   │                                               +notification_templates.language, §7.16 —
+│   │                                               both additive, default 'en')
+│   └── 2026_08_03_000050                          (Phase 4.5 — +users.role/is_active,
+│                                                   §7.17 — additive to the Phase 1
+│                                                   default `users` table; `sessions`/
+│                                                   `password_reset_tokens` already
+│                                                   existed since Phase 1, unused until now)
 └── seeders/{DemoCapabilitiesSeeder,CommerceCapabilitiesSeeder,CRMCapabilitiesSeeder,FinanceCapabilitiesSeeder,WorkflowsCapabilitiesSeeder,LoyaltyCapabilitiesSeeder,ReportingCapabilitiesSeeder,ShippingCapabilitiesSeeder,NotificationsCapabilitiesSeeder}.php
 
 tests/
@@ -889,7 +978,26 @@ tests/
 │                        translation falls back to English, and a Tenant's
 │                        own default_language reaches the capability with
 │                        no query/header at all), §7.16
-└── 518 tests total, 1229 assertions, ~33s runtime (`php artisan test`)
+├── Unit/Core/            + HashedPasswordTest (4), EmailTest (3), UserTest
+│                        (5 — register/verifyPassword/activate-deactivate/
+│                        changeRole/rename+changeEmail), all framework-free
+│                        PHPUnit, §7.17
+├── Feature/Auth/         new — LoginTest (9): valid/wrong/inactive-user
+│                        login, the translated-error assertion in both
+│                        English and Farsi, guest redirected off
+│                        `/dashboard`, non-admin gets 403, admin gets 200,
+│                        already-authenticated redirected off `/login`,
+│                        logout ends the session (§7.17)
+└── Feature/Dashboard/    new — DashboardPagesTest (12): language
+                         switch renders RTL/Farsi and LTR/English text,
+                         Tenants index/store/update, Agents index
+                         (tenant-filtered)/store/suspend+activate,
+                         Products index (tenant-selected), Orders index
+                         (status-filtered)/cancel, Settings update — every
+                         page driven through the same Actions the MCP
+                         layer itself uses, real data, no mocking (§7.17)
+
+551 tests total, 1307 assertions, ~13s runtime (`php artisan test`)
 ```
 
 ---
@@ -1176,17 +1284,24 @@ where noted) plus what Phase 2 specifically taught:
 # First time / after pulling
 composer install
 cd packages/opencommerce-sdk; composer install; cd ../..
+npm install && npm run build   # Phase 4 Stage 5, §7.17 — Tailwind/Alpine.js
+                                # assets the Dashboard's own @vite() calls need;
+                                # tests never need this (they call withoutVite())
 
 # Database
 php artisan migrate
 php artisan db:seed   # runs Demo-, Commerce-, CRM-, Finance-, Workflows-, Loyalty-, Reporting-, Shipping-, and NotificationsCapabilitiesSeeder
+                       # + seeds one default Dashboard admin (§7.17):
+                       # admin@opencommerce.test / password
 
 # Tests
-php artisan test                                                  # full app suite — 518 tests, ~33s
+php artisan test                                                  # full app suite — 551 tests, ~13s
 cd packages/opencommerce-sdk; vendor/bin/phpunit tests; cd ../..   # SDK's own suite (unaffected by Phase 2)
 
 # Manual/live verification
 php artisan serve --port=8000
+# Admin Dashboard (Phase 4 Stage 5, §7.17): http://127.0.0.1:8000/login
+# using the seeded admin@opencommerce.test / password above
 php examples/sample-agent.php <agent-token> http://127.0.0.1:8000/mcp/v1
 php examples/woocommerce-sync.php <agent-token> http://127.0.0.1:8000/mcp/v1   # Stage 6 — set
                                                                                 # WOOCOMMERCE_* in .env first,
@@ -2551,6 +2666,160 @@ via query/header/neither), `tests/Feature/Notifications/NotificationTemplateLang
 (3 — matching translation, fallback, Tenant-default propagation). 518
 tests total, zero regressions.
 
+### 7.17 Phase 4, Stage 5 — Admin Dashboard + Human Authentication
+
+New Domain: `Entities/User` (see below for why this replaces a dead Phase
+1 skeleton of the same class), `ValueObjects/{Email,HashedPassword,
+UserRole,UserStatus}`, `Events/{UserWasCreated,UserWasUpdated}`,
+`Repositories/UserRepositoryInterface`, `Exceptions/{UserNotFoundException,
+InvalidCredentialsException,InvalidEmailException,TenantNotFoundException,
+AgentNotFoundException}`. New Application: `DTOs/UserData`,
+`Actions/{CreateUserAction,UpdateUserAction,GetUserAction,ListUsersAction,
+AuthenticateUserAction,UpdateTenantAction,UpdateAgentAction,
+ChangeAgentStatusAction}`. New Infrastructure:
+`Models/User` (extends `Authenticatable`), `Repositories/EloquentUserRepository`.
+New Interfaces/HTTP: `Controllers/Auth/{LoginController,LogoutController}`,
+`Requests/Auth/LoginRequest`. New top-level: `app/Http/Middleware/{Authenticate,
+RedirectIfAuthenticated,EnsureUserIsAdmin}`, `app/Http/Controllers/{LanguageController,
+Dashboard/{DashboardController,TenantController,AgentController,ProductController,
+OrderController,NotificationController,SettingsController}}`, `app/helpers.php`
+(`t()`/`dashboard_language()`), 17 Blade files under `resources/views/{auth,layouts,dashboard}`.
+1 additive migration (`users.role`/`users.is_active`).
+
+**`User` is platform-level (no tenant_id) — a real pivot from what Stage
+4's own text tentatively recorded ("session Guard backed by
+`OrganizationMember`").** That earlier note was written before this
+stage's concrete page list existed; once it did, the correct architecture
+became unambiguous: the Dashboard's own Tenants Management page does full
+CRUD across *every* Tenant — an operator creating/editing other
+businesses' own tenants, the platform vendor's own staff, not a business's
+own logged-in employee. `OrganizationMember` (`MemberType::User`) is
+scoped to *membership in one specific Tenant's Organization* — the right
+shape for a future "a business's own staff member logs in and manages
+just their store" feature (still unbuilt, §8.7), but the wrong shape for
+an operator who needs to see/manage every Tenant. `User` therefore joins
+`Tenant` itself as the second Core entity with no tenant_id at all.
+Authorization is a plain `UserRole::Admin`/`Operator` enum + an `admin`
+route-middleware alias — deliberately NOT the tenant-scoped
+Role/Permission/`MemberRole` RBAC system Agents use for MCP capability
+checks, since that system is fundamentally "what can this member do
+*inside this Tenant*," a question that doesn't apply to a platform
+operator. This correction is recorded here explicitly rather than left
+for someone to notice the contradiction later.
+
+**Replaced a dead Phase 1 skeleton, not built alongside it.**
+`App\Core\Domain\Entities\User` already existed on disk — tenant-scoped
+(`tenantId`/`organizationId` fields), a raw string email, no password
+concept at all (literally incapable of authenticating anyone), and zero
+callers/Repository interface/Infrastructure model anywhere in the
+codebase (confirmed via a full-repo grep before touching it). This is
+exactly the "User identity path is incomplete" gap HANDOFF §8.7 already
+named, just further along than a bare TODO — an abandoned first attempt
+predating `OrganizationMember`. Replaced outright rather than patched,
+with a docblock explaining why.
+
+**Laravel's own default `App\Models\User` (and its Factory) were
+deleted, not left alongside the new one.** That scaffold's `$fillable`
+already listed `tenant_id`/`organization_id`/`status` — columns that
+never existed on the actual `users` migration at all, a pre-existing
+inconsistency confirmed dead (only `config/auth.php` and
+`DatabaseSeeder.php` referenced it, both updated). `config/auth.php`'s
+`AUTH_MODEL` now points at `App\Core\Infrastructure\Models\User`, which
+`extends Authenticatable` — real Laravel session-guard machinery, not a
+custom auth mechanism — while `Domain\Entities\User` itself stays
+framework-free, the same Domain/Infrastructure split every other Core
+aggregate already has.
+
+**`HashedPassword` uses PHP's own `password_hash()`/`password_verify()`
+(bcrypt), never Laravel's `Hash` facade** — every Domain class in this
+codebase is framework-free and PHPUnit-testable without booting Laravel
+(`PricingService`, `WorkflowEvaluator`, `TemplateRenderer`, ...); this is
+the first VO that needed real cryptographic hashing; reaching for
+`Hash::make()` would have been the first Domain-layer exception to that
+rule for no real benefit, since PHP's own stdlib already does exactly
+this. `AuthenticateUserAction` (Application layer) verifies credentials
+using this VO and returns `UserData` — `Auth::loginUsingId()` (the HTTP
+layer, `LoginController`) only ever runs *after* that verification
+succeeds, the same "verify identity (Action) vs. adapt it to this
+transport (thin HTTP class)" split `AgentAuthenticationService`/
+`AuthenticateAgentAction` already established for MCP.
+
+**Core needed its own `Email` VO again** — Commerce already has one;
+importing it into Core would be the identical cross-module Domain
+dependency Finance's/Shipping's own duplicate `Money` VOs already exist to
+avoid (§7.8/§7.12), just Core -> Module instead of Module -> Module.
+
+**2 small Actions didn't exist before this stage and had to be added —
+the "missing piece the request implies" pattern (§3 #12) applied to
+Tenant/Agent instead of a Domain Module's own aggregate this time**:
+`UpdateTenantAction` (name + status; `Tenant::activate()`/`suspend()` have
+existed since Phase 1 with zero callers, the exact "mutator with no
+Action wired to it" gap `Cart::abandon()` had before the Tech Debt
+Sprint's scheduler, §7.13) and `UpdateAgentAction` (name + type; `Agent`
+gained `rename()`/`changeType()` mutators alongside it). `ChangeAgentStatusAction`
+backs the Suspend/Activate buttons, a thin wrapper so the Dashboard
+controller never touches a Repository or an Entity's mutators directly.
+`AgentRepositoryInterface` also gained `all()` — the first thing that
+ever needed to list every Agent platform-wide, the same reasoning
+`TenantRepositoryInterface::all()` was added for the Tech Debt Sprint's
+scheduler.
+
+**Every Dashboard Controller is a thin Action/Repository caller, per this
+stage's own rule.** `ProductController`/`OrderController`/`NotificationController`
+call Commerce's/Notifications' own `ListProductsAction`/`GetProductAction`/
+`ListOrdersAction`/`GetOrderAction`/`CancelOrderAction`/`ListNotificationsAction`
+directly — the exact same Actions each capability's own MCP handler
+calls — rather than querying a Repository or re-implementing any of their
+logic. Since these Actions are tenant-scoped (they back tenant-scoped MCP
+capabilities) and a Dashboard `User` isn't tied to one Tenant, every one
+of these three pages carries an explicit `?tenant_id=` selector
+(defaulting to the first Tenant if omitted) — there is no implicit
+"current tenant" concept for a platform operator to default to.
+
+**Two places this stage's own request asked for something the actual
+domain model doesn't support yet — flagged, not faked:**
+1. **Settings only manages `default_language`.** The request's Settings
+   page also named Timezone and Currency, but neither concept exists
+   anywhere on `Tenant` (or anywhere else) in this codebase. Inventing new
+   `Tenant` fields/migrations under this stage's own time budget would
+   have meant building a feature nothing else was asked to support, not
+   wiring an existing one — the honest scope is `default_language` only
+   (§8.47).
+2. **The Notifications page filters by type/status only, not language.**
+   A sent `Notification` (`Domain\Entities\Notification`) doesn't carry a
+   language field at all — only `NotificationTemplate` does (§7.16). There
+   is nothing to filter sent Notifications by; adding a column that
+   nothing else populates would have been worse than not filtering at all
+   (§8.48).
+
+**A real gotcha hit while writing this stage's own Blade views, worth
+flagging for future template-writers**: `TranslationServiceInterface::translate()`'s
+`$key` format is `"{group}.{path}"` (Stage 4, §7.16) — every one of this
+stage's own first-draft Blade calls used e.g. `t('dashboard.title')`
+instead of `t('messages.dashboard.title')`, silently resolving to "no
+translations for group `dashboard`" and falling through to
+`TranslationService`'s own last-resort behavior (return the key literally)
+across all 17 Blade files and every Dashboard controller's flash message
+at once — caught by the first Dashboard feature test actually asserting
+on rendered text (`assertSee('OpenCommerce Dashboard')` failing against
+literal `"dashboard.title"` in the response body), not by a type system,
+since `t()`'s `$key` is a plain string. Fixed everywhere in one pass; the
+lesson for next time is to write the first `assertSee()` against real
+translated text before duplicating a `t()` call pattern across many
+files.
+
+No new MCP capabilities — this stage is entirely a `web` (not `mcp/*`)
+surface; MCP's own error/exception handling is completely untouched.
+
+New tests: `tests/Unit/Core/{HashedPasswordTest,EmailTest,UserTest}.php`
+(4 + 3 + 5, framework-free), `tests/Feature/Auth/LoginTest.php` (9 — valid/
+wrong/inactive-user login, the translated-error assertion checked in both
+English and Farsi, guest/non-admin/admin against `/dashboard`, already-
+authenticated redirect, logout), `tests/Feature/Dashboard/DashboardPagesTest.php`
+(12 — language switch RTL/LTR rendering, and a real end-to-end smoke test
+per resource page, all through the same Actions the MCP layer itself
+uses, no mocking). 551 tests total, zero regressions.
+
 ---
 
 ## 8. Known technical debt (ranked, carried over + Phase 2 additions)
@@ -2824,6 +3093,33 @@ tests total, zero regressions.
     descriptions across nine `*Capabilities.php` manifests was judged out
     of scope for an infrastructure stage; the mechanism (`TranslationServiceInterface`)
     is in place if a future stage wants this.
+47. **Tenant has no Timezone/Currency concept** (§7.17) — the Dashboard's
+    own Settings page only manages `default_language`, the one Tenant-level
+    setting that actually exists; Timezone/Currency were requested but
+    would need new `Tenant` fields/migrations built from scratch, not
+    wiring something already there.
+48. **No way to filter sent Notifications by language** (§7.17) — a sent
+    `Notification` doesn't carry a language field at all, only
+    `NotificationTemplate` does (§7.16); the Dashboard's Notifications page
+    filters by type/status only. Adding a language column to
+    `notifications` that nothing populates would misrepresent what the
+    domain model actually tracks.
+49. **No Dashboard UI for User management itself** (§7.17) — `CreateUserAction`/
+    `UpdateUserAction`/`GetUserAction`/`ListUsersAction` all exist and are
+    unit/feature-tested (via `DatabaseSeeder`'s own default admin and
+    `LoginTest`), but there's no `/dashboard/users` page — the 8 requested
+    pages didn't include one. Cheapest possible next increment if a future
+    stage wants operators to create more Dashboard Users through the UI
+    instead of `php artisan tinker`/a seeder.
+50. **No password-reset flow** — `password_reset_tokens` (Phase 1's default
+    migration) still has zero code touching it; a Dashboard User who
+    forgets their password has no self-service recovery path yet, only a
+    re-seed or a direct DB update.
+51. **Only two Guards/roles: `Admin`/`Operator`, and `Operator` grants no
+    narrower access than `Admin` today** (§7.17) — `UserRole::Operator` is
+    modeled but every route this stage built is gated by the `admin`
+    middleware alone; a real distinction (e.g. an Operator who can view
+    but not create/edit) is unbuilt.
 
 ---
 
@@ -2831,22 +3127,28 @@ tests total, zero regressions.
 
 Phase 2 (Commerce, all 6 Stages) and Phase 3 (CRM, Finance, Workflows,
 Loyalty, Reporting — all 5 Stages) are fully complete. Phase 4
-(Shipping & Logistics) has four Stages done — Shipping Foundation, the
+(Shipping & Logistics) has five Stages done — Shipping Foundation, the
 Shipping Provider Connector (§7.14), the Notifications Module (§7.15),
-and the i18n Infrastructure (§7.16). The Tech Debt Sprint (§7.13) ran
-between Stages 1 and 2, closing the scheduler gap and the
-`CheckInventoryAction` re-check bug that used to top this list.
-Candidates worth raising with whoever's driving scope next, roughly in
-order of how much they'd reuse what already exists:
+the i18n Infrastructure (§7.16), and the Admin Dashboard + Human
+Authentication (§7.17). The Tech Debt Sprint (§7.13) ran between Stages 1
+and 2, closing the scheduler gap and the `CheckInventoryAction` re-check
+bug that used to top this list. Candidates worth raising with whoever's
+driving scope next, roughly in order of how much they'd reuse what
+already exists:
 
-- **The Admin Dashboard** (§7.16/§8.43) — the piece Stage 4's own request
-  asked for and this session deliberately deferred. Needs, in order: a
-  session Guard backed by `OrganizationMember` (decided, not built — no
-  Laravel `Auth::` usage exists anywhere in this codebase yet, only
-  Agent-bearer-token auth), a login flow, then the 8 requested pages
-  (Tailwind + Alpine.js, also decided) — `lang/{en,fa}/messages.json`
-  already has the `dashboard`/`tenants`/`agents`/`common` keys this would
-  consume via `TranslationServiceInterface`.
+- **A `/dashboard/users` page** (§8.49) — `CreateUserAction`/`UpdateUserAction`/
+  `GetUserAction`/`ListUsersAction` all exist and are tested; only the
+  page itself (+ routes + a controller, the same shape every other
+  Dashboard resource already has) is missing, since the 8 requested pages
+  didn't include one.
+- **A password-reset flow** (§8.50) — `password_reset_tokens` has existed
+  since Phase 1 with zero code touching it.
+- **A real `Operator` vs. `Admin` access distinction** (§8.51) — both
+  roles currently get identical Dashboard access; only the `admin`
+  middleware alias exists, no narrower one.
+- **Tenant Timezone/Currency** (§8.47) — the Dashboard Settings page's own
+  remaining two requested fields, needing new `Tenant` fields/migrations
+  from scratch.
 - **Wire `HighValueOrderListener` and/or CRM's `ticket_created`
   notification** (§7.9/§7.15/§8.42) — both are the same shape: the event
   already exists, only `Event::listen()` (+ for the latter, a Template)

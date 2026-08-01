@@ -8,12 +8,14 @@ use Tests\TestCase;
 class ExampleTest extends TestCase
 {
     /**
-     * A basic test example.
+     * `/` redirects to the login form (Phase 4 Stage 5) — there is no
+     * public "welcome" page anymore, the Laravel default this test
+     * originally checked for.
      */
-    public function test_the_application_returns_a_successful_response(): void
+    public function test_the_application_redirects_root_to_login(): void
     {
         $response = $this->get('/');
 
-        $response->assertStatus(200);
+        $response->assertRedirect(route('login'));
     }
 }

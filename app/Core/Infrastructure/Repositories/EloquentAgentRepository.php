@@ -18,6 +18,15 @@ class EloquentAgentRepository implements AgentRepositoryInterface
         return $model ? $this->toEntity($model) : null;
     }
 
+    public function all(): array
+    {
+        return AgentModel::query()
+            ->orderBy('id')
+            ->get()
+            ->map(fn (AgentModel $model) => $this->toEntity($model))
+            ->all();
+    }
+
     public function save(AgentEntity $agent): AgentEntity
     {
         $model = $agent->id()

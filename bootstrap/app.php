@@ -1,6 +1,9 @@
 <?php
 
 use App\Core\Exceptions\MCPExceptionHandler;
+use App\Http\Middleware\Authenticate;
+use App\Http\Middleware\EnsureUserIsAdmin;
+use App\Http\Middleware\RedirectIfAuthenticated;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -13,7 +16,16 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        // Phase 4 Stage 5 (Admin Dashboard + Human Auth) — explicit
+        // aliases rather than relying on the framework's own default
+        // 'auth'/'guest' middleware classes, so the app's own
+        // Authenticate/RedirectIfAuthenticated (redirect to the Dashboard's
+        // own named routes) are what actually run.
+        $middleware->alias([
+            'auth' => Authenticate::class,
+            'guest' => RedirectIfAuthenticated::class,
+            'admin' => EnsureUserIsAdmin::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Scoped to mcp/* only (returning null falls through to Laravel's

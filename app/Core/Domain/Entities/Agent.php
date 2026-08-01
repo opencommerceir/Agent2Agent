@@ -46,6 +46,16 @@ final class Agent
         );
     }
 
+    public function rename(string $name): void
+    {
+        $this->name = $name;
+    }
+
+    public function changeType(AgentType $type): void
+    {
+        $this->type = $type;
+    }
+
     public function activate(): void
     {
         $this->status = AgentStatus::Active;

@@ -4,21 +4,102 @@
     "welcome": "خوش آمدید، :name",
     "total_tenants": "تعداد مستأجران",
     "total_agents": "تعداد Agentها",
-    "total_orders": "تعداد سفارشات"
+    "total_orders": "تعداد سفارشات",
+    "total_notifications": "تعداد اعلان‌ها",
+    "quick_actions": "دسترسی سریع"
   },
   "tenants": {
     "create": "ایجاد مستأجر",
     "edit": "ویرایش مستأجر",
     "delete": "حذف مستأجر",
     "name": "نام مستأجر",
-    "domain": "دامنه"
+    "domain": "دامنه",
+    "list": "مستأجران",
+    "status": "وضعیت",
+    "created_at": "تاریخ ایجاد",
+    "no_tenants": "هنوز مستأجری ثبت نشده است."
   },
   "agents": {
     "create": "ایجاد Agent",
     "edit": "ویرایش Agent",
     "status": "وضعیت",
     "active": "فعال",
-    "inactive": "غیرفعال"
+    "inactive": "غیرفعال",
+    "suspended": "معلق",
+    "list": "Agentها",
+    "type": "نوع",
+    "tenant": "مستأجر",
+    "organization_id": "شناسه سازمان",
+    "filter_by_tenant": "فیلتر بر اساس مستأجر",
+    "all_tenants": "همه مستأجران",
+    "no_agents": "هنوز Agentی ثبت نشده است.",
+    "suspend": "معلق کردن",
+    "activate": "فعال‌سازی"
+  },
+  "products": {
+    "list": "محصولات",
+    "name": "نام",
+    "sku": "کد SKU",
+    "price": "قیمت",
+    "status": "وضعیت",
+    "no_products": "هنوز محصولی ثبت نشده است.",
+    "details": "جزئیات محصول",
+    "description": "توضیحات"
+  },
+  "orders": {
+    "list": "سفارشات",
+    "order_number": "شماره سفارش",
+    "status": "وضعیت",
+    "total": "مبلغ کل",
+    "customer": "مشتری",
+    "filter_by_status": "فیلتر بر اساس وضعیت",
+    "all_statuses": "همه وضعیت‌ها",
+    "no_orders": "هنوز سفارشی ثبت نشده است.",
+    "details": "جزئیات سفارش",
+    "cancel": "لغو سفارش",
+    "cancelled": "سفارش لغو شد.",
+    "items": "اقلام",
+    "quantity": "تعداد"
+  },
+  "notifications": {
+    "list": "اعلان‌ها",
+    "type": "نوع",
+    "channel": "کانال",
+    "status": "وضعیت",
+    "language": "زبان",
+    "sent_at": "زمان ارسال",
+    "no_notifications": "هنوز اعلانی ثبت نشده است.",
+    "recipient": "گیرنده",
+    "subject": "موضوع",
+    "filter_by_type": "فیلتر بر اساس نوع",
+    "filter_by_status": "فیلتر بر اساس وضعیت",
+    "filter_by_language": "فیلتر بر اساس زبان",
+    "all_types": "همه انواع",
+    "all_languages": "همه زبان‌ها"
+  },
+  "settings": {
+    "title": "تنظیمات",
+    "default_language": "زبان پیش‌فرض",
+    "select_tenant": "انتخاب مستأجر",
+    "saved": "تنظیمات ذخیره شد."
+  },
+  "nav": {
+    "dashboard": "داشبورد",
+    "tenants": "مستأجران",
+    "agents": "Agentها",
+    "products": "محصولات",
+    "orders": "سفارشات",
+    "notifications": "اعلان‌ها",
+    "settings": "تنظیمات",
+    "logout": "خروج"
+  },
+  "auth": {
+    "login_title": "ورود به OpenCommerce",
+    "email": "ایمیل",
+    "password": "رمز عبور",
+    "remember_me": "مرا به خاطر بسپار",
+    "login_button": "ورود",
+    "invalid_credentials": "این اطلاعات با سوابق ما مطابقت ندارد."
   },
   "common": {
     "save": "ذخیره",
@@ -27,7 +108,9 @@
     "edit": "ویرایش",
     "create": "ایجاد",
     "back": "بازگشت",
+    "view": "مشاهده",
     "actions": "عملیات",
-    "confirm_delete": "آیا مطمئن هستید که می‌خواهید این مورد را حذف کنید؟"
+    "confirm_delete": "آیا مطمئن هستید که می‌خواهید این مورد را حذف کنید؟",
+    "select": "انتخاب کنید..."
   }
 }

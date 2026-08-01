@@ -33,6 +33,11 @@ final class Tenant
         );
     }
 
+    public function rename(string $name): void
+    {
+        $this->name = $name;
+    }
+
     public function activate(): void
     {
         $this->status = TenantStatus::Active;
