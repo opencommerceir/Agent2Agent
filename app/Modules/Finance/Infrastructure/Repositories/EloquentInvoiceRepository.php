@@ -16,12 +16,16 @@ use DateTimeImmutable;
  * Never deletes-and-reinserts items, and only ever inserts them once
  * (when $isNew) — Invoice items are immutable (mirrors
  * EloquentOrderRepository's own docblock).
+ *
+ * Every read method eager-loads `items` (Phase 4 Stage 8, Performance
+ * Optimization, §7.20) — toEntity() always reads $model->items, so
+ * list() was a real N+1 before this.
  */
 class EloquentInvoiceRepository implements InvoiceRepositoryInterface
 {
     public function findById(int $id, int $tenantId): ?InvoiceEntity
     {
-        $model = InvoiceModel::query()->where('tenant_id', $tenantId)->find($id);
+        $model = InvoiceModel::query()->with('items')->where('tenant_id', $tenantId)->find($id);
 
         return $model ? $this->toEntity($model) : null;
     }
@@ -36,7 +40,7 @@ class EloquentInvoiceRepository implements InvoiceRepositoryInterface
 
     public function list(int $tenantId, ?InvoiceStatus $status, ?int $customerId, int $limit): array
     {
-        $builder = InvoiceModel::query()->where('tenant_id', $tenantId);
+        $builder = InvoiceModel::query()->with('items')->where('tenant_id', $tenantId);
 
         if ($status !== null) {
             $builder->where('status', $status->value);

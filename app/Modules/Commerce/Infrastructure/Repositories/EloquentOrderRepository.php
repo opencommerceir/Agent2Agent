@@ -18,12 +18,20 @@ use DateTimeImmutable;
  * Order items are immutable (Immutable Order Items rule), so save() only
  * ever inserts them once, the first time a brand-new Order is persisted.
  * Every later save() (a status change) touches only the `orders` row.
+ *
+ * Every read method eager-loads `items` (Phase 4 Stage 8, Performance
+ * Optimization, §7.20) — toEntity() always reads $model->items, so
+ * listByTenant()/listByCustomer() were a real N+1 before this: one query
+ * per row returned, on top of the one query that fetched the rows
+ * themselves. findById() only ever returns one row either way, but
+ * eager-loading there too saves the second query unconditionally, at no
+ * cost.
  */
 class EloquentOrderRepository implements OrderRepositoryInterface
 {
     public function findById(int $id, int $tenantId): ?OrderEntity
     {
-        $model = OrderModel::query()->where('tenant_id', $tenantId)->find($id);
+        $model = OrderModel::query()->with('items')->where('tenant_id', $tenantId)->find($id);
 
         return $model ? $this->toEntity($model) : null;
     }
@@ -38,7 +46,7 @@ class EloquentOrderRepository implements OrderRepositoryInterface
 
     public function listByTenant(int $tenantId, ?OrderStatus $status, int $limit): array
     {
-        $builder = OrderModel::query()->where('tenant_id', $tenantId);
+        $builder = OrderModel::query()->with('items')->where('tenant_id', $tenantId);
 
         if ($status !== null) {
             $builder->where('status', $status->value);
@@ -54,6 +62,7 @@ class EloquentOrderRepository implements OrderRepositoryInterface
     public function listByCustomer(int $customerId, int $tenantId, int $limit): array
     {
         return OrderModel::query()
+            ->with('items')
             ->where('tenant_id', $tenantId)
             ->where('customer_id', $customerId)
             ->orderBy('id', 'desc')

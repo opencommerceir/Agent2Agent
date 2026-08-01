@@ -21,12 +21,19 @@ use Illuminate\Support\Facades\DB;
  * rows. Carts are small (a handful of line items), so this trades a
  * little redundant I/O for not needing per-CartItem identity tracking
  * (Domain\Entities\CartItem's own docblock).
+ *
+ * Every read method eager-loads `items` (Phase 4 Stage 8, Performance
+ * Optimization, §7.20) — toEntity() always reads $model->items;
+ * findStaleActive() in particular fed a real N+1 (one query per stale
+ * Cart on top of the one that found them) into the hourly
+ * commerce:check-abandoned-carts scheduled command.
  */
 class EloquentCartRepository implements CartRepositoryInterface
 {
     public function findActiveByOwner(int $tenantId, MemberType $ownerType, int $ownerId): ?CartEntity
     {
         $model = CartModel::query()
+            ->with('items')
             ->where('tenant_id', $tenantId)
             ->where('owner_type', $ownerType->value)
             ->where('owner_id', $ownerId)
@@ -39,7 +46,7 @@ class EloquentCartRepository implements CartRepositoryInterface
 
     public function findById(int $id, int $tenantId): ?CartEntity
     {
-        $model = CartModel::query()->where('tenant_id', $tenantId)->find($id);
+        $model = CartModel::query()->with('items')->where('tenant_id', $tenantId)->find($id);
 
         return $model ? $this->toEntity($model) : null;
     }
@@ -47,6 +54,7 @@ class EloquentCartRepository implements CartRepositoryInterface
     public function findStaleActive(int $tenantId, DateTimeImmutable $before): array
     {
         return CartModel::query()
+            ->with('items')
             ->where('tenant_id', $tenantId)
             ->where('status', CartStatus::Active->value)
             ->where('updated_at', '<', $before)

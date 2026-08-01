@@ -91,6 +91,7 @@
     "orders": "سفارشات",
     "notifications": "اعلان‌ها",
     "analytics": "تحلیل‌ها",
+    "performance": "عملکرد",
     "settings": "تنظیمات",
     "logout": "خروج"
   },
@@ -135,5 +136,17 @@
     "actions": "عملیات",
     "confirm_delete": "آیا مطمئن هستید که می‌خواهید این مورد را حذف کنید؟",
     "select": "انتخاب کنید..."
+  },
+  "performance": {
+    "title": "عملکرد",
+    "average_response_time": "میانگین زمان پاسخ",
+    "cache_hit_rate": "نرخ برخورد کش",
+    "request_count": "درخواست‌های مشاهده‌شده",
+    "memory_usage": "بیشینه مصرف حافظه",
+    "database_connections": "اتصالات باز پایگاه داده",
+    "slow_queries": "کوئری‌های کند",
+    "no_slow_queries": "هیچ کوئری کندی ثبت نشده است.",
+    "optimization_suggestions": "پیشنهادهای بهینه‌سازی",
+    "no_suggestions": "هیچ الگوی کوئری تکراری (احتمالاً N+1) شناسایی نشد."
   }
 }

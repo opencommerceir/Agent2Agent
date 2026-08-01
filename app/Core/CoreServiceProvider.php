@@ -33,6 +33,8 @@ use App\Core\Infrastructure\Repositories\EloquentPermissionRepository;
 use App\Core\Infrastructure\Repositories\EloquentRoleRepository;
 use App\Core\Infrastructure\Repositories\EloquentTenantRepository;
 use App\Core\Infrastructure\Repositories\EloquentUserRepository;
+use App\Core\Infrastructure\Logging\QueryLogger;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
@@ -71,5 +73,15 @@ class CoreServiceProvider extends ServiceProvider
         Event::listen(MemberRemovedFromOrganization::class, RevokeRolesWhenMemberRemovedFromOrganization::class);
 
         $this->loadRoutesFrom(base_path('routes/mcp.php'));
+
+        // Phase 4 Stage 8 (Performance Optimization, §7.20) — skipped
+        // during the test suite itself: every one of this app's 600+
+        // tests runs real queries, and instrumenting every single one
+        // would both slow the suite down and pollute PerformanceMonitor's
+        // own rolling window with test-run noise (QueryLogger's own
+        // docblock).
+        if (! $this->app->runningUnitTests()) {
+            DB::listen(fn ($event) => $this->app->make(QueryLogger::class)($event));
+        }
     }
 }

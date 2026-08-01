@@ -7,6 +7,7 @@ use App\Http\Controllers\Dashboard\AnalyticsController;
 use App\Http\Controllers\Dashboard\DashboardController;
 use App\Http\Controllers\Dashboard\NotificationController;
 use App\Http\Controllers\Dashboard\OrderController;
+use App\Http\Controllers\Dashboard\PerformanceController;
 use App\Http\Controllers\Dashboard\ProductController;
 use App\Http\Controllers\Dashboard\SettingsController;
 use App\Http\Controllers\Dashboard\TenantController;
@@ -59,5 +60,7 @@ Route::middleware('auth')->group(function () {
 
         Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
         Route::put('/settings', [SettingsController::class, 'update'])->name('settings.update');
+
+        Route::get('/performance', [PerformanceController::class, 'index'])->name('performance.index');
     });
 });

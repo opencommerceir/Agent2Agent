@@ -91,6 +91,7 @@
     "orders": "Orders",
     "notifications": "Notifications",
     "analytics": "Analytics",
+    "performance": "Performance",
     "settings": "Settings",
     "logout": "Logout"
   },
@@ -135,5 +136,17 @@
     "actions": "Actions",
     "confirm_delete": "Are you sure you want to delete this?",
     "select": "Select..."
+  },
+  "performance": {
+    "title": "Performance",
+    "average_response_time": "Average Response Time",
+    "cache_hit_rate": "Cache Hit Rate",
+    "request_count": "Requests Observed",
+    "memory_usage": "Peak Memory Usage",
+    "database_connections": "Open Database Connections",
+    "slow_queries": "Slow Queries",
+    "no_slow_queries": "No slow queries recorded.",
+    "optimization_suggestions": "Optimization Suggestions",
+    "no_suggestions": "No repeated (likely N+1) query shapes detected."
   }
 }

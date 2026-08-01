@@ -1,14 +1,15 @@
 # OpenCommerce Platform — Session Handoff
 
 **Status: Phase 1 (Core + MCP Gateway), Phase 2 (Commerce, all 6
-Stages), and Phase 3 (Domain Expansion, all 5 Stages — CRM, Finance,
-Workflows, Loyalty, Reporting) are complete. Phase 4 (Shipping &
-Logistics) is under way: Stage 1 (Shipping Foundation), Stage 2
-(Shipping Provider Connector, §7.14), Stage 3 (Notifications Module,
-§7.15), Stage 4 (Multi-language Support / i18n Infrastructure, §7.16),
-Stage 5 (Admin Dashboard + Human Authentication, §7.17), Stage 6
-(Advanced Analytics & KPIs, §7.18), and Stage 7 (API Versioning System,
-§7.19) are all complete.
+Stages), Phase 3 (Domain Expansion, all 5 Stages — CRM, Finance,
+Workflows, Loyalty, Reporting), and Phase 4 (Shipping & Logistics, all 8
+Stages) are all complete. Phase 4's 8 Stages: Stage 1 (Shipping
+Foundation), Stage 2 (Shipping Provider Connector, §7.14), Stage 3
+(Notifications Module, §7.15), Stage 4 (Multi-language Support / i18n
+Infrastructure, §7.16), Stage 5 (Admin Dashboard + Human Authentication,
+§7.17), Stage 6 (Advanced Analytics & KPIs, §7.18), Stage 7 (API
+Versioning System, §7.19), and Stage 8 (Performance Optimization, §7.20 —
+the last Stage of Phase 4).
 
 The paragraphs below are in build order — read top to bottom for the
 actual chronological story. Finance supplies Commerce's own checkout
@@ -210,21 +211,93 @@ SDK at a v2 `baseUrl` would have silently returned empty results. Both now
 check `result`/`metadata` first, falling back to `data`/`meta`. See §7.19
 for the full detail.**
 
-608 tests passing (577 + 31 new), zero known regressions. Next up:
-another Phase 4 Shipping/Logistics stage (Shipping Zones, partial fulfillment,
-folding `shipping_cost` into checkout pricing — §8.37/§8.35/§8.36), a real
-carrier implementation of `ShippingProviderInterface` (USPS/FedEx/DHL —
-`MockShippingProviderAdapter` is now the template, the same role
-`WooCommerceProductConnector` played for a second real Commerce
-Connector), a real SMS gateway behind `SmsSender` (still an explicit
-stub — §7.15/§8), wiring `HighValueOrderListener`/CRM's own
-`ticket_created` notification type (both scaffolded, still the cheapest
-available increments — §9), a real v3 (or retiring v1 once its sunset
-date passes — §7.19), or any remaining deferred item in §8/§9.
-Note: `WorkflowsCapabilityTest`'s own docblock still describes working
-around the now-fixed §8.22 ceiling (6-on-hand/order-3, kept under half
-of stock) — harmless (the test still passes either way) but worth a
-quick cleanup pass since the constraint that motivated it is gone.**
+**Stage 8 (Performance Optimization, §7.20 — Phase 4's last Stage) —
+audited the request's own literal file list against the real codebase
+before writing anything, the same discipline every prior stage's own
+mismatches got, and it turned up more corrections than usual for one
+stage. The requested database-index list mostly already existed (added
+by earlier stages' own migrations) and two entries referenced columns
+that don't exist at all (`kpi_values.type` — `type` only lives on the
+parent `kpis` table; `member_roles.tenant_id` — that table has no
+`tenant_id` column at all) — the actual migration adds only the 8
+genuinely missing, schema-correct indexes, skipping everything already
+covered. The bigger find: auditing every Repository for the request's own
+"check all Repositories for eager loading" ask surfaced 4 real, provable
+N+1 bugs (`EloquentOrderRepository::listByTenant()`/`listByCustomer()`,
+`EloquentCartRepository::findStaleActive()`,
+`EloquentInvoiceRepository::list()`,
+`EloquentWorkflowRepository::list()`/`findActiveByEventType()`) — every
+one of those `toEntity()` methods reads a hasMany relation
+(`items`/`rules`/`actions`) that was never eager-loaded, so listing N rows
+cost 1+N queries; `findActiveByEventType()` in particular runs on every
+single `InventoryWasCommitted`/`CartWasAbandoned` Domain Event, not just
+an occasional page view. All 4 fixed with a plain `->with()`, proven by a
+new query-count regression test
+(`OrderRepositoryEagerLoadingTest`, the same style
+`CheckPermissionTest`'s own N+1 regression test already established,
+§7.13). Two of the request's own literal asks were judged unsafe to
+implement as written and built differently instead, each confirmed sound
+rather than asked about (neither is a business-level fork the way Stage
+7's URL-priority question was): (1) gzip-compressing every response,
+including `mcp/*`, would have broken ~600 existing JSON-asserting Feature
+tests and risks double-compression with `zlib.output_compression` —
+`CompressResponse` is scoped to the `web` middleware group only and
+disables itself during the test suite; (2) `PDO::ATTR_PERSISTENT => true`
+unconditionally is a real correctness risk in a multi-tenant app
+(connection-level state leaking across unrelated requests/Tenants) — it's
+an opt-in env var (`DB_PERSISTENT_CONNECTIONS`, default `false`) with the
+risk documented in `config/database.php` itself, not a default. The
+request's own `LazyLoadingDetector` heuristic ("a fast `SELECT *` might be
+N+1") was also replaced — a fast query is not a reliable N+1 signal in
+either direction — with the real, standard one: the same query shape
+repeated several times in one captured window, regardless of speed (this
+is what actually caught the 4 real bugs above, retroactively). This
+dev environment has neither a running Redis server nor `predis/predis`
+installed (same "real infra assumed in production, not verified locally"
+shape the Tech Debt Sprint's own PCOV note already established, §8.11) —
+added `predis/predis` as a real, installable Composer dependency and
+documented `CACHE_STORE=redis` as the recommended production value in
+`.env.example`, but left this working copy on `database` (zero extra
+infrastructure to run tests against). New: `CacheService`
+(`Application/Services`, tag-aware, wired into
+`GetProductAction`/`UpdateProductAction`/`DeleteProductAction` as the one
+reference integration — deliberately not swept across all 9 modules in
+one stage, the same "built the mechanism + one real example, not applied
+everywhere yet" shape most of this codebase's own mechanisms have
+carried, §8.2's list), `PerformanceMonitor` (a lightweight, documented
+best-effort operational monitor — not a production APM replacement),
+`QueryLogger` (skipped during the test suite itself,
+`$this->app->runningUnitTests()` — confirmed empirically this flag is
+*not* reliable inside a `ServiceProvider::boot()` call under `php artisan
+test`'s own outer wrapper process, only inside a real HTTP
+dispatch/middleware, a real gotcha worth flagging for future use of that
+flag), `RecordPerformanceMetrics`/`SetCDNHeaders` (global middleware),
+`/dashboard/performance` (the one Dashboard page that's deliberately not
+Tenant-scoped — these are platform-operational metrics, not one Tenant's
+business data), and `performance:benchmark`/`performance:check-lazy-loading`/
+`cache:warm` (the first of these three deliberately dropped the request's
+own "Order creation" benchmark — a benchmark a real operator might run
+against production must never *write* fake Orders into it every time
+someone wants a timing number). See §7.20 for the full detail.**
+
+648 tests passing (609 + 39 new), zero known regressions. Phase 4 is now
+fully complete (all 8 Stages). Next up: Phase 5 or further Phase 4
+polish — Shipping Zones/partial fulfillment/folding `shipping_cost` into
+checkout pricing (§8.37/§8.35/§8.36), a real carrier implementation of
+`ShippingProviderInterface` (USPS/FedEx/DHL — `MockShippingProviderAdapter`
+is now the template, the same role `WooCommerceProductConnector` played
+for a second real Commerce Connector), a real SMS gateway behind
+`SmsSender` (still an explicit stub — §7.15/§8), wiring
+`HighValueOrderListener`/CRM's own `ticket_created` notification type
+(both scaffolded, still the cheapest available increments — §9), a real
+v3 (or retiring v1 once its sunset date passes — §7.19), extending
+CacheService's own reference integration to more than one module's read
+path (§7.20 — Commerce Product is the only one wired so far), or any
+remaining deferred item in §8/§9. Note: `WorkflowsCapabilityTest`'s own
+docblock still describes working around the now-fixed §8.22 ceiling
+(6-on-hand/order-3, kept under half of stock) — harmless (the test still
+passes either way) but worth a quick cleanup pass since the constraint
+that motivated it is gone.**
 
 This file is a working-state snapshot for picking up development in a new
 session. It assumes you've already read `CLAUDE.md` and `docs/*.md` (the
@@ -261,6 +334,7 @@ from `App\Modules\*`.
 | MCP Gateway | `Interfaces/HTTP/Controllers/MCP/*`, `Exceptions/MCPExceptionHandler.php` | Routes: `POST /mcp/{v1,v2}/execute`, `GET /mcp/{v1,v2}/capabilities` (v2 added Stage 7, §7.19). Error envelope has `CONFLICT` (409, Phase 2) and, since Stage 4 (§7.16), a purely additive `error.localized_message` field (`error.message` itself untouched) — identical across v1/v2. `MCPExceptionHandler` is now container-resolved in `bootstrap/app.php` (was `new`'d), specifically so it can take `LanguageDetector`/`TranslationServiceInterface` constructor dependencies. |
 | **i18n (Stage 4, §7.16)** | `Domain/ValueObjects/Language.php` (`en`/`fa`), `Domain/Services/{TranslationServiceInterface,TranslationLoaderInterface}.php`, `Application/Services/{TranslationService,JsonTranslationLoader,LanguageDetector}.php`, `Application/DTOs/TranslationData.php` | A small, custom JSON translation subsystem — deliberately not Laravel's own `__()` (its flat-JSON shape doesn't fit `lang/{code}/{group}.json`-per-group, dot-path keys). `LanguageDetector::detect()` (HTTP: query `?lang=` -> `Accept-Language` header -> Tenant default -> English) and `::detectForTenant()` (non-HTTP, e.g. a Listener: Tenant default -> English only). `t()`/`dashboard_language()` (`app/helpers.php`) are the Blade-facing wrappers the Dashboard uses — **always prefix translation keys with the group, e.g. `t('messages.dashboard.title')`, never `t('dashboard.title')`** — a real bug from exactly this mistake hit every Dashboard view at once during Stage 6 (§7.18), caught by the first test that actually asserted on rendered text. |
 | **API Versioning (Stage 7, §7.19)** | `Domain/ValueObjects/{ApiVersion,SunsetDate}.php`, `Domain/Services/{VersionDetectorInterface,DeprecationNotifierInterface}.php`, `Application/Services/{VersionDetector,DeprecationNotifier}.php`, `Interfaces/HTTP/Middleware/ApiVersioning.php`, `Interfaces/HTTP/Controllers/MCP/{AbstractMCPGatewayController,AbstractMCPDiscoveryController,MCPGatewayControllerV2,MCPDiscoveryControllerV2}.php`, `config/api.php` | An explicit URL version (`/mcp/v1/`, `/mcp/v2/`) always wins over a header/query signal — confirmed with the user during planning, since the request's own example contradicted its own stated priority order (§7.19). `ApiVersioning` middleware attaches `X-API-Version` always, plus `Deprecation`/`Sunset`/`Link`/`Warning` + a log line only for whichever version `config('api.deprecation')` actually names (`v1` today). v1/v2 share one Authenticate -> rate-limit -> authorize -> execute sequence (the two Abstract base classes) — only the response envelope differs. |
+| **Performance Optimization (Stage 8, §7.20)** | `Application/Services/{CacheService,PerformanceMonitor,LazyLoadingDetector}.php`, `Application/Actions/OptimizeQueriesAction.php`, `Infrastructure/Logging/QueryLogger.php` | `CacheService` is tag-aware (`Cache::tags()`, confirmed working under `CACHE_STORE=array` too, not Redis-only) and wired into exactly one module's read path so far — Commerce's `GetProductAction`/`UpdateProductAction`/`DeleteProductAction` (§7.20's own "extend this" note, §9). `PerformanceMonitor` is a lightweight, documented best-effort operational monitor, not a production APM replacement. `QueryLogger` is registered via `DB::listen()` in `CoreServiceProvider::boot()`, skipped during the test suite — see that provider's own docblock for a real `runningUnitTests()` timing gotcha worth knowing before relying on that flag inside a `ServiceProvider::boot()` elsewhere. |
 | **Human/Dashboard Auth (Stage 5, §7.17)** | `Domain/Entities/User.php`, `Domain/ValueObjects/{Email,HashedPassword,UserRole,UserStatus}.php`, `Domain/Repositories/UserRepositoryInterface.php`, `Application/Actions/{CreateUserAction,UpdateUserAction,GetUserAction,ListUsersAction,AuthenticateUserAction}.php`, `Infrastructure/Models/User.php` (extends `Authenticatable`) | Platform-level (no tenant_id) — the second Core entity above tenancy alongside `Tenant` itself, since the Dashboard's own Tenants Management page does full cross-tenant CRUD. Gates the whole `/dashboard/*` route group via a plain `UserRole::Admin`/`Operator` enum + the `admin` route-middleware alias, **not** the tenant-scoped Role/Permission system above. `HashedPassword` uses PHP's own `password_hash()`/`password_verify()`, never Laravel's `Hash` facade (keeps this Domain class framework-free like every other one). Seeded by default: `admin@opencommerce.test` / `password` (`DatabaseSeeder`). |
 
 ### `app/Modules/Commerce/` — **no longer a skeleton. Product, Category, Cart, Inventory, Order, Customer, Payment, Coupon, Discount are all real, tested, and MCP-reachable — and Stage 6 added the first real external Connector.**
@@ -1612,7 +1686,7 @@ php artisan storage:link   # Stage 6, §7.18 — required for analytics.report.e
                             # buttons stream directly and don't need this
 
 # Tests
-php artisan test                                                  # full app suite — 608 tests, ~16s
+php artisan test                                                  # full app suite — 648 tests, ~18s
 cd packages/opencommerce-sdk; vendor/bin/phpunit tests; cd ../..   # SDK's own suite (unaffected by Phase 2)
 
 # Manual/live verification
@@ -1644,7 +1718,14 @@ curl -X POST http://127.0.0.1:8000/mcp/v2/execute -H "Authorization: Bearer <age
 php artisan loyalty:expire-points          # daily @ 02:00
 php artisan commerce:check-abandoned-carts # hourly
 php artisan analytics:generate-snapshot    # daily @ 01:00
-php artisan schedule:list                  # confirm all three are registered
+php artisan cache:warm                     # daily @ 00:00 — flushes the whole cache first, then rewarms it (§7.20)
+php artisan schedule:list                  # confirm all four are registered
+
+# Performance (Phase 4 Stage 8, §7.20) — run manually any time, not scheduled
+php artisan performance:benchmark              # read-only timing: product search + KPI calculation
+php artisan performance:check-lazy-loading     # runs a representative read scenario, reports any repeated (likely N+1) query shapes
+# /dashboard/performance — average response time, cache hit rate, slow queries,
+# memory usage, open DB connections; not Tenant-scoped (see PerformanceController's own docblock)
 ```
 
 To generate a throwaway Agent token for manual testing, see the Tinker
@@ -3461,6 +3542,220 @@ tests (`packages/opencommerce-sdk/tests/MCPConfigTest.php` + 2 new cases
 in `CapabilityExecutorTest`/`CapabilityDiscoveryTest`). 608 tests total
 (577 + 31), zero regressions.
 
+### 7.20 Phase 4, Stage 8 — Performance Optimization (last Stage of Phase 4)
+
+New Core: `Application/Services/{CacheService,PerformanceMonitor,LazyLoadingDetector}.php`,
+`Application/Actions/OptimizeQueriesAction.php`,
+`Infrastructure/Logging/QueryLogger.php`. New top-level:
+`app/Http/Middleware/{RecordPerformanceMetrics,SetCDNHeaders,CompressResponse}.php`,
+`app/Console/Commands/{BenchmarkPerformanceCommand,CheckLazyLoadingCommand,WarmCacheCommand}.php`,
+`app/Http/Controllers/Dashboard/PerformanceController.php`,
+`resources/views/dashboard/performance/index.blade.php`. One additive
+migration (`2026_08_05_000054_add_performance_indexes.php`). No new MCP
+capabilities — this stage is entirely cross-cutting infrastructure, the
+same shape Stage 7 (API Versioning) was.
+
+**The database-index audit — done before writing the migration, not
+after — found most of the request's own list already existed and two
+entries referenced columns that don't exist at all.** Every table's own
+original migration was read first (the same discipline Stage 7's own
+version-priority conflict got): `products`/`customers`/`tax_rates`/
+`analytics_snapshots`/`shipments`/`notification_templates`/`member_roles`
+already had an index or unique constraint covering the exact columns
+requested, so adding another would have been pure noise. Two were
+outright broken as literally specified: `kpi_values` has no `type` column
+at all (`type` lives on the parent `kpis` table via `kpi_id` — a
+`kpi_values->index(['tenant_id','type',...])` migration would have
+thrown), and `member_roles` has no `tenant_id` column at all (only the
+polymorphic `member_type`/`member_id` pair, already indexed). The actual
+migration adds exactly 8 indexes that are both genuinely missing and
+schema-correct: `orders`/`carts`/`invoices` (broadening an existing
+2-column index with a 3rd, e.g. `(tenant_id, status)` -> `(tenant_id,
+status, created_at)`), `tickets`/`notifications` (a real 3-column
+compound filter their own capabilities already support, e.g.
+`crm.ticket.list`'s optional `status`+`customer_id` together),
+`point_transactions` (the exact `(tenant_id, expires_at)` pair
+`ExpirePointsAction`'s own scan needs), `kpi_values` (the schema-correct
+substitute, `(tenant_id, kpi_id, time_period)`), and `agents` (which had
+no index at all beyond its unique token hash).
+
+**Auditing every Repository for the request's own "check all
+Repositories for eager loading" ask found 4 real, provable N+1 bugs —
+not a hypothetical exercise.** A grep for every `toEntity()` method
+reading a hasMany relation (`$model->items`/`->rules`/`->actions`)
+combined with every list-returning Repository method that maps many rows
+through it turned up exactly 4 spots where the relation was never
+eager-loaded: `EloquentOrderRepository::listByTenant()`/`listByCustomer()`,
+`EloquentCartRepository::findStaleActive()`,
+`EloquentInvoiceRepository::list()`, and
+`EloquentWorkflowRepository::list()`/`findActiveByEventType()` — each one
+cost 1 query for the parent rows plus 1 more *per row returned* for its
+child relation, undetected until now because every existing test happened
+to only ever list a small, fixed number of rows. `findActiveByEventType()`
+is the highest-value fix of the four: it's not a list-page view someone
+occasionally loads, it runs on *every single*
+`InventoryWasCommitted`/`CartWasAbandoned` Domain Event dispatch
+(`InventoryLowListener`/`CartAbandonedListener`), so its N+1 was being
+paid continuously in normal operation. Fixed uniformly with a plain
+`->with('items')`/`->with(['rules','actions'])` added to each query
+builder chain — a behavior-preserving change (query *count* only, never
+query *results*), confirmed by the full pre-existing test suite passing
+unmodified plus one new regression test,
+`tests/Feature/Commerce/OrderRepositoryEagerLoadingTest.php`, proving the
+query count for `listByTenant()` stays flat between 1 Order and 4 Orders —
+the same "assert the count itself, not just that the answer is still
+correct" style `CheckPermissionTest`'s own N+1 regression test already
+established (Tech Debt Sprint, §7.13).
+
+**`LazyLoadingDetector`'s own heuristic was rebuilt, not implemented as
+requested.** The request proposed flagging "a `SELECT *` query taking
+under 10ms" as likely N+1 — unreliable in both directions: a fast query is
+just as often a normal, well-indexed lookup as part of an N+1 chain, and
+a genuinely slow N+1 query (a big table, a cold cache) would be missed
+entirely. Built instead on the real, standard N+1 signature: the exact
+same query shape (every numeric literal normalized to `?`) repeated
+several times within one captured window, independent of how fast any
+one occurrence was. This is not a hypothetical improvement — it's the
+literal mechanism that surfaced the 4 real bugs above during this stage's
+own planning (`performance:check-lazy-loading` now runs that same
+detector against a representative read scenario as an ongoing regression
+guard against a future N+1 being reintroduced).
+
+**Two of the request's own literal asks were judged unsafe and built
+differently instead — each decided and documented, not asked about, since
+neither is a business-facing fork the way Stage 7's URL-priority question
+was:**
+1. **Response compression is not global, and not applied to `mcp/*`.**
+   The request asked for gzip on every response. Laravel's in-process test
+   client never negotiates `Content-Encoding` — gzip-encoding the body
+   first would break every one of this app's ~600 JSON-asserting Feature
+   tests (`assertJsonPath`, `->json()`), which all read
+   `$response->getContent()` as plain text. There's also a real
+   double-compression risk if a deployment's own `zlib.output_compression`
+   ini setting is also enabled (gzipping already-gzipped bytes produces
+   output no client can decode) — the standard, correct place for this is
+   the web server (nginx `gzip on;`) or CDN layer, not the PHP application
+   itself. `CompressResponse` is scoped to the `web` middleware group only
+   (Dashboard responses — never `mcp/*`) and disables itself via
+   `app()->runningUnitTests()` during the test suite. Its actual gzip
+   logic (`compress()`) is unit-tested directly
+   (`CompressResponseTest`), decoupled from that environment gate so the
+   logic itself is still verified even though `handle()` never engages it
+   in-suite.
+2. **`PDO::ATTR_PERSISTENT => true` is opt-in, not a default.** Persistent
+   PDO connections under mod_php/PHP-FPM reuse a connection across
+   *unrelated* requests — a transaction, session variable, or advisory
+   lock left open by one request can leak into the next request that
+   happens to reuse the same pooled connection, a real correctness risk in
+   a multi-tenant app where "the next request" is very likely a *different*
+   Tenant's own data. `config/database.php` now reads
+   `DB_PERSISTENT_CONNECTIONS` (default `false`) with the risk documented
+   inline; a deployment that has specifically measured and accepted the
+   trade-off can opt in.
+
+**A real gotcha hit while wiring `QueryLogger`, worth flagging for future
+use of the same flag**: `$this->app->runningUnitTests()` is *not*
+reliable inside a `ServiceProvider::boot()` call under `php artisan
+test`'s own invocation — that command boots an outer console-wrapper
+Application (under the real `.env`'s `APP_ENV=local`) before it execs
+`vendor/bin/phpunit` as a subprocess, and `CoreServiceProvider::boot()`
+runs once during *that* outer boot too, where `runningUnitTests()`
+legitimately returns `false` (confirmed empirically by temporarily
+throwing inside the gated branch and observing it fire under `php artisan
+test` but not under a direct `vendor/bin/phpunit` invocation). Harmless in
+this specific case (that throwaway wrapper process never runs any real
+test's queries), but the general lesson is real: this flag is reliable
+inside a middleware's `handle()` (which only ever runs during a genuine
+HTTP dispatch through an already-and-correctly-booted test application —
+CompressResponse's own gate relies on exactly this), not inside a
+ServiceProvider's `boot()` under every invocation path.
+
+**This dev environment has neither a running Redis server nor
+`predis/predis` installed** — the same "real infrastructure the request
+assumes, verifiable only in a real deployment, not this sandbox" shape
+the Tech Debt Sprint's own PCOV note already established (§8.11).
+`predis/predis` was added as a real, installable Composer dependency (so
+the code path is genuine, not aspirational), and `.env.example` documents
+`CACHE_STORE=redis` as the recommended production value — but this
+working copy's own `.env` stays on `CACHE_STORE=database` (already the
+committed default, zero extra infrastructure needed to run
+`php artisan serve`/the test suite). `CacheService::flush(string $tag)`
+uses Laravel's own `Cache::tags()` — confirmed during planning that
+`ArrayStore` (this app's own `CACHE_STORE=array` in `phpunit.xml`)
+`extends TaggableStore`, so the tagging tests exercise real behavior, not
+a Redis-only code path nothing here can verify.
+
+**`CacheService` is wired into exactly one module's read path this
+stage — Commerce's `GetProductAction`/`UpdateProductAction`/
+`DeleteProductAction` — deliberately, not swept across all 9 modules.**
+This is the same "build the real mechanism plus one concrete, tested
+example; leave the rest as a documented next increment" shape most of
+this codebase's own cross-cutting mechanisms have carried since Phase 2
+(§8.2's own long list). The key format is
+`commerce:product:{tenantId}:{id}:v1` — **tenant id was added to the
+request's own literal example** (`commerce:product:123:v1`, no tenant):
+caching purely by product id would let one Tenant's cached Product be
+served back to a *different* Tenant that happens to request the same
+numeric id, since product ids are a single global auto-increment sequence
+across all Tenants — a real cross-tenant leak this app has avoided in
+every other capability (the identical reasoning Analytics' own
+capabilities dropped a caller-supplied `tenant_id` input entirely to
+prevent, §7.18). Proven directly:
+`GetProductActionCachingTest::test_execute_differentTenantWithSameProductId_neverSeesTheOtherTenantsCachedProduct`.
+Invalidated on `UpdateProductAction`/`DeleteProductAction` via
+`CacheService::forget()` on the identical key
+(`GetProductAction::cacheKey()`, the one place that format is computed).
+
+**`PerformanceMonitor` is a lightweight, documented best-effort
+operational monitor, not a production APM replacement** — the same
+"real, working, honestly-scoped-down" precedent Analytics'
+`CustomerRetentionRate`/`CustomerLifetimeValue` simplifications already
+set (§7.18/§8.52). Stores a capped rolling window (200 samples) in
+whatever cache store is configured, read-modify-write, no cross-request
+locking — restarting the cache store resets it to zero, which is fine for
+a rolling snapshot, not something to alert on-call from.
+
+**`/dashboard/performance` is the one Dashboard resource page that is
+deliberately not Tenant-scoped** — no `?tenant_id=` selector, unlike
+every other Dashboard page since Stage 5 (§7.17) — because
+`PerformanceMonitor`'s own metrics (average response time, cache hit
+rate, slow queries) are platform-operational data, not any single
+Tenant's business data, the same reason no MCP capability in this
+codebase accepts a caller-supplied `tenant_id` either.
+
+**`performance:benchmark` deliberately dropped the request's own "Order
+creation (50 iterations)" benchmark.** A benchmark command a real
+operator might run against a real production database must never *write*
+50 fake Orders into it every time someone wants a timing number (fake
+inventory commits, fake revenue bleeding into every report/KPI
+downstream, no cleanup path). Product search and KPI calculation
+(`GetDashboardStatsAction`) are both naturally read-only and are exactly
+the two read paths this stage's own CacheService/Analytics integration
+already cares about — timing them tells an operator what they actually
+need to know without mutating anything.
+
+**One naming/location correction from the request, caught during
+planning**: `ApiVersioning` (Stage 7) already established that
+middleware in this codebase lives under `Interfaces/HTTP`, not
+`Infrastructure` — the request's own file list for this stage didn't ask
+for a location explicitly for its 3 new middleware classes, so they
+follow that same precedent (`app/Http/Middleware/*`, alongside
+`Authenticate`/`EnsureUserIsAdmin`/`RedirectIfAuthenticated`, since these
+are top-level `web`-adjacent classes, not Core-specific like
+`ApiVersioning` was).
+
+New tests: `tests/Unit/Core/{LazyLoadingDetectorTest,CompressResponseTest}.php`
+(5+3, framework-free), `tests/Feature/Core/{PerformanceMonitorTest,
+CacheServiceTest,QueryLoggerTest,GlobalPerformanceMiddlewareTest,
+PerformanceCommandsTest}.php` (7+5+3+4+5 — needs a booted container for
+`Cache::`/`config()`, the same reason `DeprecationNotifierTest` is a
+Feature test, §7.19),
+`tests/Feature/Commerce/{OrderRepositoryEagerLoadingTest,GetProductActionCachingTest}.php`
+(1+4 — the N+1 regression guard and the full cache
+lifecycle/invalidation/cross-tenant-isolation scenario),
+`tests/Feature/Dashboard/PerformancePageTest.php` (3). 648 tests total
+(609 + 39), 1522 assertions, ~18s runtime (`php artisan test`).
+
 ---
 
 ## 8. Known technical debt (ranked, carried over + Phase 2 additions)
@@ -3798,15 +4093,33 @@ in `CapabilityExecutorTest`/`CapabilityDiscoveryTest`). 608 tests total
 
 Phase 2 (Commerce, all 6 Stages) and Phase 3 (CRM, Finance, Workflows,
 Loyalty, Reporting — all 5 Stages) are fully complete. Phase 4
-(Shipping & Logistics) has six Stages done — Shipping Foundation, the
-Shipping Provider Connector (§7.14), the Notifications Module (§7.15),
-the i18n Infrastructure (§7.16), the Admin Dashboard + Human
-Authentication (§7.17), and Advanced Analytics & KPIs (§7.18). The Tech
-Debt Sprint (§7.13) ran between Stages 1 and 2, closing the scheduler gap
-and the `CheckInventoryAction` re-check bug that used to top this list.
-Candidates worth raising with whoever's driving scope next, roughly in
+(Shipping & Logistics) is now also fully complete — all 8 Stages:
+Shipping Foundation, the Shipping Provider Connector (§7.14), the
+Notifications Module (§7.15), the i18n Infrastructure (§7.16), the Admin
+Dashboard + Human Authentication (§7.17), Advanced Analytics & KPIs
+(§7.18), API Versioning (§7.19), and Performance Optimization (§7.20).
+The Tech Debt Sprint (§7.13) ran between Stages 1 and 2, closing the
+scheduler gap and the `CheckInventoryAction` re-check bug that used to
+top this list. There is no Phase 5 scoped yet — whoever drives scope next
+is choosing where the platform goes after Shipping & Logistics, not just
+picking the next item off this list. Candidates worth raising, roughly in
 order of how much they'd reuse what already exists:
 
+- **Extend `CacheService`'s reference integration beyond Commerce
+  Product** (§7.20) — the mechanism (tag-aware, `PerformanceMonitor`-backed
+  hit/miss tracking) is real and tested; only one module
+  (`GetProductAction`/`UpdateProductAction`/`DeleteProductAction`) is
+  actually wired to it. Analytics' own KPI caching (§7.18) still uses its
+  own separate `Cache::remember` call directly — deciding whether to
+  migrate it onto `CacheService` for consistency, or leave it as a
+  working, already-tested mechanism, is an open call for whoever picks
+  this up.
+- **Stand up a real Redis server and flip `CACHE_STORE=redis`** (§7.20) —
+  `predis/predis` is already a real Composer dependency and
+  `.env.example` documents the recommended value; no Redis server exists
+  in this dev environment to verify against locally, the same "real infra
+  assumed in production, unmeasured here" shape the Tech Debt Sprint's own
+  PCOV note already established (§8.11).
 - **Export one of Reporting's own 5 report types (not just the 6-KPI
   summary)** (§8.53) — `ReportExporter` is already generic enough
   (`headers + rows -> CSV/PDF bytes`); only a new row-building call site

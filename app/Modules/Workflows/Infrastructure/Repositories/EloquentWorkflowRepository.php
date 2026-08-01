@@ -20,19 +20,28 @@ use DateTimeImmutable;
  * Never deletes-and-reinserts rules/actions, and only ever inserts them
  * once (when $isNew) — Workflow rules/actions are immutable (mirrors
  * EloquentOrderRepository's/EloquentInvoiceRepository's own docblocks).
+ *
+ * Every read method eager-loads `rules`/`actions` (Phase 4 Stage 8,
+ * Performance Optimization, §7.20) — toEntity() always reads both.
+ * findActiveByEventType() in particular is the real hot path here: it
+ * runs on every InventoryWasCommitted/CartWasAbandoned dispatch
+ * (InventoryLowListener/CartAbandonedListener), so its N+1 (2 extra
+ * queries per matching Workflow, on top of the one that found them) was
+ * paid on every relevant Domain Event, not just an occasional list-page
+ * view.
  */
 class EloquentWorkflowRepository implements WorkflowRepositoryInterface
 {
     public function findById(int $id, int $tenantId): ?WorkflowEntity
     {
-        $model = WorkflowModel::query()->where('tenant_id', $tenantId)->find($id);
+        $model = WorkflowModel::query()->with(['rules', 'actions'])->where('tenant_id', $tenantId)->find($id);
 
         return $model ? $this->toEntity($model) : null;
     }
 
     public function list(int $tenantId, ?WorkflowStatus $status, ?EventType $eventType): array
     {
-        $builder = WorkflowModel::query()->where('tenant_id', $tenantId);
+        $builder = WorkflowModel::query()->with(['rules', 'actions'])->where('tenant_id', $tenantId);
 
         if ($status !== null) {
             $builder->where('status', $status->value);
@@ -51,6 +60,7 @@ class EloquentWorkflowRepository implements WorkflowRepositoryInterface
     public function findActiveByEventType(EventType $eventType, int $tenantId): array
     {
         return WorkflowModel::query()
+            ->with(['rules', 'actions'])
             ->where('tenant_id', $tenantId)
             ->where('event_type', $eventType->value)
             ->where('status', WorkflowStatus::Active->value)

@@ -59,8 +59,23 @@ return [
             'prefix_indexes' => true,
             'strict' => true,
             'engine' => null,
+            // DB_PERSISTENT_CONNECTIONS defaults to false, deliberately —
+            // PDO::ATTR_PERSISTENT reuses a connection across unrelated
+            // requests under mod_php/PHP-FPM, which means a transaction,
+            // session variable (e.g. MySQL's own SET/advisory locks), or
+            // temp-table state left open by one request can leak into the
+            // next, unrelated request that happens to reuse the same pooled
+            // connection — a real correctness risk in a multi-tenant app
+            // where "the next request" is very likely a *different*
+            // Tenant's own data. Real production connection pooling
+            // (PgBouncer/ProxySQL, or just enough PHP-FPM workers) is the
+            // safer way to reduce connection-setup overhead; this is opt-in
+            // (Phase 4 Stage 8, Performance Optimization, §7.20) for a
+            // deployment that has specifically measured and accepted that
+            // trade-off, not a default.
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_ATTR_SSL_CA'),
+                PDO::ATTR_PERSISTENT => (bool) env('DB_PERSISTENT_CONNECTIONS', false),
             ]) : [],
         ],
 
@@ -79,8 +94,23 @@ return [
             'prefix_indexes' => true,
             'strict' => true,
             'engine' => null,
+            // DB_PERSISTENT_CONNECTIONS defaults to false, deliberately —
+            // PDO::ATTR_PERSISTENT reuses a connection across unrelated
+            // requests under mod_php/PHP-FPM, which means a transaction,
+            // session variable (e.g. MySQL's own SET/advisory locks), or
+            // temp-table state left open by one request can leak into the
+            // next, unrelated request that happens to reuse the same pooled
+            // connection — a real correctness risk in a multi-tenant app
+            // where "the next request" is very likely a *different*
+            // Tenant's own data. Real production connection pooling
+            // (PgBouncer/ProxySQL, or just enough PHP-FPM workers) is the
+            // safer way to reduce connection-setup overhead; this is opt-in
+            // (Phase 4 Stage 8, Performance Optimization, §7.20) for a
+            // deployment that has specifically measured and accepted that
+            // trade-off, not a default.
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_ATTR_SSL_CA'),
+                PDO::ATTR_PERSISTENT => (bool) env('DB_PERSISTENT_CONNECTIONS', false),
             ]) : [],
         ],
 
