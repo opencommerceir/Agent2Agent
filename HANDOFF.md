@@ -6,51 +6,27 @@ Workflows, Loyalty, Reporting) are complete. Phase 4 (Shipping &
 Logistics) is under way: Stage 1 (Shipping Foundation), Stage 2
 (Shipping Provider Connector, §7.14), Stage 3 (Notifications Module,
 §7.15), Stage 4 (Multi-language Support / i18n Infrastructure, §7.16),
-and Stage 5 (Admin Dashboard + Human Authentication, §7.17) are all
-complete.
+Stage 5 (Admin Dashboard + Human Authentication, §7.17), and Stage 6
+(Advanced Analytics & KPIs, §7.18) are all complete.
 
-**Stage 4 (i18n Infrastructure, §7.16) was deliberately scoped down from
-its own request during planning: the request bundled a JSON-based i18n
-backend (Language detection, translated MCP errors, multi-language
-Notification Templates) together with a full 8-page, human-login Admin
-Dashboard (Tailwind/Alpine, Tenants/Agents/Products/Orders management).
-Building the Dashboard first requires a human-authentication architecture
-this codebase has never had — every identity path so far (§8.7) is
-Agent-bearer-token-only, with no session Guard, no login flow, and no
-tie between Laravel's own stock `User` model (unused scaffolding) and
-Core's real tenancy model (`OrganizationMember`). Shipping that decision
-silently would have meant either building throwaway auth or quietly
-picking an architecture the user hadn't actually approved. Raised as a
-scope question before writing any code; the user chose to split it: that
-stage delivered only the i18n backend, deferring the Dashboard to its own
-stage once a human-auth architecture was decided.**
-
-**Stage 5 (§7.17) built that deferred Dashboard — and, once the concrete
-page list was in hand (Tenants Management does full cross-tenant CRUD),
-the auth architecture actually needed turned out to be a real pivot from
-what Stage 4 tentatively recorded: not `OrganizationMember` (which is
-scoped to *one* Tenant's Organization — the right shape for a future
-business's-own-staff login, a distinct, still-unbuilt feature) but a new,
-platform-level `User` entity with no tenant_id at all, the same
-"Core entity above tenancy" shape only `Tenant` itself had before (§7.17
-explains the full reasoning). This correction is recorded here, not
-buried, since Stage 4's own text pointed the other way.**
-Finance supplies Commerce's own checkout pricing with real tax rates
-through an Interface Commerce itself owns (§7.8). Workflows (§7.9) and
-Loyalty (§7.10) each introduce a real cross-module Domain Event
-Listener. Reporting (§7.11) is the platform's first read-only module
-and the first deliberate, documented exception to the Module -> Module
-"depend on an Interface, never a Model" rule (a CQRS-style Read Model
-querying Commerce's/Loyalty's Eloquent Models directly for aggregate
-performance). Shipping (§7.12) is Phase 4's first module and the
-**first time a later module's migration alters an earlier module's own
-table**: Commerce's `Order` entity gained an additive, backward-compatible
-`assignShipping()` (three new nullable fields — `shippingMethodId`/
-`shipmentId`/`shippingCost`) so a Shipment can write its assignment back
-onto the Order it fulfills, the same Dependency-Inversion direction
-every prior cross-module integration used, just flowing one field
-further than before — see `Order::assignShipping()`'s own docblock for
-the full reasoning and the alternative that was considered and rejected.
+The paragraphs below are in build order — read top to bottom for the
+actual chronological story. Finance supplies Commerce's own checkout
+pricing with real tax rates through an Interface Commerce itself owns
+(§7.8). Workflows (§7.9) and Loyalty (§7.10) each introduce a real
+cross-module Domain Event Listener. Reporting (§7.11) is the platform's
+first read-only module and the first deliberate, documented exception to
+the Module -> Module "depend on an Interface, never a Model" rule (a
+CQRS-style Read Model querying Commerce's/Loyalty's Eloquent Models
+directly for aggregate performance). Shipping (§7.12) is Phase 4's first
+module and **the first time a later module's migration alters an earlier
+module's own table**: Commerce's `Order` entity gained an additive,
+backward-compatible `assignShipping()` (three new nullable fields —
+`shippingMethodId`/`shipmentId`/`shippingCost`) so a Shipment can write
+its assignment back onto the Order it fulfills, the same
+Dependency-Inversion direction every prior cross-module integration used,
+just flowing one field further than before — see `Order::assignShipping()`'s
+own docblock for the full reasoning and the alternative that was
+considered and rejected.
 
 **A Tech Debt Sprint (§7.13) ran immediately after Shipping Stage 1,
 before Phase 4 continues, closing 7 items from §8/§9 in one pass: the
@@ -105,55 +81,101 @@ permission names that hit the usual 3-segment gotcha, and keeping
 `NotificationDispatcher` a pure Domain decision function instead of a
 Repository-querying one. See §7.15 for the full detail.**
 
-**Stage 4 (i18n Infrastructure, §7.16) builds a small, custom JSON-based
-translation subsystem in Core (`Language` enum, `TranslationServiceInterface`/
-`TranslationLoaderInterface` + their one implementation each, `LanguageDetector`)
-— deliberately not Laravel's own `__()`/flat-JSON translator, since the
-request's own `lang/{code}/{group}.json`-per-group, dot-path-addressable
-shape doesn't match what Laravel's built-in JSON translation feature
-expects. `LanguageDetector` implements the requested priority order
-(query `?lang=` -> `Accept-Language` header -> Tenant's own new
+**Stage 4 (i18n Infrastructure, §7.16) was deliberately scoped down from
+its own request during planning: the request bundled a JSON-based i18n
+backend together with a full 8-page, human-login Admin Dashboard. Building
+the Dashboard first requires a human-authentication architecture this
+codebase has never had — every identity path so far (§8.7) was
+Agent-bearer-token-only, with no session Guard, no login flow, and no tie
+between Laravel's own stock `User` model (unused scaffolding) and Core's
+real tenancy model (`OrganizationMember`). Raised as a scope question
+before writing any code; the user chose to split it: this stage delivered
+only the i18n backend, deferring the Dashboard to its own stage once a
+human-auth architecture was decided. Builds a small, custom JSON-based
+translation subsystem in Core (`Language` enum,
+`TranslationServiceInterface`/`TranslationLoaderInterface` + their one
+implementation each, `LanguageDetector`) — deliberately not Laravel's own
+`__()`/flat-JSON translator, since the request's own
+`lang/{code}/{group}.json`-per-group, dot-path-addressable shape doesn't
+match what Laravel's built-in JSON translation feature expects.
+`LanguageDetector` implements the requested priority order (query
+`?lang=` -> `Accept-Language` header -> Tenant's own new
 `default_language` column -> English), threaded into every Capability
-handler via a new `AuthContext::$language` field (the same "widen the
-MCP boundary DTO" shape §3 pattern #1 already established) and into
-`MCPExceptionHandler` (now container-resolved, not `new`'d, specifically
-so it can take this constructor dependency) as a purely additive
-`error.localized_message` field — `error.message` itself is untouched, so
-no existing test needed to change. Notifications' `NotificationTemplate`
-gained an optional trailing `language` field (one row per Language per
-type+channel, not the nested translations-blob shape the request
-illustrated — see §7.16) with automatic fallback-to-English baked into
+handler via a new `AuthContext::$language` field (the same "widen the MCP
+boundary DTO" shape §3 pattern #1 already established) and into
+`MCPExceptionHandler` (now container-resolved, not `new`'d) as a purely
+additive `error.localized_message` field — `error.message` itself is
+untouched. Notifications' `NotificationTemplate` gained an optional
+trailing `language` field (one row per Language per type+channel, not the
+nested translations-blob shape the request illustrated) with automatic
+fallback-to-English baked into
 `EloquentNotificationTemplateRepository::findActive()` itself, so every
-caller (3 Listeners + the `notification.message.send` MCP handler) gets
-the fallback for free.**
+caller gets the fallback for free. See §7.16 for the full detail.**
 
-**Stage 5 (Admin Dashboard + Human Auth, §7.17) adds Core's first human,
-password-based identity — `User` (Domain entity + `HashedPassword`/`UserRole`/
-`UserStatus` VOs + a Core-owned `Email` VO, the same "avoid a cross-module
-Domain dependency" duplicate every `Money` VO in this codebase already
-has, §7.8/§7.12), backed by a real Laravel session Guard
-(`App\Core\Infrastructure\Models\User extends Authenticatable`) — replacing
-Laravel's own never-actually-used default scaffold `App\Models\User`
-(deleted, along with its Factory). Deliberately NOT the tenant-scoped
-Role/Permission/`OrganizationMember` RBAC system Agents use for MCP
-capability checks: a Dashboard User manages the platform itself (Tenants
-Management is full cross-tenant CRUD), so `User` is platform-level — no
-tenant_id — gated by a plain `UserRole::Admin`/`Operator` enum and a
-`admin` route middleware, not a per-tenant Role grant. All 8 requested
-pages are real, wired to existing Actions/Repositories (Dashboard
-Controllers hold no business logic, per that rule) — 2 small "missing
-piece implied by the request" Actions (§3 pattern #12) were added along
-the way: `UpdateTenantAction`/`UpdateAgentAction` (neither existed before;
-only `activate()`/`suspend()` mutators did, the same "mutator with no
-Action wired to it yet" gap Cart::abandon() had before §7.13's scheduler).
-Discovered and replaced a dead, never-wired Phase 1 skeleton of
-`Domain\Entities\User` (tenant-scoped, no password at all, zero callers
-anywhere) rather than building alongside it. See §7.17 for the full
-detail, including what this stage's own request asked for but the actual
-domain model can't yet support (Tenant Timezone/Currency, a
-Notification-level language filter).**
+**Stage 5 (Admin Dashboard + Human Auth, §7.17) built that deferred
+Dashboard — and, once the concrete page list was in hand (Tenants
+Management does full cross-tenant CRUD), the auth architecture actually
+needed turned out to be a real pivot from what Stage 4 tentatively
+recorded: not `OrganizationMember` (scoped to *one* Tenant's Organization
+— the right shape for a future business's-own-staff login, a distinct,
+still-unbuilt feature) but a new, platform-level `User` entity with no
+tenant_id at all, the same "Core entity above tenancy" shape only
+`Tenant` itself had before. This correction is recorded here, not buried,
+since Stage 4's own text pointed the other way. `User` (Domain entity +
+`HashedPassword`/`UserRole`/`UserStatus` VOs + a Core-owned `Email` VO,
+the same "avoid a cross-module Domain dependency" duplicate every `Money`
+VO in this codebase already has) is backed by a real Laravel session
+Guard (`App\Core\Infrastructure\Models\User extends Authenticatable`) —
+replacing Laravel's own never-actually-used default scaffold
+`App\Models\User` (deleted, along with its Factory). Gated by a plain
+`UserRole::Admin`/`Operator` enum and an `admin` route middleware, **not**
+the tenant-scoped Role/Permission/`OrganizationMember` RBAC system Agents
+use for MCP capability checks. All 8 requested pages are real, wired to
+existing Actions/Repositories (Dashboard Controllers hold no business
+logic) — 2 small "missing piece implied by the request" Actions (§3
+pattern #12) were added along the way: `UpdateTenantAction`/`UpdateAgentAction`
+(neither existed before). Discovered and replaced a dead, never-wired
+Phase 1 skeleton of `Domain\Entities\User` (tenant-scoped, no password at
+all, zero callers anywhere) rather than building alongside it. See §7.17
+for the full detail, including what this stage's own request asked for
+but the actual domain model can't yet support (Tenant Timezone/Currency,
+a Notification-level language filter).**
 
-551 tests passing (518 + 33 new), zero known regressions. Next up:
+**Stage 6 (Advanced Analytics & KPIs, §7.18) — the biggest single
+correction of this whole session — was requested as a brand-new
+"Analytics" module with its own `RevenueCalculator`/`OrderCalculator`/
+`CustomerCalculator` re-querying Commerce's/Loyalty's tables from
+scratch. That would have built a second, independent way to compute the
+exact numbers Reporting (Phase 3, §7.11) already computes — "Total
+Revenue," "Total Orders," "Top Products," and Loyalty's points totals —
+two sources of truth for the same figure that could silently drift apart
+over time. Raised as a scope question before writing any code; the user
+confirmed reuse. `CalculateKPIAction` (the one entry point every KPI —
+MCP, the Dashboard Home page's 6 cards, the daily Snapshot command — is
+computed through) now calls Reporting's own `Infrastructure\Queries\*`
+Query Builders directly for every KPI Reporting already knows how to
+aggregate, and only the 4 requested Domain Calculators
+(`RevenueCalculator`/`OrderCalculator`/`CustomerCalculator`/
+`ConversionRateCalculator`, pure/framework-free) handle KPIs Reporting
+genuinely has no concept of (Conversion Rate, Revenue Growth Rate,
+Customer Retention Rate/Lifetime Value, New Customers). Results cache for
+1 hour and persist a `KPIValue` row only on an actual cache miss. New:
+`analytics.*` (5 MCP capabilities — deliberately dropped the request's
+own `tenant_id` input from all 3 capabilities that had one, a real
+cross-tenant data leak every other capability in this codebase avoids by
+scoping to `AuthContext` alone), Chart.js-powered Revenue/Orders charts on
+the Dashboard Home page, a new `/dashboard/analytics` page, CSV/PDF export
+(`barryvdh/laravel-dompdf`, added this stage — no PDF library existed
+before), and a daily `analytics:generate-snapshot` scheduled command. Also
+fixed a real, pre-existing bug found while testing this stage's own "no
+tenants yet" Dashboard case: every one of Stage 5's six tenant-selector
+Dashboard controllers used `$tenants[0]->id() ?? null`, which throws (not
+returns null) on an empty array — `?->` alone doesn't guard the
+array-access step, only the method-call step. Fixed to
+`($tenants[0] ?? null)?->id()` in all six. See §7.18 for the full mapping
+and reasoning.**
+
+577 tests passing, zero known regressions. Next up:
 another Phase 4 Shipping/Logistics stage (Shipping Zones, partial fulfillment,
 folding `shipping_cost` into checkout pricing — §8.37/§8.35/§8.36), a real
 carrier implementation of `ShippingProviderInterface` (USPS/FedEx/DHL —
@@ -182,26 +204,27 @@ mistake or re-deciding something that was already deliberately decided.
 
 ## 1. What exists right now
 
-### `app/Core/` — Identity, Tenancy, Registry, Permissions, MCP Gateway
+### `app/Core/` — Identity, Tenancy, Registry, Permissions, MCP Gateway, i18n, Human Auth
 
-Unchanged in shape since Phase 1, with one deliberate widening made during
-Phase 2 (see §7.2 and §3): the Capability execution path now threads an
-`AuthContext` (tenantId + agentId) into every handler, and two marker
-interfaces (`NotFoundExceptionInterface`, `ConflictExceptionInterface`) were
-added so Domain Modules can opt an exception into the MCP error envelope
-*without Core ever importing a Domain Module's class*.
+Structurally stable since Phase 1/2 (the widening described below), plus
+two later, purely additive growth spurts: i18n (Phase 4 Stage 4, §7.16)
+and human/Dashboard authentication (Phase 4 Stage 5, §7.17). Core is
+still domain-independent — none of this newer material imports anything
+from `App\Modules\*`.
 
 | Sub-area | Key classes | Notes |
 |---|---|---|
-| Tenant | `Domain/Entities/Tenant.php`, `Application/Actions/CreateTenantAction.php` | `TenantRepositoryInterface` gained `all()` in the Tech Debt Sprint (§7.13) — the first thing that ever needed to list every Tenant, for the new cross-tenant scheduled commands. |
-| Organization | `Domain/Entities/Organization.php`, `OrganizationMember.php` | Unchanged since Phase 1. |
-| Agent Registry | `Domain/Entities/Agent.php`, `AgentToken.php`, related Actions | Unchanged since Phase 1. |
-| Permission System | `Domain/Entities/{Permission,Role,MemberRole}.php`, `CheckPermissionAction` | Unchanged since Phase 1. |
+| Tenant | `Domain/Entities/Tenant.php`, `Application/Actions/CreateTenantAction.php` | `TenantRepositoryInterface` gained `all()` in the Tech Debt Sprint (§7.13). Gained `defaultLanguage()`/`changeDefaultLanguage()` + a `default_language` column in Stage 4 (§7.16) and `rename()` in Stage 5 (§7.17, backing `UpdateTenantAction`). |
+| Organization | `Domain/Entities/Organization.php`, `OrganizationMember.php` | Unchanged since Phase 1. Still the model for a *future* per-tenant human staff login (`MemberType::User`) — not what Stage 5's own `User` entity is (see below). |
+| Agent Registry | `Domain/Entities/Agent.php`, `AgentToken.php`, related Actions | Unchanged since Phase 1, except `Agent` gained `rename()`/`changeType()` mutators in Stage 5 (§7.17, backing `UpdateAgentAction`) and `AgentRepositoryInterface` gained `all()` (the Dashboard's own Agents page). |
+| Permission System | `Domain/Entities/{Permission,Role,MemberRole}.php`, `CheckPermissionAction` | Unchanged since Phase 1. Still exclusively for tenant-scoped MCP capability checks — the Dashboard's own `User`/`UserRole` (below) is a deliberately separate, platform-level authorization mechanism, not a consumer of this system. |
 | Capability Registry | `Domain/Entities/Capability.php`, related Actions | Unchanged since Phase 1. Still strict 3-segment `domain.resource.action` names. |
 | **Capability Execution** | `Application/Services/CapabilityHandlerRegistry.php`, `CapabilityExecutionService.php` | **Handler contract changed in Phase 2**: `callable(array $input, AuthContext $context): array` — was `callable(array $input): array` in Phase 1, then briefly `callable(array $input, int $tenantId): array` early in Phase 2 before Cart ownership needed the Agent's own id too. See §7.2/§7.3 for the full history — do not re-litigate this, it was already widened twice and settled. |
-| **AuthContext** | `Application/DTOs/AuthContext.php` | New in Phase 2. `{tenantId: int, agentId: int}`, built via `AuthContext::forAgent(AgentData $agent)`. Passed explicitly into every handler — never resolved from a container/global. Every Commerce Domain Repository interface and Application Action still takes plain `int $tenantId`/`int $agentId` scalars, not `AuthContext` itself — only `CommerceServiceProvider`'s handler closures unpack it. Do not push `AuthContext` down into Domain/Application signatures; that would invert the dependency direction (Domain must not depend on an Application-layer DTO). |
-| **Marker interfaces** | `Domain/Exceptions/Contracts/{NotFoundExceptionInterface,ConflictExceptionInterface}.php` | New in Phase 2. `MCPExceptionHandler` matches on these interfaces (404 / 409) in addition to its own concrete exception classes — this is how Commerce's exceptions (`ProductNotFoundException`, `InsufficientInventoryException`, etc.) get mapped to the right HTTP status **without Core importing anything from `App\Modules\Commerce`**. Any new Domain Module exception that should map to 404/409 implements one of these; Core is never touched again for this. |
-| MCP Gateway | `Interfaces/HTTP/Controllers/MCP/*`, `Exceptions/MCPExceptionHandler.php` | Routes unchanged: `POST /mcp/v1/execute`, `GET /mcp/v1/capabilities`. Error envelope gained a new code: `CONFLICT` (409), used for business-rule rejections (insufficient stock, payment declined, invalid coupon, invalid order-status transition) that are neither a validation error nor a missing resource. |
+| **AuthContext** | `Application/DTOs/AuthContext.php` | New in Phase 2: `{tenantId: int, agentId: int}`, built via `AuthContext::forAgent(AgentData $agent)`. **Widened in Stage 4 (§7.16)** to `{tenantId, agentId, language: Language}` — `MCPGatewayController` resolves the Language once via `LanguageDetector` and passes it in; a handler with nothing language-specific to do simply never reads it (Demo's own precedent). Passed explicitly into every handler — never resolved from a container/global. Do not push `AuthContext` down into Domain/Application signatures. |
+| **Marker interfaces** | `Domain/Exceptions/Contracts/{NotFoundExceptionInterface,ConflictExceptionInterface}.php` | New in Phase 2. `MCPExceptionHandler` matches on these interfaces (404 / 409) in addition to its own concrete exception classes. Any new Domain Module (or Core-owned, e.g. `UserNotFoundException`/`TenantNotFoundException`/`AgentNotFoundException`, all added in Stage 5) exception that should map to 404/409 implements one of these. |
+| MCP Gateway | `Interfaces/HTTP/Controllers/MCP/*`, `Exceptions/MCPExceptionHandler.php` | Routes unchanged: `POST /mcp/v1/execute`, `GET /mcp/v1/capabilities`. Error envelope has `CONFLICT` (409, Phase 2) and, since Stage 4 (§7.16), a purely additive `error.localized_message` field (`error.message` itself untouched). `MCPExceptionHandler` is now container-resolved in `bootstrap/app.php` (was `new`'d), specifically so it can take `LanguageDetector`/`TranslationServiceInterface` constructor dependencies. |
+| **i18n (Stage 4, §7.16)** | `Domain/ValueObjects/Language.php` (`en`/`fa`), `Domain/Services/{TranslationServiceInterface,TranslationLoaderInterface}.php`, `Application/Services/{TranslationService,JsonTranslationLoader,LanguageDetector}.php`, `Application/DTOs/TranslationData.php` | A small, custom JSON translation subsystem — deliberately not Laravel's own `__()` (its flat-JSON shape doesn't fit `lang/{code}/{group}.json`-per-group, dot-path keys). `LanguageDetector::detect()` (HTTP: query `?lang=` -> `Accept-Language` header -> Tenant default -> English) and `::detectForTenant()` (non-HTTP, e.g. a Listener: Tenant default -> English only). `t()`/`dashboard_language()` (`app/helpers.php`) are the Blade-facing wrappers the Dashboard uses — **always prefix translation keys with the group, e.g. `t('messages.dashboard.title')`, never `t('dashboard.title')`** — a real bug from exactly this mistake hit every Dashboard view at once during Stage 6 (§7.18), caught by the first test that actually asserted on rendered text. |
+| **Human/Dashboard Auth (Stage 5, §7.17)** | `Domain/Entities/User.php`, `Domain/ValueObjects/{Email,HashedPassword,UserRole,UserStatus}.php`, `Domain/Repositories/UserRepositoryInterface.php`, `Application/Actions/{CreateUserAction,UpdateUserAction,GetUserAction,ListUsersAction,AuthenticateUserAction}.php`, `Infrastructure/Models/User.php` (extends `Authenticatable`) | Platform-level (no tenant_id) — the second Core entity above tenancy alongside `Tenant` itself, since the Dashboard's own Tenants Management page does full cross-tenant CRUD. Gates the whole `/dashboard/*` route group via a plain `UserRole::Admin`/`Operator` enum + the `admin` route-middleware alias, **not** the tenant-scoped Role/Permission system above. `HashedPassword` uses PHP's own `password_hash()`/`password_verify()`, never Laravel's `Hash` facade (keeps this Domain class framework-free like every other one). Seeded by default: `admin@opencommerce.test` / `password` (`DatabaseSeeder`). |
 
 ### `app/Modules/Commerce/` — **no longer a skeleton. Product, Category, Cart, Inventory, Order, Customer, Payment, Coupon, Discount are all real, tested, and MCP-reachable — and Stage 6 added the first real external Connector.**
 
@@ -373,6 +396,78 @@ this codebase's first retry-with-exponential-backoff logic
 `NotificationType` is modeled but has no Listener yet (§8.42) — nothing
 requested one this stage.
 
+### `app/Modules/Analytics/` — **new in Phase 4, Stage 6. KPIs, Snapshots, and Dashboard/Chart data — reuses Reporting's own Query Builders rather than re-aggregating Commerce's/Loyalty's tables a second time.**
+
+See §7.18 for the full detail. 3 Domain Entities (`KPI`, `KPIValue` —
+owned by `KPIRepositoryInterface`, same "repo owns its child records"
+shape `WorkflowLog`/`Redemption` have —, `AnalyticsSnapshot`), 3 Value
+Objects (`KPIType` — 14 cases —, `TimePeriod` with a pure `boundsFor()`,
+Analytics' own `Money`), 4 Domain Calculators (`RevenueCalculator`/
+`OrderCalculator`/`CustomerCalculator`/`ConversionRateCalculator`,
+pure/framework-free, implementing `KPICalculatorInterface`) that own only
+the KPIs Reporting has no equivalent for at all, 2 exceptions, 2
+Repository interfaces, 6 Application Actions (all 5 requested capabilities
+wired, `ExportReportAction` is the 6th, MCP-only), 5 DTOs, 3 Eloquent
+models, 2 Eloquent repositories, 3 migrations. `CalculateKPIAction` is the
+one entry point every KPI (MCP, the Dashboard's own 6 cards, the daily
+Snapshot command) is computed through — it depends directly on
+Reporting's `Infrastructure\Queries\*` Query Builders (a second, narrower
+instance of Reporting's own documented CQRS exception, §7.11) for every
+KPI Reporting already aggregates, and on Commerce's
+`CustomerRepositoryInterface` + 2 new methods
+(`CartRepositoryInterface::countCreatedBetween()`,
+`InventoryRepositoryInterface::listLowStock()`) for the genuinely new
+ones. Results cache for 1 hour (`Cache::remember`); a `KPIValue` row
+persists only on an actual cache miss. `ReportExporter` (generic
+headers+rows -> CSV/PDF bytes, `barryvdh/laravel-dompdf`) backs both the
+MCP export capability (writes to the `public` disk, returns a URL) and
+the Dashboard's own direct-download export buttons. A daily
+`analytics:generate-snapshot` scheduled command (01:00) iterates every
+Tenant the same way `loyalty:expire-points`/`commerce:check-abandoned-carts`
+already do.
+
+### Admin Dashboard — **new in Phase 4, Stage 5 (§7.17), extended in Stage 6 (§7.18). A session-authenticated, bilingual (EN/FA, RTL-aware) web UI at `/dashboard/*` — a human-operator control panel, not an MCP/Agent-facing surface.**
+
+Not a Domain Module (no `app/Modules/Dashboard/`) — it's a thin web
+Interfaces layer sitting directly under `app/Http/`, reusing the exact
+same Actions/Repositories every MCP capability already calls (Dashboard
+Controllers Rule: no business logic in Controllers). Gated by the `auth`
++ `admin` route middleware (Core's own `User`/`UserRole`, see above), a
+`guest` middleware keeps an already-signed-in User off `/login`.
+
+- **Auth**: `GET/POST /login`, `POST /logout` —
+  `App\Core\Interfaces\HTTP\Controllers\Auth\{LoginController,LogoutController}`.
+  `LoginController` calls `AuthenticateUserAction` (Application layer,
+  verifies credentials) then `Auth::loginUsingId()` (HTTP layer,
+  establishes the session) — the same "verify identity vs. adapt to this
+  transport" split `AgentAuthenticationService` already demonstrates for
+  MCP.
+- **8 pages**, `app/Http/Controllers/Dashboard/*` + `resources/views/dashboard/*`:
+  Home (`DashboardController` — 6 KPI cards, Revenue/Orders Chart.js
+  charts, Top 5 Products, Recent Orders, all tenant-selected via
+  `?tenant_id=`), Tenants (full CRUD), Agents (CRUD + Suspend/Activate,
+  tenant-filterable), Products (read-only, tenant-selected — reuses
+  Commerce's own `ListProductsAction`/`GetProductAction`), Orders
+  (list/show/cancel, tenant + status filterable — reuses
+  `ListOrdersAction`/`GetOrderAction`/`CancelOrderAction`), Notifications
+  (read-only list, tenant + type + status filterable — no language filter,
+  see §8.48), Analytics (single-KPI calculator form + CSV/PDF export,
+  Stage 6), Settings (manages only `Tenant.default_language` — Timezone/
+  Currency don't exist on `Tenant` at all yet, §8.47).
+- **i18n**: every page routes its strings through `t('messages.*.*')`
+  (Core's own `TranslationServiceInterface`, §7.16) — always with the
+  `messages.` group prefix. `<html lang dir>` and the navbar's EN/FA
+  switcher (`GET /language/{code}`, `LanguageController`) both read/write
+  the `dashboard_language` session key (`dashboard_language()` helper) —
+  a separate mechanism from MCP's own per-request `LanguageDetector`
+  chain, since a browser session persists a choice across page loads.
+- **Frontend**: Tailwind CSS v4 + Alpine.js (mobile sidebar toggle,
+  language-button active state) + Chart.js (`chart.js/auto`, Stage 6) —
+  all bundled via Vite (`npm run build`); Feature tests call
+  `$this->withoutVite()` so they never depend on a fresh build existing.
+- **Seeded default admin**: `admin@opencommerce.test` / `password`
+  (`DatabaseSeeder`) — change or remove before any real deployment.
+
 ### `app/Modules/Demo/` — unchanged since Phase 1
 
 Same three demo capabilities. Its `DemoServiceProvider` handler closures were
@@ -462,18 +557,24 @@ app/Http/Controllers/{LanguageController,Dashboard/*}.php
 
 resources/views/{auth,layouts,dashboard}/*.blade.php
                              new in Phase 4 Stage 5 (§7.17) — 17 Blade
-                             files across the 8 requested Dashboard pages
+                             files across the 8 requested Dashboard pages;
+                             +1 (`dashboard/analytics/index.blade.php`) in
+                             Stage 6 (§7.18) for the 9th page Analytics
+                             itself added, not part of Stage 5's original 8
 
 routes/web.php                previously just the Laravel default welcome
                              route; now login/logout/language-switch +
-                             the whole `/dashboard/*` route group (§7.17)
+                             the whole `/dashboard/*` route group (§7.17),
+                             + `/dashboard/analytics`
+                             /`/dashboard/analytics/export/{csv,pdf}` (§7.18)
 
 app/Console/Commands/       new in Tech Debt Sprint (§7.13) — this directory
                              didn't exist before: ExpireLoyaltyPointsCommand,
-                             MarkAbandonedCartsCommand, both scheduled via
-                             routes/console.php (Schedule::command(), also
-                             new — no app/Console/Kernel.php in this Laravel
-                             version)
+                             MarkAbandonedCartsCommand, +
+                             GenerateAnalyticsSnapshotCommand (§7.18), all three
+                             scheduled via routes/console.php
+                             (Schedule::command(), also new — no
+                             app/Console/Kernel.php in this Laravel version)
 
 app/Modules/Commerce/
 ├── Domain/
@@ -826,6 +927,67 @@ app/Modules/Notifications/         new in Phase 4, Stage 3 (§7.15) — the
                                    Event::listen()s all 3 Listeners,
                                    registers 8 capability handlers (§6)
 
+app/Modules/Analytics/             new in Phase 4, Stage 6 (§7.18) —
+                                   depends on Reporting's own
+                                   Infrastructure\Queries\* directly
+                                   (a second, narrower CQRS exception,
+                                   see Reporting's own §7.11) and on
+                                   Commerce's CustomerRepositoryInterface/
+                                   the new CartRepositoryInterface::countCreatedBetween()/
+                                   InventoryRepositoryInterface::listLowStock()
+├── Domain/
+│   ├── Entities/                 KPI (definition), KPIValue (one computed
+│   │                             result per period — owned by
+│   │                             KPIRepositoryInterface, same "repo owns
+│   │                             its child records" shape WorkflowLog/
+│   │                             Redemption already have), AnalyticsSnapshot
+│   │                             (daily rollup)
+│   ├── ValueObjects/             KPIType (14 cases), TimePeriod
+│   │                             (hourly/daily/weekly/monthly/yearly +
+│   │                             pure boundsFor()), Money (Analytics' own,
+│   │                             same reasoning Finance's/Shipping's
+│   │                             own duplicates have)
+│   ├── Services/                 KPICalculatorInterface + RevenueCalculator
+│   │                             (Revenue, RevenueGrowthRate),
+│   │                             OrderCalculator (TotalOrders,
+│   │                             AverageOrderValue), CustomerCalculator
+│   │                             (TotalCustomers, NewCustomers,
+│   │                             CustomerRetentionRate,
+│   │                             CustomerLifetimeValue — the last two are
+│   │                             documented simplifications, not a
+│   │                             cohort/predictive model),
+│   │                             ConversionRateCalculator (ConversionRate)
+│   │                             — all pure, framework-free, only
+│   │                             combine numbers CalculateKPIAction
+│   │                             already fetched
+│   ├── Repositories/              KPIRepositoryInterface (owns KPIValue
+│   │                             persistence too), AnalyticsSnapshotRepositoryInterface
+│   │                             (upserts by tenant+date)
+│   └── Exceptions/                KPINotFoundException, InvalidTimePeriodException
+├── Application/
+│   ├── Actions/                  CalculateKPIAction (the one entry point
+│   │                             every KPI is computed through — see its
+│   │                             own docblock for the full Reporting-reuse
+│   │                             reasoning), GetKPIAction, ListKPIsAction,
+│   │                             GenerateSnapshotAction, GetDashboardStatsAction,
+│   │                             ExportReportAction (MCP path: writes to
+│   │                             the public disk, returns a URL)
+│   ├── Services/                 ChartDataProvider (Chart.js `{labels,data}`
+│   │                             shape, reuses SalesQueryBuilder::byDay()/
+│   │                             the new ordersByDay()), ReportExporter
+│   │                             (generic headers+rows -> CSV/PDF bytes,
+│   │                             barryvdh/laravel-dompdf)
+│   └── DTOs/                     KPIData, KPIValueData (unit doubles as a
+│   │                             scale tag for non-monetary KPIs — PCT/
+│   │                             CNT/PTS/LST, see its own docblock),
+│   │                             AnalyticsSnapshotData, DashboardStatsData,
+│   │                             ChartData
+├── Infrastructure/
+│   ├── Models/                    KPI, KPIValue, AnalyticsSnapshot
+│   └── Repositories/               EloquentKPIRepository, EloquentAnalyticsSnapshotRepository
+└── AnalyticsServiceProvider.php   binds 2 Repository interfaces,
+                                   registers 5 capability handlers (§6)
+
 app/Modules/Demo/                  unchanged since Phase 1
 
 packages/opencommerce-sdk/         unchanged since Phase 1
@@ -865,12 +1027,14 @@ database/
 │   ├── 2026_08_02_000048-000049                  (Phase 4.4 — +tenants.default_language,
 │   │                                               +notification_templates.language, §7.16 —
 │   │                                               both additive, default 'en')
-│   └── 2026_08_03_000050                          (Phase 4.5 — +users.role/is_active,
-│                                                   §7.17 — additive to the Phase 1
-│                                                   default `users` table; `sessions`/
-│                                                   `password_reset_tokens` already
-│                                                   existed since Phase 1, unused until now)
-└── seeders/{DemoCapabilitiesSeeder,CommerceCapabilitiesSeeder,CRMCapabilitiesSeeder,FinanceCapabilitiesSeeder,WorkflowsCapabilitiesSeeder,LoyaltyCapabilitiesSeeder,ReportingCapabilitiesSeeder,ShippingCapabilitiesSeeder,NotificationsCapabilitiesSeeder}.php
+│   ├── 2026_08_03_000050                          (Phase 4.5 — +users.role/is_active,
+│   │                                               §7.17 — additive to the Phase 1
+│   │                                               default `users` table; `sessions`/
+│   │                                               `password_reset_tokens` already
+│   │                                               existed since Phase 1, unused until now)
+│   └── 2026_08_04_000051-000053                  (Phase 4.6 — kpis, kpi_values,
+│                                                   analytics_snapshots, §7.18)
+└── seeders/{DemoCapabilitiesSeeder,CommerceCapabilitiesSeeder,CRMCapabilitiesSeeder,FinanceCapabilitiesSeeder,WorkflowsCapabilitiesSeeder,LoyaltyCapabilitiesSeeder,ReportingCapabilitiesSeeder,ShippingCapabilitiesSeeder,NotificationsCapabilitiesSeeder,AnalyticsCapabilitiesSeeder}.php
 
 tests/
 ├── Fixtures/            woocommerce-products-response.json (Stage 6 — reference payload),
@@ -988,16 +1152,37 @@ tests/
 │                        `/dashboard`, non-admin gets 403, admin gets 200,
 │                        already-authenticated redirected off `/login`,
 │                        logout ends the session (§7.17)
-└── Feature/Dashboard/    new — DashboardPagesTest (12): language
-                         switch renders RTL/Farsi and LTR/English text,
-                         Tenants index/store/update, Agents index
-                         (tenant-filtered)/store/suspend+activate,
-                         Products index (tenant-selected), Orders index
-                         (status-filtered)/cancel, Settings update — every
-                         page driven through the same Actions the MCP
-                         layer itself uses, real data, no mocking (§7.17)
+├── Feature/Dashboard/    + DashboardPagesTest (12): language
+│                        switch renders RTL/Farsi and LTR/English text,
+│                        Tenants index/store/update, Agents index
+│                        (tenant-filtered)/store/suspend+activate,
+│                        Products index (tenant-selected), Orders index
+│                        (status-filtered)/cancel, Settings update — every
+│                        page driven through the same Actions the MCP
+│                        layer itself uses, real data, no mocking (§7.17)
+├── Unit/Analytics/       new — RevenueCalculatorTest/OrderCalculatorTest/
+│                        CustomerCalculatorTest/ConversionRateCalculatorTest
+│                        (4+4+5+2 — every metric each Calculator owns,
+│                        incl. the 0-not-a-division-error guard each one
+│                        has) + TimePeriodTest (4 — boundsFor() for all
+│                        5 granularities), all framework-free PHPUnit (§7.18)
+├── Feature/Analytics/    new — AnalyticsCapabilityTest (2): the literal
+│                        end-to-end scenario — 10 real paid Orders with
+│                        different amounts -> Revenue KPI matches the real
+│                        sum -> Average Order Value matches the real
+│                        average -> Snapshot generated and persisted ->
+│                        Dashboard stats match -> tenant isolation ->
+│                        CSV/PDF export (real files, asserted on disk via
+│                        Storage::fake) (§7.18)
+└── Feature/Dashboard/    + AnalyticsPageTest (5): Home page KPI cards +
+                         chart canvases render for a selected Tenant, "no
+                         tenants yet" shows no data instead of a 500 (the
+                         bug this stage's own testing caught, see above),
+                         the Analytics page's filter form computes a KPI,
+                         CSV/PDF export routes return real
+                         Content-Disposition: attachment downloads (§7.18)
 
-551 tests total, 1307 assertions, ~13s runtime (`php artisan test`)
+577 tests total, 1370 assertions, ~14s runtime (`php artisan test`)
 ```
 
 ---
@@ -1195,6 +1380,33 @@ What the Tech Debt Sprint and Phase 4 Stages 2–3 *added* on top of that
     a single exception class or an owned child record) because the
     missing aggregate didn't naturally belong to any of the 3 interfaces
     the request did name.
+19. **A human-facing web UI (the Admin Dashboard) is a thin Interfaces
+    layer sitting outside every Domain Module, never a place that
+    re-implements business logic a second time for a second transport.**
+    Every Dashboard Controller (§7.17/§7.18) calls the exact same
+    Actions/Repositories the corresponding MCP capability's own handler
+    closure calls — `ProductController`/`OrderController` reuse Commerce's
+    `ListProductsAction`/`CancelOrderAction` directly, `AnalyticsController`
+    reuses `CalculateKPIAction` directly. The only genuinely new
+    Dashboard-side code is presentation (Blade views, `?tenant_id=`
+    selection, translation keys) — if a Dashboard page needs a capability
+    that doesn't exist as an Action yet, add the Action (the same way MCP
+    would need it too), never inline the logic into the Controller.
+20. **When a second module needs the exact aggregate math another module
+    already computes, reuse that module's own read-side building blocks
+    (Query Builders) directly — never re-implement the same SUM/COUNT/GROUP
+    BY a second time.** Confirmed with the user before writing any code
+    (§7.18's own "biggest correction" note) rather than assumed: Analytics'
+    `CalculateKPIAction` calls Reporting's `Infrastructure\Queries\*`
+    Query Builders directly for every KPI Reporting already aggregates,
+    a second, narrower application of the exact CQRS Read-Model exception
+    `SalesQueryBuilder`'s own docblock established for Reporting itself
+    (pattern this list has always called out as Reporting's alone, §7.11
+    — now precedent for any future module in the same position). Never
+    call another module's own `Generate*Action`/equivalent for this kind
+    of frequent, cacheable read if that Action has a persistence side
+    effect (Reporting's own Actions write a `Report`+`ReportResult` row
+    per call) — reach one layer lower, to the read-only aggregation itself.
 
 ---
 
@@ -1275,6 +1487,32 @@ where noted) plus what Phase 2 specifically taught:
     to land, not at the docblock itself — if a `ParseError: unexpected
     identifier` shows up in a file you didn't expect, check every
     docblock in it for a stray `*/` first.
+13. **Every Dashboard/Core translation key needs its group prefix —
+    `t('messages.dashboard.title')`, never `t('dashboard.title')`.**
+    `TranslationServiceInterface::translate()`'s `$key` format is
+    `"{group}.{path}"` (§7.16) — the first segment picks which
+    `lang/{code}/{group}.json` file to read at all. Omitting it doesn't
+    error; it silently resolves to "no translations in group X" and
+    `TranslationService`'s own last-resort behavior returns the key
+    literally, so the bug reads as "every translated string on the page
+    shows its own raw key" rather than a crash. Hit once already, across
+    all 17 Dashboard Blade files and every Dashboard controller's flash
+    message at once (§7.18) — caught only because a Feature test asserted
+    on real rendered text (`assertSee('OpenCommerce Dashboard')`) rather
+    than just a 200 status code. Write that assertion before copying a
+    `t()` call pattern across many files, not after.
+14. **`?->` only guards the method-call step, never the array-access step
+    before it.** `$tenants[0]?->id()` still throws/warns "Undefined array
+    key 0" when `$tenants` is empty — PHP evaluates `$tenants[0]` first,
+    and `?->` only starts protecting *after* that already succeeded (or
+    failed). The safe form is `($tenants[0] ?? null)?->id()` — `??`
+    tolerates the missing array key, *then* `?->` tolerates the
+    possibly-null result. Every one of Stage 5's six tenant-selector
+    Dashboard controllers had this exact bug; none of Stage 5's own tests
+    happened to start from zero Tenants, so it went uncaught until Stage
+    6's own "no tenants yet" test case (§7.18). If a Dashboard page 500s
+    only on a freshly-seeded/empty database, check every `$array[0]?->`
+    in its controller first.
 
 ---
 
@@ -1282,39 +1520,47 @@ where noted) plus what Phase 2 specifically taught:
 
 ```powershell
 # First time / after pulling
-composer install
+composer install   # includes barryvdh/laravel-dompdf, Stage 6, §7.18
 cd packages/opencommerce-sdk; composer install; cd ../..
-npm install && npm run build   # Phase 4 Stage 5, §7.17 — Tailwind/Alpine.js
-                                # assets the Dashboard's own @vite() calls need;
+npm install && npm run build   # Tailwind/Alpine.js/Chart.js assets the
+                                # Dashboard's own @vite() calls need (Stage 5
+                                # §7.17 + Stage 6 §7.18 for Chart.js);
                                 # tests never need this (they call withoutVite())
 
 # Database
 php artisan migrate
-php artisan db:seed   # runs Demo-, Commerce-, CRM-, Finance-, Workflows-, Loyalty-, Reporting-, Shipping-, and NotificationsCapabilitiesSeeder
+php artisan db:seed   # runs Demo-, Commerce-, CRM-, Finance-, Workflows-, Loyalty-, Reporting-,
+                       # Shipping-, Notifications-, and AnalyticsCapabilitiesSeeder
                        # + seeds one default Dashboard admin (§7.17):
                        # admin@opencommerce.test / password
+php artisan storage:link   # Stage 6, §7.18 — required for analytics.report.export's
+                            # returned file_url (public/storage -> storage/app/public)
+                            # to actually resolve; the Dashboard's own CSV/PDF export
+                            # buttons stream directly and don't need this
 
 # Tests
-php artisan test                                                  # full app suite — 551 tests, ~13s
+php artisan test                                                  # full app suite — 577 tests, ~14s
 cd packages/opencommerce-sdk; vendor/bin/phpunit tests; cd ../..   # SDK's own suite (unaffected by Phase 2)
 
 # Manual/live verification
 php artisan serve --port=8000
-# Admin Dashboard (Phase 4 Stage 5, §7.17): http://127.0.0.1:8000/login
-# using the seeded admin@opencommerce.test / password above
+# Admin Dashboard (Phase 4 Stage 5/6, §7.17/§7.18): http://127.0.0.1:8000/login
+# using the seeded admin@opencommerce.test / password above — Home page has
+# KPI cards/charts, /dashboard/analytics has the KPI calculator + CSV/PDF export
 php examples/sample-agent.php <agent-token> http://127.0.0.1:8000/mcp/v1
 php examples/woocommerce-sync.php <agent-token> http://127.0.0.1:8000/mcp/v1   # Stage 6 — set
                                                                                 # WOOCOMMERCE_* in .env first,
                                                                                 # or every call fails against
                                                                                 # an empty base URL
 
-# Scheduled jobs (Tech Debt Sprint, §7.13) — run once manually, or via a
-# real OS cron entry (`* * * * * php artisan schedule:run`) in any actual
-# deployment; routes/console.php's Schedule::command() calls only define
-# *what* runs, not that anything triggers them automatically
+# Scheduled jobs (Tech Debt Sprint §7.13; Analytics' own, §7.18) — run once
+# manually, or via a real OS cron entry (`* * * * * php artisan schedule:run`)
+# in any actual deployment; routes/console.php's Schedule::command() calls
+# only define *what* runs, not that anything triggers them automatically
 php artisan loyalty:expire-points          # daily @ 02:00
 php artisan commerce:check-abandoned-carts # hourly
-php artisan schedule:list                  # confirm both are registered
+php artisan analytics:generate-snapshot    # daily @ 01:00
+php artisan schedule:list                  # confirm all three are registered
 ```
 
 To generate a throwaway Agent token for manual testing, see the Tinker
@@ -1326,7 +1572,7 @@ end to end.
 
 ---
 
-## 6. The 65 MCP capabilities that exist right now
+## 6. The 70 MCP capabilities that exist right now
 
 | Capability | Phase/Stage | Permission | Notes |
 |---|---|---|---|
@@ -1395,6 +1641,11 @@ end to end.
 | `notification.message.get` | P4.3 | `notifications.messages.read` | Renamed from `notification.get` — same reason as `.send`. |
 | `notification.message.list` | P4.3 | `notifications.messages.read` | Renamed from `notification.list` — same reason. Optional `type`/`status`/`limit`. |
 | `notification.preference.set` | P4.3 | `notifications.preferences.manage` | Upserts by (tenant, recipient_type, recipient_id, notification_type, channel). |
+| `analytics.kpi.calculate` | P4.6 | `analytics.kpis.read` | Cached 1h. `kpi_type`/`time_period`/`start_date`/`end_date`. `tenant_id` deliberately dropped from the request's own input schema (§7.18 — every capability in this codebase scopes to `AuthContext` alone). |
+| `analytics.kpi.list` | P4.6 | `analytics.kpis.read` | Optional `is_active`. Lists the tenant's own `KPI` definitions (created lazily, the first time each `KPIType` is ever calculated). |
+| `analytics.dashboard.stats` | P4.6 | `analytics.dashboard.read` | The 6 headline KPIs + Top 5 Products + 5 most recent Orders, always "this calendar month, to date." |
+| `analytics.snapshot.generate` | P4.6 | `analytics.snapshots.create` | Computes and upserts today's `AnalyticsSnapshot` — same idempotent-upsert-by-date shape the scheduled command also relies on. |
+| `analytics.report.export` | P4.6 | `analytics.reports.export` | `format: csv\|pdf`. Only `report_type: kpi_summary` is implemented (§8.53). Writes to the `public` disk, returns a URL (an MCP JSON body can't carry raw file bytes). |
 
 **Deliberately NOT wired to MCP** despite the underlying Action existing and
 being fully tested (see §8.2 for why, and the same reasoning each time):
@@ -2820,6 +3071,149 @@ authenticated redirect, logout), `tests/Feature/Dashboard/DashboardPagesTest.php
 per resource page, all through the same Actions the MCP layer itself
 uses, no mocking). 551 tests total, zero regressions.
 
+### 7.18 Phase 4, Stage 6 — Advanced Analytics & KPIs
+
+New Domain: `Entities/{KPI,KPIValue,AnalyticsSnapshot}`, `ValueObjects/{KPIType,TimePeriod,Money}`,
+`Services/{KPICalculatorInterface,RevenueCalculator,OrderCalculator,CustomerCalculator,ConversionRateCalculator}`,
+`Repositories/{KPIRepositoryInterface,AnalyticsSnapshotRepositoryInterface}`,
+`Exceptions/{KPINotFoundException,InvalidTimePeriodException}`. New
+Application: `Actions/{CalculateKPIAction,GetKPIAction,ListKPIsAction,
+GenerateSnapshotAction,GetDashboardStatsAction,ExportReportAction}`,
+`Services/{ChartDataProvider,ReportExporter}`,
+`DTOs/{KPIData,KPIValueData,AnalyticsSnapshotData,DashboardStatsData,ChartData}`.
+New Infrastructure: 3 Eloquent Models, 2 Eloquent Repositories. 3
+additive migrations. `AnalyticsServiceProvider` + `AnalyticsCapabilities`
+manifest + `AnalyticsCapabilitiesSeeder`. New top-level:
+`GenerateAnalyticsSnapshotCommand`, Dashboard `AnalyticsController` +
+`/dashboard/analytics` page, Chart.js (npm), `barryvdh/laravel-dompdf`
+(composer).
+
+**The single biggest correction this session has made — confirmed with
+the user before writing any code, not decided silently.** The request's
+own Domain Services list (`RevenueCalculator`/`OrderCalculator`/
+`CustomerCalculator`) implied re-querying Commerce's/Loyalty's tables from
+scratch for KPIs Reporting (Phase 3, §7.11) already computes — Total
+Revenue, Total Orders, Top Products, Loyalty's points totals. Building
+that would have created two independent, potentially-diverging
+implementations of the identical SUM/COUNT/GROUP BY aggregate. Asked the
+user directly: reuse Reporting, or build fully independent duplicate
+logic? Confirmed: reuse. `CalculateKPIAction` (the one entry point every
+KPI — MCP, the Dashboard's 6 cards, the daily Snapshot — is computed
+through) calls Reporting's own `Infrastructure\Queries\{Sales,Revenue,
+TopProducts,TopCustomers,Loyalty}QueryBuilder` directly, plus Reporting's
+own `DateRange` VO. This is a second, narrower application of the exact
+CQRS Read-Model exception `SalesQueryBuilder`'s own docblock already
+established for Reporting itself (§7.11) — not a new kind of coupling,
+just one more module reaching into the same, already-accepted read-only
+seam. Deliberately calls the Query Builders, never Reporting's own
+`Generate*ReportAction`s — those Actions persist a `Report`+`ReportResult`
+row on every call (correct for an Agent explicitly running a report;
+wrong for a cache-miss KPI read that would spam that table). One new
+method was added to Reporting's own `SalesQueryBuilder` for this stage —
+`ordersByDay()` (the Dashboard's Orders chart needs a per-day order
+*count*, `byDay()` only gives per-day sales *sum*) — the identical query
+shape, just a different aggregate function, kept on the same class rather
+than inventing a new one.
+
+**The 4 requested Domain Calculators only own KPIs Reporting has no
+equivalent for at all**: `RevenueCalculator` (`Revenue` — near-passthrough,
+routed through the same interface uniformly — and `RevenueGrowthRate`,
+the one real derived number, `null` rather than a divide-by-zero crash
+when the prior period had no revenue), `OrderCalculator` (`TotalOrders`
+passthrough, `AverageOrderValue`), `CustomerCalculator` (`TotalCustomers`/
+`NewCustomers` from `CustomerRepositoryInterface::listByTenant()`,
+`CustomerRetentionRate`/`CustomerLifetimeValue` — both **documented
+simplifications**: retention = repeat-order customers ÷ all ordering
+customers *in the period* from Reporting's own `TopCustomersQueryBuilder`,
+not a longer-horizon cohort model; lifetime value = period revenue ÷
+distinct ordering customers, not a discounted-future-value model — the
+same "real, working, honestly-scoped-down" precedent `ExpirePointsAction`'s
+simplified FIFO already set, §7.10/§8.26), `ConversionRateCalculator`
+(Cart -> Order, via the new `CartRepositoryInterface::countCreatedBetween()`).
+All 4 are pure, framework-free — `KPICalculatorInterface::calculate(array): array`
+takes primitives `CalculateKPIAction` already fetched and returns derived
+numbers, never touching a Repository or Query Builder itself, the same
+shape `PricingService`/`WorkflowEvaluator`/`TemplateRenderer` already
+establish.
+
+**2 new, narrowly-scoped Repository methods, added unprompted (§3
+pattern #12)**: `CartRepositoryInterface::countCreatedBetween()` (nothing
+before this needed a bare Cart count in a window) and
+`InventoryRepositoryInterface::listLowStock()` (nothing before this
+needed to list Inventory across every Product for a tenant — "low stock"
+uses `available()`, the same on-hand-minus-reserved definition
+`CheckInventoryAction` already uses, not raw on-hand alone).
+
+**`value_currency` doubles as a unit tag for non-monetary KPIs** — the
+migration's own schema (`value_amount`/`value_currency`) is inherently
+Money-shaped, but most KPIs aren't money. Rather than adding new columns,
+`KPIValueData`'s own docblock documents the convention: `PCT` (a
+percentage, `amount` scaled ×100 for 2-decimal integer precision — HANDOFF
+gotcha #4, never a float column), `CNT` (a plain count), `PTS` (loyalty
+points), or `LST` (the real payload lives in `metadata`, `amount` is a
+meaningless 0 — used by `TopProducts`/`LowStockProducts`). One real bug
+surfaced by this convention during testing: `Money::fromAmount()`'s own
+currency validation requires *exactly* 3 uppercase letters — the first
+draft used `'LIST'` (4 letters) as the tag, which threw
+`InvalidArgumentException` on every `TopProducts`/`LowStockProducts`
+calculation the moment a real request exercised it (the Dashboard Home
+page, which always requests `top_products`). Renamed to the 3-letter
+`LST` everywhere (code, Blade views, docblocks) once caught.
+
+**A real, pre-existing bug from Stage 5, caught by this stage's own
+"no tenants yet" test case.** All six of Stage 5's tenant-selector
+Dashboard controllers (`Dashboard`/`Product`/`Order`/`Notification`/
+`Settings`/and this stage's own new `Analytics` controller) used
+`$tenants[0]->id() ?? null` to default to the first Tenant when none was
+selected. When `$tenants` is empty, `$tenants[0]` itself throws/warns
+"Undefined array key 0" *before* `??`/`?->` ever gets a chance to run —
+neither operator guards the array-access step, only a null *result* of
+one. Every prior Stage 5 test happened to always have at least one Tenant
+already created, so this never surfaced until this stage's own
+`test_dashboardHome_withNoTenants_showsNoDataInsteadOfError` test
+deliberately started from an empty database. Fixed in all six controllers
+to `($tenants[0] ?? null)?->id()` — `??` guards the array access first,
+*then* `?->` guards the method call on whatever it returned.
+
+**Deliberately dropped `tenant_id` from 3 of the request's own MCP input
+schemas** — `analytics.dashboard.stats`, `analytics.snapshot.generate`,
+and `analytics.kpi.list` each named an optional caller-supplied
+`tenant_id` input in the request. Every other MCP capability in this
+codebase, without exception, scopes exclusively to the authenticated
+Agent's own `AuthContext::$tenantId` — accepting a caller-supplied tenant
+id here would let any Agent read a *different* Tenant's revenue, customer
+count, or order history just by passing its id, a genuine cross-tenant
+data leak this stage's own request would have introduced. Caught and
+corrected during planning, documented in `AnalyticsCapabilities`'s own
+docblock rather than implemented literally.
+
+**Export builds a generic `ReportExporter` (headers + rows -> CSV/PDF
+bytes)**, deliberately knowing nothing about KPI/Analytics semantics, so
+both `ExportReportAction` (MCP's own path — writes to the `public` disk,
+`analytics-exports/`, and returns a URL, since an MCP JSON response body
+can't carry raw file bytes) and the Dashboard's own
+`AnalyticsController::exportCsv()`/`exportPdf()` (a browser request
+already holds the connection open — streams the exact same bytes straight
+back with `Content-Disposition: attachment`, no disk round-trip needed)
+reuse it identically. `report_type` only supports `kpi_summary` this
+stage (the 6 headline KPIs) — exporting one of Reporting's own 5 report
+types instead is real future work (§9), not built here.
+
+No capability/permission renames this stage — every one of the 5
+requested `analytics.*` names was already exactly 3 dot-separated
+segments.
+
+New tests: `tests/Unit/Analytics/{RevenueCalculatorTest,OrderCalculatorTest,
+CustomerCalculatorTest,ConversionRateCalculatorTest,TimePeriodTest}.php`
+(4+4+5+2+4, framework-free), `tests/Feature/Analytics/AnalyticsCapabilityTest.php`
+(2 — the literal end-to-end scenario: 10 real paid Orders with different
+amounts -> Revenue/AOV match the real numbers -> Snapshot persisted ->
+Dashboard stats match -> tenant isolation -> CSV/PDF export, real files
+asserted via `Storage::fake`), `tests/Feature/Dashboard/AnalyticsPageTest.php`
+(5 — Home page KPI cards/charts render, the empty-tenants bug's own
+regression test, the Analytics filter form, both export routes' real
+download headers). 577 tests total, zero regressions.
+
 ---
 
 ## 8. Known technical debt (ranked, carried over + Phase 2 additions)
@@ -3090,7 +3484,9 @@ uses, no mocking). 551 tests total, zero regressions.
     text in `docs/api-reference.md`/`GET /mcp/v1/capabilities`) are not
     translated** (§7.16) — only error messages and Notification Templates
     are multi-language this stage. Translating all 65 capability
-    descriptions across nine `*Capabilities.php` manifests was judged out
+    descriptions that existed at the time, across the nine
+    `*Capabilities.php` manifests that existed then (now 70 across ten,
+    after Analytics — §7.18), was judged out
     of scope for an infrastructure stage; the mechanism (`TranslationServiceInterface`)
     is in place if a future stage wants this.
 47. **Tenant has no Timezone/Currency concept** (§7.17) — the Dashboard's
@@ -3120,6 +3516,34 @@ uses, no mocking). 551 tests total, zero regressions.
     modeled but every route this stage built is gated by the `admin`
     middleware alone; a real distinction (e.g. an Operator who can view
     but not create/edit) is unbuilt.
+52. **`CustomerRetentionRate`/`CustomerLifetimeValue` are documented
+    simplifications, not a true cohort/predictive model** (§7.18) —
+    retention only looks at repeat-order customers *within the requested
+    period itself* (via `TopCustomersQueryBuilder`, capped at a large
+    bound), not a longer-horizon "did they come back next month" metric;
+    lifetime value is period-revenue-÷-distinct-customers, not a
+    discounted future-value model. Both are real, working, and honestly
+    scoped down — a precise version is real future work.
+53. **`analytics.report.export`/the Dashboard's own export only cover the
+    6-KPI summary (`report_type: kpi_summary`)** (§7.18) — exporting one
+    of Reporting's own 5 report types (Sales/Revenue/Top Products/Top
+    Customers/Loyalty) as CSV/PDF instead is unbuilt; `ReportExporter`
+    itself is already generic enough (`headers + rows -> bytes`) to
+    support this without changes, only a new row-building call site is
+    needed.
+54. **PDF export renders a single unstyled HTML table, no branding/layout**
+    (§7.18) — `ReportExporter::toPdf()` builds a minimal inline
+    `<table>`, not a real templated report; functional (the E2E scenario's
+    own "file downloads" requirement), not polished.
+55. **No per-KPI-type historical drill-down UI** — `KPIRepositoryInterface::listValues()`
+    already exists (every `KPIValue` a Tenant has ever had computed, most
+    recent first) but no Dashboard page reads it back; the Analytics
+    page's own filter form only ever shows the *current* calculation, not
+    a trend of past ones for the same KPI.
+56. **Low stock threshold (10 units) and Top Products limit (5) are both
+    hardcoded constants on `CalculateKPIAction`** (§7.18) — not
+    per-tenant configurable; a real "alert me below N units" feature
+    would need this to become a Tenant- or KPI-level setting.
 
 ---
 
@@ -3127,20 +3551,29 @@ uses, no mocking). 551 tests total, zero regressions.
 
 Phase 2 (Commerce, all 6 Stages) and Phase 3 (CRM, Finance, Workflows,
 Loyalty, Reporting — all 5 Stages) are fully complete. Phase 4
-(Shipping & Logistics) has five Stages done — Shipping Foundation, the
+(Shipping & Logistics) has six Stages done — Shipping Foundation, the
 Shipping Provider Connector (§7.14), the Notifications Module (§7.15),
-the i18n Infrastructure (§7.16), and the Admin Dashboard + Human
-Authentication (§7.17). The Tech Debt Sprint (§7.13) ran between Stages 1
-and 2, closing the scheduler gap and the `CheckInventoryAction` re-check
-bug that used to top this list. Candidates worth raising with whoever's
-driving scope next, roughly in order of how much they'd reuse what
-already exists:
+the i18n Infrastructure (§7.16), the Admin Dashboard + Human
+Authentication (§7.17), and Advanced Analytics & KPIs (§7.18). The Tech
+Debt Sprint (§7.13) ran between Stages 1 and 2, closing the scheduler gap
+and the `CheckInventoryAction` re-check bug that used to top this list.
+Candidates worth raising with whoever's driving scope next, roughly in
+order of how much they'd reuse what already exists:
 
+- **Export one of Reporting's own 5 report types (not just the 6-KPI
+  summary)** (§8.53) — `ReportExporter` is already generic enough
+  (`headers + rows -> CSV/PDF bytes`); only a new row-building call site
+  per report type is needed, the same shape `ExportReportAction`'s own
+  `buildKpiSummaryRows()` already demonstrates.
 - **A `/dashboard/users` page** (§8.49) — `CreateUserAction`/`UpdateUserAction`/
   `GetUserAction`/`ListUsersAction` all exist and are tested; only the
   page itself (+ routes + a controller, the same shape every other
   Dashboard resource already has) is missing, since the 8 requested pages
   didn't include one.
+- **A per-KPI-type historical drill-down UI** (§8.55) —
+  `KPIRepositoryInterface::listValues()` already returns every past
+  computation for a KPI, most recent first; no Dashboard page reads it
+  back yet.
 - **A password-reset flow** (§8.50) — `password_reset_tokens` has existed
   since Phase 1 with zero code touching it.
 - **A real `Operator` vs. `Admin` access distinction** (§8.51) — both
@@ -3207,7 +3640,7 @@ already exists:
   `OrderConnectorInterface` still has no implementation.
 - **A dedicated `capabilities:sync` artisan command**, graduating away from
   the seeder pattern — flagged as an open decision since Phase 1, still
-  open, now with 65 capabilities across nine seeders instead of 3.
+  open, now with 70 capabilities across ten seeders instead of 3.
 
 Whatever comes next, follow §3's patterns and check §8 before assuming a
 piece of the puzzle doesn't already exist.

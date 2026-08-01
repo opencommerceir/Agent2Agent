@@ -30,7 +30,7 @@ class SettingsController extends Controller
     public function index(Request $request): View
     {
         $tenants = $this->tenants->all();
-        $tenantId = $request->integer('tenant_id') ?: ($tenants[0]->id() ?? null);
+        $tenantId = $request->integer('tenant_id') ?: (($tenants[0] ?? null)?->id());
         $tenant = $tenantId !== null ? $this->tenants->findById($tenantId) : null;
 
         return view('dashboard.settings.index', [

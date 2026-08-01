@@ -88,4 +88,33 @@ final class SalesQueryBuilder
 
         return $byDay;
     }
+
+    /**
+     * Added for Analytics' own Dashboard Orders chart (Phase 4 Stage 6,
+     * §7.18) — the exact same shape `byDay()` already has, just `COUNT(*)`
+     * instead of `SUM(total_amount)`. Kept on this class rather than a
+     * separate one since it's the identical query shape against the same
+     * table, just a different aggregate function.
+     *
+     * @return array<string, int> day (Y-m-d) => order count
+     */
+    public function ordersByDay(int $tenantId, DateRange $dateRange): array
+    {
+        $rows = Order::query()
+            ->where('tenant_id', $tenantId)
+            ->whereNotIn('status', self::EXCLUDED_STATUSES)
+            ->whereBetween('created_at', [$dateRange->start(), $dateRange->end()])
+            ->selectRaw('DATE(created_at) as day, COUNT(*) as total')
+            ->groupBy('day')
+            ->orderBy('day')
+            ->get();
+
+        $byDay = [];
+
+        foreach ($rows as $row) {
+            $byDay[$row->day] = (int) $row->total;
+        }
+
+        return $byDay;
+    }
 }

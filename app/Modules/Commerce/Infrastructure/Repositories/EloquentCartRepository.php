@@ -55,6 +55,14 @@ class EloquentCartRepository implements CartRepositoryInterface
             ->all();
     }
 
+    public function countCreatedBetween(int $tenantId, DateTimeImmutable $start, DateTimeImmutable $end): int
+    {
+        return CartModel::query()
+            ->where('tenant_id', $tenantId)
+            ->whereBetween('created_at', [$start, $end])
+            ->count();
+    }
+
     public function save(CartEntity $cart): CartEntity
     {
         return DB::transaction(function () use ($cart) {

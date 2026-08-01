@@ -23,6 +23,7 @@
                 <a href="{{ route('dashboard.products.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.products.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nav.products') }}</a>
                 <a href="{{ route('dashboard.orders.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.orders.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nav.orders') }}</a>
                 <a href="{{ route('dashboard.notifications.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.notifications.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nav.notifications') }}</a>
+                <a href="{{ route('dashboard.analytics.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.analytics.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nav.analytics') }}</a>
                 <a href="{{ route('dashboard.settings.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.settings.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nav.settings') }}</a>
             </nav>
         </aside>

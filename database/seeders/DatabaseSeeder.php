@@ -32,5 +32,6 @@ class DatabaseSeeder extends Seeder
         $this->call(ReportingCapabilitiesSeeder::class);
         $this->call(ShippingCapabilitiesSeeder::class);
         $this->call(NotificationsCapabilitiesSeeder::class);
+        $this->call(AnalyticsCapabilitiesSeeder::class);
     }
 }

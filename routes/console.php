@@ -1,6 +1,7 @@
 <?php
 
 use App\Console\Commands\ExpireLoyaltyPointsCommand;
+use App\Console\Commands\GenerateAnalyticsSnapshotCommand;
 use App\Console\Commands\MarkAbandonedCartsCommand;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -27,3 +28,5 @@ Artisan::command('inspire', function () {
 Schedule::command(ExpireLoyaltyPointsCommand::class)->daily()->at('02:00')->withoutOverlapping();
 
 Schedule::command(MarkAbandonedCartsCommand::class)->hourly()->withoutOverlapping();
+
+Schedule::command(GenerateAnalyticsSnapshotCommand::class)->daily()->at('01:00')->withoutOverlapping();

@@ -27,7 +27,7 @@ class ProductController extends Controller
     public function index(Request $request): View
     {
         $tenants = $this->tenants->all();
-        $tenantId = $request->integer('tenant_id') ?: ($tenants[0]->id() ?? null);
+        $tenantId = $request->integer('tenant_id') ?: (($tenants[0] ?? null)?->id());
 
         $products = $tenantId !== null
             ? $this->listProducts->execute(['query' => $request->string('query')->toString() ?: null], $tenantId)['products']

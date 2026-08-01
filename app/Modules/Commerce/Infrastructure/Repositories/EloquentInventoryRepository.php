@@ -30,6 +30,16 @@ class EloquentInventoryRepository implements InventoryRepositoryInterface
         return $model ? $this->toEntity($model) : null;
     }
 
+    public function listLowStock(int $tenantId, int $threshold): array
+    {
+        return InventoryModel::query()
+            ->where('tenant_id', $tenantId)
+            ->whereRaw('(quantity_on_hand - quantity_reserved) < ?', [$threshold])
+            ->get()
+            ->map(fn (InventoryModel $model) => $this->toEntity($model))
+            ->all();
+    }
+
     public function save(InventoryEntity $inventory): InventoryEntity
     {
         $model = $inventory->id()

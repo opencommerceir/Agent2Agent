@@ -1,6 +1,7 @@
 <?php
 
 use App\Core\CoreServiceProvider;
+use App\Modules\Analytics\AnalyticsServiceProvider;
 use App\Modules\Commerce\CommerceServiceProvider;
 use App\Modules\CRM\CRMServiceProvider;
 use App\Modules\Demo\DemoServiceProvider;
@@ -21,6 +22,13 @@ return [
     WorkflowsServiceProvider::class,
     LoyaltyServiceProvider::class,
     ReportingServiceProvider::class,
+    // Registered after Reporting — Analytics' own CalculateKPIAction
+    // depends directly on Reporting's Infrastructure\Queries\* Query
+    // Builders (plain autowired concrete classes, not bound here either
+    // way), a readability choice mirroring Notifications' own comment
+    // below, not a correctness requirement (register() always runs for
+    // every provider before any boot()).
+    AnalyticsServiceProvider::class,
     ShippingServiceProvider::class,
     // Registered after Commerce/Loyalty/Shipping — Notifications' own
     // Listeners depend on Domain Events those providers' modules

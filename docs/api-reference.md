@@ -14,6 +14,11 @@ from anywhere else, so it stays accurate to what's actually wired.
 - **Rate limit**: 100 requests/minute per Agent by default
   (`MCP_RATE_LIMIT_PER_MINUTE` in `.env`), enforced independently per Agent
   — one Agent hitting its limit never affects another.
+- **Language**: pass `?lang=fa` (or `en`) as a query parameter, or an
+  `Accept-Language` header — checked in that order, falling back to the
+  calling Agent's own Tenant's configured default, then English. Only
+  affects the error envelope's `localized_message` field (below); every
+  capability's own `data` payload is unaffected. Supported: `en`, `fa`.
 
 ---
 
@@ -43,10 +48,19 @@ Error:
 {
     "error": {
         "code": "SOME_CODE",
-        "message": "Human-readable reason"
+        "message": "Human-readable reason",
+        "localized_message": "Same reason, translated per the Language rules above"
     }
 }
 ```
+
+`message` is always the original, exception-specific text in English
+(e.g. `"Order [42] does not exist."`) — never translated, so scripts
+parsing it keep working regardless of caller language. `localized_message`
+is a second, purely additive field: a generic, translated label for the
+error *code* itself (e.g. `NOT_FOUND` → "منبع درخواستی یافت نشد" in
+Farsi), meant for displaying to a human end user, not for programmatic
+matching.
 
 ---
 
@@ -250,6 +264,40 @@ plain HTTP POST), `sms` (an explicit stub — no real gateway exists yet),
 not yet wired to any Listener). Preferences are opt-*out*: no Preference
 row at all means "send" — a recipient only ever suppresses a type+channel
 by explicitly disabling it.
+
+---
+
+### Analytics
+
+KPIs, daily Snapshots, and Dashboard/export data — reuses Reporting's own
+Query Builders for every KPI Reporting already aggregates (Revenue, Total
+Orders, Top Products, Loyalty points/accounts); only Conversion Rate,
+Revenue Growth Rate, New/Total Customers, Customer Retention Rate/Lifetime
+Value, and Low Stock Products are computed independently.
+
+| Capability | Description | Input | Output | Permission |
+|---|---|---|---|---|
+| `analytics.kpi.calculate` | Calculate a single KPI for a date range — cached 1 hour. | `kpi_type: string, time_period: string, start_date: date, end_date: date` | `kpi: array` | `analytics.kpis.read` |
+| `analytics.kpi.list` | List the tenant's own KPI definitions (created lazily on first calculation). | — | `kpis: array` | `analytics.kpis.read` |
+| `analytics.dashboard.stats` | The 6 headline KPIs + Top 5 Products + 5 most recent Orders, for the current calendar month. | — | `stats: array` | `analytics.dashboard.read` |
+| `analytics.snapshot.generate` | Compute and upsert today's AnalyticsSnapshot for the tenant. | — | `snapshot: array` | `analytics.snapshots.create` |
+| `analytics.report.export` | Export the 6-KPI summary report as CSV or PDF — returns a downloadable URL (only `report_type: kpi_summary` is implemented so far). | `report_type: string, format: string, start_date: date, end_date: date` | `file_url: string` | `analytics.reports.export` |
+
+`kpi_type` accepts `revenue`, `revenue_growth_rate`, `total_orders`,
+`average_order_value`, `total_customers`, `new_customers`,
+`conversion_rate`, `top_products`, `low_stock_products`,
+`loyalty_points_earned`, `loyalty_points_redeemed`,
+`active_loyalty_accounts`, `customer_retention_rate`, or
+`customer_lifetime_value`. `time_period` accepts `hourly`, `daily`,
+`weekly`, `monthly`, or `yearly` — it only labels the computed
+`KPIValue`'s own period bucket, it does not itself change what
+`start_date`/`end_date` you pass. None of these 5 capabilities accept a
+`tenant_id` input — like every other capability in this API, they scope
+exclusively to the calling Agent's own tenant.
+
+Point-in-time daily Snapshots also run automatically via the scheduled
+`analytics:generate-snapshot` command (daily, 01:00) — not itself an MCP
+capability.
 
 ---
 

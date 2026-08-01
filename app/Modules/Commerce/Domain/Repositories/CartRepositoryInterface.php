@@ -22,5 +22,14 @@ interface CartRepositoryInterface
      */
     public function findStaleActive(int $tenantId, DateTimeImmutable $before): array;
 
+    /**
+     * Added for Analytics' own Conversion Rate KPI (Phase 4 Stage 6,
+     * §7.18) — nothing before this needed a bare count of Carts created
+     * in a window, only single-Cart lookups or the abandoned-Cart scan
+     * existed. A plain `COUNT(*)`, not a full Entity hydration (rule §e
+     * "از Eloquent aggregates استفاده کن, نه loop در PHP").
+     */
+    public function countCreatedBetween(int $tenantId, DateTimeImmutable $start, DateTimeImmutable $end): int;
+
     public function save(Cart $cart): Cart;
 }

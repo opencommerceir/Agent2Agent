@@ -20,5 +20,17 @@ interface InventoryRepositoryInterface
      */
     public function findByProductForUpdate(int $productId, int $tenantId): ?Inventory;
 
+    /**
+     * Added for Analytics' own Low Stock Products KPI (Phase 4 Stage 6,
+     * §7.18) — nothing before this needed to list Inventory across every
+     * Product for a tenant, only single-Product lookups existed.
+     * "Low stock" means available() (on-hand minus reserved) below
+     * $threshold — the same available-stock definition
+     * `CheckInventoryAction` already uses, not raw on-hand alone.
+     *
+     * @return list<Inventory>
+     */
+    public function listLowStock(int $tenantId, int $threshold): array;
+
     public function save(Inventory $inventory): Inventory;
 }

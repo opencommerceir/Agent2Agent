@@ -30,7 +30,7 @@ class OrderController extends Controller
     public function index(Request $request): View
     {
         $tenants = $this->tenants->all();
-        $tenantId = $request->integer('tenant_id') ?: ($tenants[0]->id() ?? null);
+        $tenantId = $request->integer('tenant_id') ?: (($tenants[0] ?? null)?->id());
         $status = $request->string('status')->toString() ?: null;
 
         $orders = $tenantId !== null

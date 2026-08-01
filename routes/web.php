@@ -3,6 +3,7 @@
 use App\Core\Interfaces\HTTP\Controllers\Auth\LoginController;
 use App\Core\Interfaces\HTTP\Controllers\Auth\LogoutController;
 use App\Http\Controllers\Dashboard\AgentController;
+use App\Http\Controllers\Dashboard\AnalyticsController;
 use App\Http\Controllers\Dashboard\DashboardController;
 use App\Http\Controllers\Dashboard\NotificationController;
 use App\Http\Controllers\Dashboard\OrderController;
@@ -51,6 +52,10 @@ Route::middleware('auth')->group(function () {
         Route::post('/orders/{orderId}/cancel', [OrderController::class, 'cancel'])->name('orders.cancel');
 
         Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+
+        Route::get('/analytics', [AnalyticsController::class, 'index'])->name('analytics.index');
+        Route::get('/analytics/export/csv', [AnalyticsController::class, 'exportCsv'])->name('analytics.export.csv');
+        Route::get('/analytics/export/pdf', [AnalyticsController::class, 'exportPdf'])->name('analytics.export.pdf');
 
         Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
         Route::put('/settings', [SettingsController::class, 'update'])->name('settings.update');
