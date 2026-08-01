@@ -224,6 +224,35 @@ defaults to `SHIPPING_PROVIDER` (`.env`, default `mock`).
 
 ---
 
+### Notifications
+
+The platform's first genuinely cross-cutting module — reacts to events
+from Shipping, Commerce, and Loyalty, and can also be called directly.
+Four channels: `email` (real, via Laravel's own mailer), `webhook` (real,
+plain HTTP POST), `sms` (an explicit stub — no real gateway exists yet),
+`in_app` (the persisted Notification row itself).
+
+| Capability | Description | Input | Output | Permission |
+|---|---|---|---|---|
+| `notification.message.send` | Render the active Template for a type+channel with `variables` and send it directly to a raw recipient (email/phone/URL). No Preference check — there is no recipient id to check one against. | `type: string, recipient: string, channel: string, variables: object` | `notification: array` | `notifications.messages.send` |
+| `notification.template.create` | Create a NotificationTemplate: a subject/body pair with `{{variable}}` placeholders for a given type+channel. | `type: string, channel: string, subject_template: string, body_template: string` | `template: array` | `notifications.templates.manage` |
+| `notification.template.get` | Get a NotificationTemplate by id. | `template_id: integer` | `template: array` | `notifications.templates.read` |
+| `notification.template.list` | List the tenant's NotificationTemplates, optionally filtered by type or channel. | — | `templates: array` | `notifications.templates.read` |
+| `notification.channel.configure` | Configure (create or update) a tenant's NotificationChannel settings. | `channel: string, config: object` | `channel: array` | `notifications.channels.manage` |
+| `notification.message.get` | Get a sent Notification by id. | `notification_id: integer` | `notification: array` | `notifications.messages.read` |
+| `notification.message.list` | List the tenant's sent Notifications, optionally filtered by type or status. | — | `notifications: array` | `notifications.messages.read` |
+| `notification.preference.set` | Enable or disable one notification type+channel combination for a recipient (`customer` or `agent`). | `recipient_type: string, recipient_id: integer, notification_type: string, channel: string, is_enabled: boolean` | `preference: array` | `notifications.preferences.manage` |
+
+`notification_type`/`type` accepts `order_placed` (wired to
+`OrderPlacedNotificationListener`), `shipment_status_changed` (wired to
+`ShipmentStatusChangedListener`), `points_earned` (wired to
+`PointsEarnedListener`, always `in_app`), or `ticket_created` (modeled,
+not yet wired to any Listener). Preferences are opt-*out*: no Preference
+row at all means "send" — a recipient only ever suppresses a type+channel
+by explicitly disabling it.
+
+---
+
 ## Capabilities Not Yet Wired to MCP
 
 The following Actions are fully built and tested but have no MCP

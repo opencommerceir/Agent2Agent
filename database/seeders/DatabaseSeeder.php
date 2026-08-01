@@ -30,5 +30,6 @@ class DatabaseSeeder extends Seeder
         $this->call(LoyaltyCapabilitiesSeeder::class);
         $this->call(ReportingCapabilitiesSeeder::class);
         $this->call(ShippingCapabilitiesSeeder::class);
+        $this->call(NotificationsCapabilitiesSeeder::class);
     }
 }

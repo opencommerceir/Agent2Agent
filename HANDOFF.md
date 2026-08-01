@@ -3,8 +3,9 @@
 **Status: Phase 1 (Core + MCP Gateway), Phase 2 (Commerce, all 6
 Stages), and Phase 3 (Domain Expansion, all 5 Stages — CRM, Finance,
 Workflows, Loyalty, Reporting) are complete. Phase 4 (Shipping &
-Logistics) is under way: Stage 1 (Shipping Foundation) and Stage 2
-(Shipping Provider Connector, §7.14) are both complete.
+Logistics) is under way: Stage 1 (Shipping Foundation), Stage 2
+(Shipping Provider Connector, §7.14), and Stage 3 (Notifications Module,
+§7.15) are all complete.
 Finance supplies Commerce's own checkout pricing with real tax rates
 through an Interface Commerce itself owns (§7.8). Workflows (§7.9) and
 Loyalty (§7.10) each introduce a real cross-module Domain Event
@@ -55,19 +56,40 @@ detail, including four places the request's own file layout would have
 duplicated an abstraction or hit a real domain conflict, and what was
 built instead.**
 
-483 tests passing, zero known regressions. Next up: another Phase 4
+**Stage 3 (Notifications Module) is the platform's first genuinely
+cross-cutting Domain Module — every prior one served a single business
+capability; Notifications reacts to events dispatched by Shipping,
+Commerce, *and* Loyalty (three source modules into one sink module,
+through their own published Repository Interfaces, the same
+Dependency-Inversion direction every cross-module integration already
+uses, just fanned out from three modules instead of one). It's also the
+third time this codebase builds the exact `ConnectorRegistry`/
+`ShippingProviderRegistry` in-memory-registry shape (`ChannelSenderRegistry`,
+one Sender per channel — `Email` real via Laravel's own `Mail` facade,
+`Webhook` real via Guzzle, `Sms` an explicit stub with no real gateway,
+`InApp` a trivial no-op), and it introduces this codebase's first retry-
+with-exponential-backoff logic (`SendNotificationAction`, 3 attempts,
+50ms/100ms/200ms). Three request/codebase mismatches were caught during
+planning — a missing 4th Repository interface
+(`NotificationPreferenceRepositoryInterface`), 3 capability names + 2
+permission names that hit the usual 3-segment gotcha, and keeping
+`NotificationDispatcher` a pure Domain decision function instead of a
+Repository-querying one. See §7.15 for the full detail.**
+
+497 tests passing, zero known regressions. Next up: another Phase 4
 Shipping/Logistics stage (Shipping Zones, partial fulfillment, folding
 `shipping_cost` into checkout pricing — §8.37/§8.35/§8.36), a real
 carrier implementation of `ShippingProviderInterface` (USPS/FedEx/DHL —
 `MockShippingProviderAdapter` is now the template, the same role
 `WooCommerceProductConnector` played for a second real Commerce
-Connector), wiring `HighValueOrderListener` (still scaffolded, still the
-cheapest available increment — §9), or any remaining deferred item in
-§8/§9. Note: `WorkflowsCapabilityTest`'s own docblock still describes
-working around the now-fixed §8.22 ceiling (6-on-hand/order-3, kept
-under half of stock) — harmless (the test still passes either way) but
-worth a quick cleanup pass since the constraint that motivated it is
-gone.**
+Connector), a real SMS gateway behind `SmsSender` (still an explicit
+stub — §7.15/§8), wiring `HighValueOrderListener`/CRM's own
+`ticket_created` notification type (both scaffolded, still the cheapest
+available increments — §9), or any remaining deferred item in §8/§9.
+Note: `WorkflowsCapabilityTest`'s own docblock still describes working
+around the now-fixed §8.22 ceiling (6-on-hand/order-3, kept under half
+of stock) — harmless (the test still passes either way) but worth a
+quick cleanup pass since the constraint that motivated it is gone.**
 
 This file is a working-state snapshot for picking up development in a new
 session. It assumes you've already read `CLAUDE.md` and `docs/*.md` (the
@@ -562,6 +584,68 @@ app/Modules/Shipping/              new in Phase 4
 config/shipping.php                new in Stage 2 — SHIPPING_PROVIDER*
                                    env vars (mirrors config/commerce.php)
 
+app/Modules/Notifications/         new in Phase 4, Stage 3 (§7.15) — the
+                                   first module that depends on three
+                                   other modules' Repository Interfaces
+                                   (Commerce, Loyalty) at once, plus
+                                   Shipping's own Domain Event
+├── Domain/
+│   ├── Entities/                 Notification, NotificationTemplate,
+│   │                             NotificationChannel, NotificationPreference
+│   ├── ValueObjects/             NotificationType, ChannelType,
+│   │                             DeliveryStatus, Recipient, RecipientType
+│   ├── Events/                   NotificationWasSent, NotificationFailed
+│   │                             (both real) + NotificationWasDelivered
+│   │                             (modeled, nothing dispatches it — §8.40)
+│   ├── Services/                 NotificationDispatcher (pure decision
+│   │                             function), TemplateRenderer (pure
+│   │                             {{variable}} substitution),
+│   │                             ChannelSenderInterface
+│   ├── Repositories/              NotificationRepositoryInterface,
+│   │                              NotificationTemplateRepositoryInterface,
+│   │                              NotificationChannelRepositoryInterface,
+│   │                              + NotificationPreferenceRepositoryInterface
+│   │                              (added unprompted, §7.15)
+│   └── Exceptions/                NotificationNotFoundException,
+│                                  TemplateNotFoundException (both
+│                                  NotFoundExceptionInterface),
+│                                  ChannelSendFailedException (neither
+│                                  marker — never reaches MCPExceptionHandler,
+│                                  caught inside SendNotificationAction)
+├── Application/
+│   ├── Actions/                  SendNotificationAction (retry/backoff
+│   │                             owner), CreateTemplateAction,
+│   │                             GetTemplateAction, ListTemplatesAction,
+│   │                             ConfigureChannelAction,
+│   │                             GetNotificationAction,
+│   │                             ListNotificationsAction,
+│   │                             SetUserPreferenceAction
+│   ├── Services/                 ChannelSenderRegistry (3rd
+│   │                             ConnectorRegistry-shaped registry in
+│   │                             this codebase), EmailSender (real,
+│   │                             Laravel's own Mail facade), WebhookSender
+│   │                             (real, Guzzle), SmsSender (explicit
+│   │                             stub, §8.39), InAppSender (no-op)
+│   ├── DTOs/                     NotificationData, NotificationTemplateData,
+│   │                             NotificationChannelData, +
+│   │                             NotificationPreferenceData (added
+│   │                             alongside the Repository above)
+│   └── Listeners/                ShipmentStatusChangedListener (reacts to
+│                                  Shipping's ShipmentStatusChanged),
+│                                  OrderPlacedNotificationListener (reacts
+│                                  to Commerce's OrderWasPlaced),
+│                                  PointsEarnedListener (reacts to
+│                                  Loyalty's PointsWereEarned) — all 3
+│                                  registered; CRM's ticket_created has no
+│                                  Listener this stage (§8.42)
+├── Infrastructure/
+│   ├── Models/                    4 Eloquent models
+│   └── Repositories/               4 Eloquent repository implementations
+└── NotificationsServiceProvider.php   binds 4 Repository interfaces +
+                                   ChannelSenderRegistry + all 4 Senders,
+                                   Event::listen()s all 3 Listeners,
+                                   registers 8 capability handlers (§6)
+
 app/Modules/Demo/                  unchanged since Phase 1
 
 packages/opencommerce-sdk/         unchanged since Phase 1
@@ -591,10 +675,14 @@ database/
 │   │                                               tracking_events, +orders shipping cols —
 │   │                                               the first later-module migration to
 │   │                                               alter an earlier module's own table, §7.12)
-│   └── 2026_08_01_000043                          (Phase 4.2 — +shipments.provider_name/
-│                                                   provider_tracking_number, both nullable,
-│                                                   no FK, §7.14)
-└── seeders/{DemoCapabilitiesSeeder,CommerceCapabilitiesSeeder,CRMCapabilitiesSeeder,FinanceCapabilitiesSeeder,WorkflowsCapabilitiesSeeder,LoyaltyCapabilitiesSeeder,ReportingCapabilitiesSeeder,ShippingCapabilitiesSeeder}.php
+│   ├── 2026_08_01_000043                          (Phase 4.2 — +shipments.provider_name/
+│   │                                               provider_tracking_number, both nullable,
+│   │                                               no FK, §7.14)
+│   └── 2026_08_01_000044-000047                  (Phase 4.3 — notifications,
+│                                                   notification_templates,
+│                                                   notification_channels,
+│                                                   notification_preferences, §7.15)
+└── seeders/{DemoCapabilitiesSeeder,CommerceCapabilitiesSeeder,CRMCapabilitiesSeeder,FinanceCapabilitiesSeeder,WorkflowsCapabilitiesSeeder,LoyaltyCapabilitiesSeeder,ReportingCapabilitiesSeeder,ShippingCapabilitiesSeeder,NotificationsCapabilitiesSeeder}.php
 
 tests/
 ├── Fixtures/            woocommerce-products-response.json (Stage 6 — reference payload),
@@ -668,7 +756,21 @@ tests/
 ├── Feature/Workflows/   + CartAbandonedListenerTest (Tech Debt Sprint,
 │                        §7.13 — real CartWasAbandoned event, no faking,
 │                        dispatched by the real scheduled command)
-└── 483 tests total, 1147 assertions, ~10s runtime (`php artisan test`)
+├── Unit/Notifications/  2 files — TemplateRendererTest (substitution,
+│                        whitespace, unmatched-placeholder cases),
+│                        NotificationDispatcherTest (every channel-active
+│                        × preference-present/enabled combination), all
+│                        framework-free PHPUnit
+├── Feature/Notifications/  2 files — SendNotificationActionTest (no
+│                        channel configured, disabled preference,
+│                        retry-recovers via a stub sender that fails
+│                        twice then succeeds, retry-exhausted marks
+│                        Failed without throwing) + NotificationCapabilityTest
+│                        (the real Order+Shipment -> real status change
+│                        -> real ShipmentStatusChangedListener -> sent
+│                        Notification -> Preference disabled -> no new
+│                        Notification -> tenant isolation scenario, §7.15)
+└── 497 tests total, 1185 assertions, ~11s runtime (`php artisan test`)
 ```
 
 ---
@@ -903,10 +1005,10 @@ cd packages/opencommerce-sdk; composer install; cd ../..
 
 # Database
 php artisan migrate
-php artisan db:seed   # runs Demo-, Commerce-, CRM-, Finance-, Workflows-, Loyalty-, Reporting-, and ShippingCapabilitiesSeeder
+php artisan db:seed   # runs Demo-, Commerce-, CRM-, Finance-, Workflows-, Loyalty-, Reporting-, Shipping-, and NotificationsCapabilitiesSeeder
 
 # Tests
-php artisan test                                                  # full app suite — 470 tests, ~8s
+php artisan test                                                  # full app suite — 497 tests, ~11s
 cd packages/opencommerce-sdk; vendor/bin/phpunit tests; cd ../..   # SDK's own suite (unaffected by Phase 2)
 
 # Manual/live verification
@@ -935,7 +1037,7 @@ end to end.
 
 ---
 
-## 6. The 57 MCP capabilities that exist right now
+## 6. The 65 MCP capabilities that exist right now
 
 | Capability | Phase/Stage | Permission | Notes |
 |---|---|---|---|
@@ -996,6 +1098,14 @@ end to end.
 | `shipping.provider.rates` | P4.2 | `shipping.providers.read` | Live rates from an external provider (`mock` by default) — `provider` optional. |
 | `shipping.provider.fulfill` | P4.2 | `shipping.providers.create` | Renamed from the requested `shipping.provider.shipment.create` — 4 segments, see §7.14. Records the provider's own tracking number onto the Shipment. |
 | `shipping.tracking.sync` | P4.2 | `shipping.providers.sync` | Looks the Shipment up by its own internal `tracking_number` (not the provider's). Idempotent — a re-sync adds 0 events. |
+| `notification.message.send` | P4.3 | `notifications.messages.send` | Renamed from `notification.send` — 2 segments, see §7.15. Renders the active Template for the type+channel with `variables`; 404 if none is configured. |
+| `notification.template.create` | P4.3 | `notifications.templates.manage` | `{{variable}}` placeholders, not Blade. |
+| `notification.template.get` | P4.3 | `notifications.templates.read` | |
+| `notification.template.list` | P4.3 | `notifications.templates.read` | Optional `type`/`channel`. |
+| `notification.channel.configure` | P4.3 | `notifications.channels.manage` | Upserts by (tenant, channel). |
+| `notification.message.get` | P4.3 | `notifications.messages.read` | Renamed from `notification.get` — same reason as `.send`. |
+| `notification.message.list` | P4.3 | `notifications.messages.read` | Renamed from `notification.list` — same reason. Optional `type`/`status`/`limit`. |
+| `notification.preference.set` | P4.3 | `notifications.preferences.manage` | Upserts by (tenant, recipient_type, recipient_id, notification_type, channel). |
 
 **Deliberately NOT wired to MCP** despite the underlying Action existing and
 being fully tested (see §8.2 for why, and the same reasoning each time):
@@ -1938,6 +2048,175 @@ name/health-check, 3 rates matching the fixture, a valid `TrackingNumber`,
 → tenant-isolation scenario, plus unregistered-provider and
 missing-permission cases). 483 tests total, zero regressions.
 
+### 7.15 Phase 4, Stage 3 — Notifications Module
+
+Entities: `Notification` (one sent/attempted record — `markSent()`/
+`markFailed()`, the only two reachable transitions this stage),
+`NotificationTemplate` (subject/body pair with `{{variable}}`
+placeholders per tenant+type+channel), `NotificationChannel` (one row
+per tenant+channel, upserted by `ConfigureChannelAction`),
+`NotificationPreference` (one opt-in/opt-out row per tenant+recipient+
+type+channel). VOs: `NotificationType` (enum `order_placed`/
+`shipment_status_changed`/`points_earned`/`ticket_created` — the last
+one modeled, no Listener built this stage, same "enum case exists
+before its own Listener does" shape `EventType::CartAbandoned` had
+before the Tech Debt Sprint wired it), `ChannelType` (enum `email`/`sms`/
+`webhook`/`in_app`), `DeliveryStatus` (enum `pending`/`sent`/`delivered`/
+`failed` — `Delivered` is modeled but nothing transitions into it this
+stage, no real delivery-confirmation mechanism exists to drive it, same
+reasoning as below), `Recipient` (thin string wrapper, deliberately no
+format validation since its shape depends on which channel reads it),
+`RecipientType` (enum `customer`/`agent`, added — see below).
+
+**The platform's first genuinely cross-cutting Domain Module** — every
+prior one (CRM, Finance, Workflows, Loyalty, Reporting, Shipping) served
+one business capability; Notifications reacts to events from three
+different source modules (Shipping's `ShipmentStatusChanged`, Commerce's
+`OrderWasPlaced`, Loyalty's `PointsWereEarned`), each through that
+module's own published Repository Interface — the identical
+one-directional Module -> Module Dependency Inversion CRM/Finance/
+Workflows/Loyalty already established, just fanned out from three
+modules into one instead of the usual one-to-one.
+
+**Three places where the request's own file layout needed a
+decision or a correction** — caught during planning, the same discipline
+the Tech Debt Sprint/Shipping Stage 2 each applied to their own
+mismatches:
+1. **3 capability names + 2 permission names hit gotcha #2** —
+   `notification.send`/`.get`/`.list` were each 2 dot-separated segments;
+   renamed to `notification.message.send/get/list` (a sent Notification
+   is fundamentally "a message"). `notifications.send`/`.read`
+   permissions were the same problem — renamed to
+   `notifications.messages.send`/`.read`.
+2. **`NotificationPreferenceRepositoryInterface` wasn't in the request's
+   list of 3** — `NotificationPreference` has its own Entity, migration,
+   and MCP capability but no named Repository, the identical gap
+   Commerce Stage 5's `DiscountRepositoryInterface`/CRM's
+   `TagNotFoundException`/Shipping's `OrderNotFoundException` each filled
+   unprompted (HANDOFF §3 pattern #12) — added as a 4th interface, along
+   with a `NotificationPreferenceData` DTO for the same "every capability
+   returns a *Data DTO" consistency every other module follows.
+3. **`NotificationDispatcher` (Domain/Services) stays a pure decision
+   function** — `shouldSend(?NotificationPreference $preference, bool $channelActive): bool`
+   — never queries a Repository itself (Domain must not depend on
+   Infrastructure), the same "only combines what it's given" shape
+   `WorkflowEvaluator`/`PricingService` already establish.
+   `SendNotificationAction` (Application layer) is the one place that
+   actually fetches the Preference/Channel rows first. Opt-*out* model:
+   no Preference row at all means "send" — matches this stage's own
+   end-to-end test (sending happens by default until a Customer
+   explicitly disables it).
+
+Two small Domain Services/VOs not named in the request but clearly
+implied by its own rules, added the same way: `Domain/Services/TemplateRenderer.php`
+(rule 2's "`{{variable}}` placeholders, not Blade" needed an obvious
+owner — pure, same shape `PricingService`/`ShippingRateCalculator`/
+`WorkflowEvaluator` already have; an unmatched placeholder is left as
+literal `{{name}}` text, not silently blanked, so an incomplete variable
+set is obviously wrong, not quietly wrong) and `Domain/ValueObjects/RecipientType.php`
+(the same type-safety `App\Core\Domain\ValueObjects\MemberType` already
+gives Core).
+
+**`ChannelSenderRegistry` (Application/Services) is the *third* time
+this codebase builds the exact `ConnectorRegistry`/`ShippingProviderRegistry`
+in-memory-lookup-by-key shape** — now a fully established convention.
+Four Senders, one per `ChannelType`, registered in
+`NotificationsServiceProvider::boot()`:
+- `EmailSender` — the one real implementation using an existing
+  framework facade rather than a new outbound port: Laravel's own `Mail`
+  facade (`Mail::raw()`), already safely testable via `MAIL_MAILER=array`
+  in `phpunit.xml` — **no Mock class needed**, unlike every Connector
+  before this, since Laravel already ships a testing-safe fake for mail.
+- `WebhookSender` — real: a Guzzle POST to `$recipient` (the destination
+  URL itself, since a webhook has no separate "address" the way email/SMS
+  do) with `{subject, body}` as JSON.
+- `SmsSender` — **explicitly a stub**, not a real gateway: no SMS
+  provider credentials or API shape were given (unlike Email/Webhook,
+  which both have an obvious real backend already available). Always
+  succeeds unless `simulateFailure()` is set, the same
+  `MockPaymentGateway`/`MockWooCommerceHttpClient` "deliberate, documented
+  test-triggering convention" every prior Mock already establishes. A
+  real gateway is real future work, not silently broken behavior.
+- `InAppSender` — trivial: the persisted `Notification` row *is* the
+  in-app notification (a UI polls `notification.message.list` filtered to
+  `channel: in_app`); this "send" never fails.
+
+**This codebase's first retry-with-exponential-backoff logic**, inside
+`SendNotificationAction`: up to 3 attempts, `usleep()` between them with
+a small exponential base (50ms/100ms/200ms — enough to demonstrate real
+backoff without materially slowing the test suite; the happy path never
+sleeps at all). Marks the `Notification` `Sent` + dispatches
+`NotificationWasSent` on the first attempt that succeeds; marks it
+`Failed` + dispatches `NotificationFailed` — **never throws** — only once
+every attempt is exhausted, satisfying this stage's own rule that a
+channel failure is business-normal, not a system error.
+`tests/Feature/Notifications/SendNotificationActionTest.php` proves the
+retry actually recovers (a stub sender that fails twice then succeeds),
+not just that it eventually gives up.
+
+**Preference checking is conditional on knowing *whose* preference to
+check.** `SendNotificationAction::execute()` takes optional, nullable
+`?RecipientType $recipientType, ?int $recipientId`: a Listener (which
+knows the real Customer id) passes both, and `NotificationDispatcher`
+gates the send on them; the direct `notification.message.send` MCP
+capability (a raw `recipient` string, no id) omits both, so nothing is
+checked — there is structurally no Preference row to look up for a
+caller-supplied string with no owning id. That same direct capability
+renders its subject/body from an active Template the same way every
+Listener does (fetched by `NotificationTemplateRepositoryInterface::findActive()`
+for the given type+channel) — the request's own input schema
+(`type`/`recipient`/`channel`/`variables`, no raw `subject`/`body` fields)
+implies this; a missing active Template is a `TemplateNotFoundException`
+(404), not a silent no-op, since an Agent explicitly asking to send
+something deserves a clear reason it didn't.
+
+**Stays synchronous** — matches this codebase's `QUEUE_CONNECTION=sync`
+default and the fact that no Job class exists anywhere yet.
+`SendNotificationAction`'s own docblock notes that queueing this later
+needs only a Job wrapping this same call, not a structural change —
+rule 4's "async ready" satisfied honestly rather than building unused
+queue scaffolding.
+
+**The 3 requested Listeners**, each the identical shape
+`InventoryLowListener`/`OrderPlacedListener` (Loyalty)/`CartAbandonedListener`
+already establish — depend on the *emitting* module's Repository
+Interfaces, never its Models; silently no-op (never throw) on a
+genuinely normal gap:
+- `ShipmentStatusChangedListener` — fetches the Order (Commerce's
+  `OrderRepositoryInterface`) then the Customer (`CustomerRepositoryInterface`)
+  from `$shipment->orderId()`; skips if the Order has no Customer
+  (nullable since Commerce Stage 4) or no active
+  `shipment_status_changed`/`email` Template exists. Variables:
+  `{{order_number}}`, `{{tracking_number}}`, `{{status}}`,
+  `{{customer_name}}`.
+- `OrderPlacedNotificationListener` — reacts to `OrderWasPlaced` (already
+  carries the full `Order`, no Repository lookup needed there); same
+  Customer lookup/skip shape. Variables: `{{order_number}}`,
+  `{{customer_name}}`.
+- `PointsEarnedListener` — reacts to `PointsWereEarned` (carries the full
+  `LoyaltyAccount`); always `in_app` (no email/phone concept for this
+  one, per the request's own example) — `Recipient` is just the
+  Customer's own id, since `InAppSender` never reads it. Variables:
+  `{{points}}`, `{{new_balance}}`.
+
+CRM's `ticket_created` was **not** wired this stage — no Listener was
+requested for it (only the 3 above were), the same "only what was asked
+for gets wired" restraint `HighValueOrderListener` already established;
+`NotificationType::TicketCreated` exists so a Template/Preference can
+already be configured against it ahead of time.
+
+New tests: `tests/Unit/Notifications/{TemplateRendererTest,NotificationDispatcherTest}.php`
+(8 — substitution/whitespace/unmatched-placeholder cases, every
+channel-active × preference-present/enabled combination),
+`tests/Feature/Notifications/SendNotificationActionTest.php` (4 — no
+channel configured, disabled preference, retry-recovers, retry-exhausted-
+marks-failed-without-throwing), `tests/Feature/Notifications/NotificationCapabilityTest.php`
+(2 — the literal 13-step end-to-end scenario from the request: real
+Order + Shipment → real status change → real `ShipmentStatusChangedListener`
+→ sent Notification with a rendered subject → Preference disabled → no
+new Notification → tenant isolation → filtered list; plus a
+missing-permission case). 497 tests total, zero regressions.
+
 ---
 
 ## 8. Known technical debt (ranked, carried over + Phase 2 additions)
@@ -2157,6 +2436,28 @@ missing-permission cases). 483 tests total, zero regressions.
     the same "optional field simply omitted from inputSchema" convention
     HANDOFF §3 pattern #7 established, but it means a caller can't
     discover it exists without reading this file or the source.
+39. **`SmsSender` is an explicit stub, not a real gateway** (§7.15) — no
+    Twilio-shaped (or any) SMS provider credentials exist; it always
+    succeeds unless `simulateFailure()` is set. A real implementation is
+    the natural next step once real credentials exist to test against
+    honestly, the same reasoning every Connector's own Mock carries.
+40. **`NotificationWasDelivered` is modeled but nothing ever dispatches
+    it** (§7.15) — no real delivery-confirmation mechanism (an email
+    open-tracking pixel, an SMS carrier webhook) exists yet; every
+    Notification's terminal state today is `Sent` or `Failed`, never
+    `Delivered`.
+41. **`NotificationChannel.config` (JSON) is stored/returned faithfully
+    but not actually consumed by any Sender this stage** (§7.15) —
+    `EmailSender` uses Laravel's own global mailer config, not a
+    per-tenant override from this column. `isActive` is the only thing
+    `NotificationDispatcher` gates on today; wiring real per-tenant
+    overrides (a tenant's own "from" address, a tenant's own SMS API key)
+    is real future work.
+42. **CRM's `ticket_created` NotificationType has no Listener** (§7.15) —
+    modeled (a Template/Preference can already be configured against it)
+    but nothing dispatches a notification when a CRM Ticket is created;
+    not requested this stage, the same "only what's asked for gets
+    wired" restraint `HighValueOrderListener` already established.
 
 ---
 
@@ -2164,32 +2465,34 @@ missing-permission cases). 483 tests total, zero regressions.
 
 Phase 2 (Commerce, all 6 Stages) and Phase 3 (CRM, Finance, Workflows,
 Loyalty, Reporting — all 5 Stages) are fully complete. Phase 4
-(Shipping & Logistics) has two Stages done — Shipping Foundation and the
-Shipping Provider Connector (§7.14). The Tech Debt Sprint (§7.13) ran
-between the two, closing the scheduler gap and the `CheckInventoryAction`
-re-check bug that used to top this list. Candidates worth raising with
-whoever's driving scope next, roughly in order of how much they'd reuse
-what already exists:
+(Shipping & Logistics) has three Stages done — Shipping Foundation, the
+Shipping Provider Connector (§7.14), and the Notifications Module
+(§7.15). The Tech Debt Sprint (§7.13) ran between Stages 1 and 2,
+closing the scheduler gap and the `CheckInventoryAction` re-check bug
+that used to top this list. Candidates worth raising with whoever's
+driving scope next, roughly in order of how much they'd reuse what
+already exists:
 
+- **Wire `HighValueOrderListener` and/or CRM's `ticket_created`
+  notification** (§7.9/§7.15/§8.42) — both are the same shape: the event
+  already exists, only `Event::listen()` (+ for the latter, a Template)
+  is missing. Genuinely the cheapest available increments in the entire
+  codebase right now.
 - **A real carrier implementation of `ShippingProviderInterface`** (USPS/
   FedEx/DHL) — `MockShippingProviderAdapter` (§7.14) is now the template,
   the same role `WooCommerceProductConnector` played for Commerce's own
   second real Connector; `ShippingProviderRegistry` already supports
   registering more than one by name, and `ShippingProviderName` already
   has the enum cases waiting.
+- **A real SMS gateway behind `SmsSender`** (§7.15/§8.39) — the same
+  "swap the stub for a real implementation" shape as the carrier item
+  above, once real credentials exist to test against honestly.
 - **Measure real test coverage from a CI run** — the Tech Debt Sprint
   (§7.13) wired `coverage: pcov` into `.github/workflows/tests.yml` but
   could only set a conservative placeholder gate (`--min=60`), since no
   coverage driver exists in this dev environment to measure the real
   number locally. Cheapest possible next increment: push, read the
   uploaded `coverage-report` artifact, raise the gate to match reality.
-- **Wire `HighValueOrderListener`** (§7.9) — still genuinely the cheapest
-  possible next increment in the entire codebase: the event it needs
-  (`OrderWasPlaced`) already exists, the Listener class already exists,
-  only `Event::listen()` in `WorkflowsServiceProvider::boot()` and a
-  Workflow row are missing. (`CartAbandonedListener`, the other half of
-  this same "scaffolded Listener" pattern, got wired for real in §7.13 —
-  this is the one that's left.)
 - **Phase 4's next Shipping stage** — Shipping Zones/per-region rates
   (§8.37 — Shipping's own new `Address` VO from §7.14 is a first step, not
   the full feature), partial/multi-shipment fulfillment (§8.35), folding
