@@ -6,8 +6,9 @@ Workflows, Loyalty, Reporting) are complete. Phase 4 (Shipping &
 Logistics) is under way: Stage 1 (Shipping Foundation), Stage 2
 (Shipping Provider Connector, §7.14), Stage 3 (Notifications Module,
 §7.15), Stage 4 (Multi-language Support / i18n Infrastructure, §7.16),
-Stage 5 (Admin Dashboard + Human Authentication, §7.17), and Stage 6
-(Advanced Analytics & KPIs, §7.18) are all complete.
+Stage 5 (Admin Dashboard + Human Authentication, §7.17), Stage 6
+(Advanced Analytics & KPIs, §7.18), and Stage 7 (API Versioning System,
+§7.19) are all complete.
 
 The paragraphs below are in build order — read top to bottom for the
 actual chronological story. Finance supplies Commerce's own checkout
@@ -175,7 +176,41 @@ array-access step, only the method-call step. Fixed to
 `($tenants[0] ?? null)?->id()` in all six. See §7.18 for the full mapping
 and reasoning.**
 
-577 tests passing, zero known regressions. Next up:
+**Stage 7 (API Versioning System, §7.19) — the request's own priority
+order for version detection (URL > Header > Query) directly contradicted
+its own example test, which expected an `Accept` header to override an
+already-explicit `/mcp/v1/execute` URL. Raised as a scope question before
+writing any code; the user confirmed the safer, industry-standard
+resolution: an explicit URL version always wins, full stop — header/query
+detection is fully built and tested, but only ever applies when a request
+carries no URL version segment at all (no such route exists yet). Adds
+`/mcp/v2/*` alongside the untouched `/mcp/v1/*` — same capabilities, same
+permissions, same error codes, same authentication as v1; the only real
+difference is the response envelope (`data`/`meta` -> `result`/`metadata`
++ `api_version`/`timestamp`). The Authenticate -> rate-limit -> authorize
+-> execute sequence, previously duplicated inline in `MCPGatewayController`/
+`MCPDiscoveryController`, was extracted into
+`AbstractMCPGatewayController`/`AbstractMCPDiscoveryController` specifically
+so v1 and v2 controllers can never drift apart on that security-critical
+path — each version-specific controller now only implements its own
+`formatResponse()`. `ApiVersioning` (`Interfaces/HTTP/Middleware`, not
+`Infrastructure/Middleware` as the request's own file list named it — see
+§7.19 for why) is the first real middleware ever attached to `routes/mcp.php`;
+Core's own Tech Debt Sprint rate limiting (§7.13) deliberately stayed an
+explicit Action call instead, for a different reason (it needs the
+Agent's own id, not known until inside the controller) that doesn't apply
+to version detection, which only ever needs the raw Request. Also caught
+before writing code: the SDK's `MCPConfig::$baseUrl` already carries the
+version segment (`.../mcp/v1`) — literally implementing the request's own
+`$version` constructor-param example would have double-appended it
+(`.../mcp/v1/v1/execute`). Added `MCPConfig::forVersion()` instead (purely
+additive), and fixed a real bug this surfaced: `CapabilityExecutor`/
+`CapabilityDiscovery` hardcoded reading only `data`/`meta` — pointing the
+SDK at a v2 `baseUrl` would have silently returned empty results. Both now
+check `result`/`metadata` first, falling back to `data`/`meta`. See §7.19
+for the full detail.**
+
+608 tests passing (577 + 31 new), zero known regressions. Next up:
 another Phase 4 Shipping/Logistics stage (Shipping Zones, partial fulfillment,
 folding `shipping_cost` into checkout pricing — §8.37/§8.35/§8.36), a real
 carrier implementation of `ShippingProviderInterface` (USPS/FedEx/DHL —
@@ -184,7 +219,8 @@ carrier implementation of `ShippingProviderInterface` (USPS/FedEx/DHL —
 Connector), a real SMS gateway behind `SmsSender` (still an explicit
 stub — §7.15/§8), wiring `HighValueOrderListener`/CRM's own
 `ticket_created` notification type (both scaffolded, still the cheapest
-available increments — §9), or any remaining deferred item in §8/§9.
+available increments — §9), a real v3 (or retiring v1 once its sunset
+date passes — §7.19), or any remaining deferred item in §8/§9.
 Note: `WorkflowsCapabilityTest`'s own docblock still describes working
 around the now-fixed §8.22 ceiling (6-on-hand/order-3, kept under half
 of stock) — harmless (the test still passes either way) but worth a
@@ -222,8 +258,9 @@ from `App\Modules\*`.
 | **Capability Execution** | `Application/Services/CapabilityHandlerRegistry.php`, `CapabilityExecutionService.php` | **Handler contract changed in Phase 2**: `callable(array $input, AuthContext $context): array` — was `callable(array $input): array` in Phase 1, then briefly `callable(array $input, int $tenantId): array` early in Phase 2 before Cart ownership needed the Agent's own id too. See §7.2/§7.3 for the full history — do not re-litigate this, it was already widened twice and settled. |
 | **AuthContext** | `Application/DTOs/AuthContext.php` | New in Phase 2: `{tenantId: int, agentId: int}`, built via `AuthContext::forAgent(AgentData $agent)`. **Widened in Stage 4 (§7.16)** to `{tenantId, agentId, language: Language}` — `MCPGatewayController` resolves the Language once via `LanguageDetector` and passes it in; a handler with nothing language-specific to do simply never reads it (Demo's own precedent). Passed explicitly into every handler — never resolved from a container/global. Do not push `AuthContext` down into Domain/Application signatures. |
 | **Marker interfaces** | `Domain/Exceptions/Contracts/{NotFoundExceptionInterface,ConflictExceptionInterface}.php` | New in Phase 2. `MCPExceptionHandler` matches on these interfaces (404 / 409) in addition to its own concrete exception classes. Any new Domain Module (or Core-owned, e.g. `UserNotFoundException`/`TenantNotFoundException`/`AgentNotFoundException`, all added in Stage 5) exception that should map to 404/409 implements one of these. |
-| MCP Gateway | `Interfaces/HTTP/Controllers/MCP/*`, `Exceptions/MCPExceptionHandler.php` | Routes unchanged: `POST /mcp/v1/execute`, `GET /mcp/v1/capabilities`. Error envelope has `CONFLICT` (409, Phase 2) and, since Stage 4 (§7.16), a purely additive `error.localized_message` field (`error.message` itself untouched). `MCPExceptionHandler` is now container-resolved in `bootstrap/app.php` (was `new`'d), specifically so it can take `LanguageDetector`/`TranslationServiceInterface` constructor dependencies. |
+| MCP Gateway | `Interfaces/HTTP/Controllers/MCP/*`, `Exceptions/MCPExceptionHandler.php` | Routes: `POST /mcp/{v1,v2}/execute`, `GET /mcp/{v1,v2}/capabilities` (v2 added Stage 7, §7.19). Error envelope has `CONFLICT` (409, Phase 2) and, since Stage 4 (§7.16), a purely additive `error.localized_message` field (`error.message` itself untouched) — identical across v1/v2. `MCPExceptionHandler` is now container-resolved in `bootstrap/app.php` (was `new`'d), specifically so it can take `LanguageDetector`/`TranslationServiceInterface` constructor dependencies. |
 | **i18n (Stage 4, §7.16)** | `Domain/ValueObjects/Language.php` (`en`/`fa`), `Domain/Services/{TranslationServiceInterface,TranslationLoaderInterface}.php`, `Application/Services/{TranslationService,JsonTranslationLoader,LanguageDetector}.php`, `Application/DTOs/TranslationData.php` | A small, custom JSON translation subsystem — deliberately not Laravel's own `__()` (its flat-JSON shape doesn't fit `lang/{code}/{group}.json`-per-group, dot-path keys). `LanguageDetector::detect()` (HTTP: query `?lang=` -> `Accept-Language` header -> Tenant default -> English) and `::detectForTenant()` (non-HTTP, e.g. a Listener: Tenant default -> English only). `t()`/`dashboard_language()` (`app/helpers.php`) are the Blade-facing wrappers the Dashboard uses — **always prefix translation keys with the group, e.g. `t('messages.dashboard.title')`, never `t('dashboard.title')`** — a real bug from exactly this mistake hit every Dashboard view at once during Stage 6 (§7.18), caught by the first test that actually asserted on rendered text. |
+| **API Versioning (Stage 7, §7.19)** | `Domain/ValueObjects/{ApiVersion,SunsetDate}.php`, `Domain/Services/{VersionDetectorInterface,DeprecationNotifierInterface}.php`, `Application/Services/{VersionDetector,DeprecationNotifier}.php`, `Interfaces/HTTP/Middleware/ApiVersioning.php`, `Interfaces/HTTP/Controllers/MCP/{AbstractMCPGatewayController,AbstractMCPDiscoveryController,MCPGatewayControllerV2,MCPDiscoveryControllerV2}.php`, `config/api.php` | An explicit URL version (`/mcp/v1/`, `/mcp/v2/`) always wins over a header/query signal — confirmed with the user during planning, since the request's own example contradicted its own stated priority order (§7.19). `ApiVersioning` middleware attaches `X-API-Version` always, plus `Deprecation`/`Sunset`/`Link`/`Warning` + a log line only for whichever version `config('api.deprecation')` actually names (`v1` today). v1/v2 share one Authenticate -> rate-limit -> authorize -> execute sequence (the two Abstract base classes) — only the response envelope differs. |
 | **Human/Dashboard Auth (Stage 5, §7.17)** | `Domain/Entities/User.php`, `Domain/ValueObjects/{Email,HashedPassword,UserRole,UserStatus}.php`, `Domain/Repositories/UserRepositoryInterface.php`, `Application/Actions/{CreateUserAction,UpdateUserAction,GetUserAction,ListUsersAction,AuthenticateUserAction}.php`, `Infrastructure/Models/User.php` (extends `Authenticatable`) | Platform-level (no tenant_id) — the second Core entity above tenancy alongside `Tenant` itself, since the Dashboard's own Tenants Management page does full cross-tenant CRUD. Gates the whole `/dashboard/*` route group via a plain `UserRole::Admin`/`Operator` enum + the `admin` route-middleware alias, **not** the tenant-scoped Role/Permission system above. `HashedPassword` uses PHP's own `password_hash()`/`password_verify()`, never Laravel's `Hash` facade (keeps this Domain class framework-free like every other one). Seeded by default: `admin@opencommerce.test` / `password` (`DatabaseSeeder`). |
 
 ### `app/Modules/Commerce/` — **no longer a skeleton. Product, Category, Cart, Inventory, Order, Customer, Payment, Coupon, Discount are all real, tested, and MCP-reachable — and Stage 6 added the first real external Connector.**
@@ -504,7 +541,9 @@ app/Core/
 │                        (all §7.17)
 ├── Domain/Services/     new in Phase 4 Stage 4 (§7.16) — TranslationServiceInterface,
 │                        TranslationLoaderInterface (2 Domain contracts, no
-│                        implementation lives here — see Application below)
+│                        implementation lives here — see Application below);
+│                        + VersionDetectorInterface/DeprecationNotifierInterface
+│                        (§7.19 — both pure decision contracts, no Request/config)
 ├── Application/{Actions,DTOs,Services,Listeners}/
 │                        + EnforceRateLimitAction (§7.13), + SetTenantDefaultLanguageAction,
 │                        TranslationData (DTO), TranslationService, JsonTranslationLoader,
@@ -514,21 +553,37 @@ app/Core/
 │                        UpdateTenantAction/UpdateAgentAction/
 │                        ChangeAgentStatusAction (all §7.17 — the last 3
 │                        are "missing piece implied by the request" Actions,
-│                        §3 pattern #12, not named in the request itself)
+│                        §3 pattern #12, not named in the request itself) +
+│                        VersionDetector/DeprecationNotifier (§7.19 — the
+│                        one implementation each, the Request/config-touching layer)
 ├── Infrastructure/{Models,Repositories}/   + Models/User (extends
 │                        Authenticatable) + EloquentUserRepository (§7.17)
 ├── Interfaces/HTTP/{Controllers/MCP,Requests/MCP}/   +
 │                        Controllers/Auth/{LoginController,LogoutController} +
 │                        Requests/Auth/LoginRequest (§7.17 — the human-login
 │                        counterpart to AgentAuthenticationService/
-│                        AuthenticateAgentAction)
+│                        AuthenticateAgentAction) +
+│                        Controllers/MCP/{AbstractMCPGatewayController,
+│                        AbstractMCPDiscoveryController,MCPGatewayControllerV2,
+│                        MCPDiscoveryControllerV2} + Middleware/ApiVersioning
+│                        (§7.19 — lives under Interfaces/HTTP, not
+│                        Infrastructure/Middleware as originally requested,
+│                        matching every other HTTP-adapter class in Core)
 ├── Exceptions/MCPExceptionHandler.php   now container-resolved in bootstrap/app.php
 │                        (was `new`'d — §7.16, so its new LanguageDetector/
-│                        TranslationServiceInterface constructor dependencies work)
+│                        TranslationServiceInterface constructor dependencies work);
+│                        untouched by §7.19 — already mcp/*-prefix-scoped, so it
+│                        covers /mcp/v2/* for free
 └── CoreServiceProvider.php    binds TranslationLoaderInterface/TranslationServiceInterface
-                             (§7.16) + UserRepositoryInterface (§7.17)
+                             (§7.16) + UserRepositoryInterface (§7.17) +
+                             VersionDetectorInterface/DeprecationNotifierInterface (§7.19)
 
 config/mcp.php              new in Tech Debt Sprint (§7.13) — MCP_RATE_LIMIT_PER_MINUTE
+
+config/api.php              new in Phase 4 Stage 7 (§7.19) — default_version,
+                             supported_versions, the api.deprecation schedule
+                             (v1 only today), and the 5 header names
+                             ApiVersioning attaches
 
 config/auth.php              AUTH_MODEL now App\Core\Infrastructure\Models\User,
                              not the deleted default App\Models\User (§7.17)
@@ -1181,8 +1236,26 @@ tests/
                          the Analytics page's filter form computes a KPI,
                          CSV/PDF export routes return real
                          Content-Disposition: attachment downloads (§7.18)
+├── Unit/Core/            + SunsetDateTest (4, framework-free) +
+                         VersionDetectorTest (10 — the full priority
+                         chain, incl. detectFromRequest() against a
+                         real Illuminate\Http\Request, no booted
+                         container needed) (§7.19)
+├── Feature/Core/         + DeprecationNotifierTest (8 — needs
+                         config(), the same reason MCPRateLimitTest is
+                         a Feature test) (§7.19)
+└── Feature/MCP/          + ApiVersioningTest (9): v1/v2 envelope
+                         shapes, deprecation headers present on v1 /
+                         absent on v2, the URL-always-wins regression
+                         test, both versions returning identical
+                         underlying data, the deprecation log line
+                         (§7.19)
 
-577 tests total, 1370 assertions, ~14s runtime (`php artisan test`)
+packages/opencommerce-sdk/tests/   + MCPConfigTest (4, new file) + 1 new
+                         case each in CapabilityExecutorTest/
+                         CapabilityDiscoveryTest (v2 envelope shape) (§7.19)
+
+608 tests total (577 + 31), 1441 assertions, ~16s runtime (`php artisan test`)
 ```
 
 ---
@@ -1539,7 +1612,7 @@ php artisan storage:link   # Stage 6, §7.18 — required for analytics.report.e
                             # buttons stream directly and don't need this
 
 # Tests
-php artisan test                                                  # full app suite — 577 tests, ~14s
+php artisan test                                                  # full app suite — 608 tests, ~16s
 cd packages/opencommerce-sdk; vendor/bin/phpunit tests; cd ../..   # SDK's own suite (unaffected by Phase 2)
 
 # Manual/live verification
@@ -1552,6 +1625,17 @@ php examples/woocommerce-sync.php <agent-token> http://127.0.0.1:8000/mcp/v1   #
                                                                                 # WOOCOMMERCE_* in .env first,
                                                                                 # or every call fails against
                                                                                 # an empty base URL
+
+# API Versioning (Phase 4 Stage 7, §7.19) — v2 is the same platform as v1,
+# just a different response envelope; point any MCP client at /mcp/v2
+# instead of /mcp/v1 (or use the SDK's own MCPConfig::forVersion()) —
+# nothing else about calling it changes. curl examples:
+curl -X POST http://127.0.0.1:8000/mcp/v1/execute -H "Authorization: Bearer <agent-token>" \
+  -H "Content-Type: application/json" -d '{"capability":"demo.tools.echo","input":{"message":"hi"}}' -i
+# ^ 200 with {"data":...,"meta":...} + Deprecation/Sunset/Link/Warning headers
+curl -X POST http://127.0.0.1:8000/mcp/v2/execute -H "Authorization: Bearer <agent-token>" \
+  -H "Content-Type: application/json" -d '{"capability":"demo.tools.echo","input":{"message":"hi"}}' -i
+# ^ 200 with {"result":...,"metadata":{"api_version":"v2",...}}, no deprecation headers
 
 # Scheduled jobs (Tech Debt Sprint §7.13; Analytics' own, §7.18) — run once
 # manually, or via a real OS cron entry (`* * * * * php artisan schedule:run`)
@@ -3214,6 +3298,169 @@ asserted via `Storage::fake`), `tests/Feature/Dashboard/AnalyticsPageTest.php`
 regression test, the Analytics filter form, both export routes' real
 download headers). 577 tests total, zero regressions.
 
+### 7.19 Phase 4, Stage 7 — API Versioning System
+
+New Domain: `ValueObjects/{ApiVersion,SunsetDate}` (`ApiVersion` — `V1`/
+`V2` real and routed, `V3` a modeled-but-unimplemented future intent, the
+same shape `ShippingProviderName::Usps/Fedex/Dhl` already establishes;
+`SunsetDate` — wraps a plain `DateTimeImmutable`, owns the one RFC 7231
+IMF-fixdate formatting rule the `Sunset` header needs),
+`Services/{VersionDetectorInterface,DeprecationNotifierInterface}` (both
+pure decision contracts — no `Illuminate\Http\Request`, no config, no
+logging — the same "Domain contract stays framework-free, the concrete
+Application class also offers a richer Request/config-touching entry
+point" split `TranslationServiceInterface`/`TranslationService` already
+established, one layer over). New Application:
+`Services/{VersionDetector,DeprecationNotifier}` (the two implementations
+— `VersionDetector::detectFromRequest()` and `DeprecationNotifier`'s own
+methods, which call `config('api.deprecation')` directly, the same style
+`EnforceRateLimitAction` already established for `config('mcp...')`, are
+the framework-touching layer). New Interfaces/HTTP:
+`Middleware/ApiVersioning` (see below for why it lives here, not
+`Infrastructure/Middleware` as requested),
+`Controllers/MCP/{AbstractMCPGatewayController,AbstractMCPDiscoveryController,
+MCPGatewayControllerV2,MCPDiscoveryControllerV2}`. New: `config/api.php`.
+No new migrations — this stage is entirely config/routing/response-shape
+infrastructure, no new persisted state.
+
+**The request's own version-detection priority order directly
+contradicted its own example test — caught during planning, the same
+discipline every prior stage's own mismatches got (§7.13-§7.18).** The
+brief specified URL > Header > Query priority, then gave an example test
+hitting the already-explicit `/mcp/v1/execute` URL with an `Accept: v2`
+header and expecting a v2-shaped response back — the header winning over
+an explicit URL, the opposite of the stated priority. Implementing that
+literally would mean a v1 integration's response shape could silently
+change out from under it because some intermediary (a proxy, a shared
+HTTP client's default headers) attached an `Accept` value it never
+intended — exactly the kind of hidden, breaking behavior change this
+whole feature exists to prevent, and a direct violation of CLAUDE.md's
+"Explicit Over Magic" principle. Raised as a scope question before
+writing any code; the user confirmed the safer resolution: **an explicit
+URL version always wins**, full stop.
+`VersionDetectorInterface::detect(?string $urlVersion, ?string $headerVersion, ?string $queryVersion): ApiVersion`
+still implements the full 3-tier priority chain (`ApiVersion::tryFrom()`
+down the chain, defaulting to `ApiVersion::V1`) — header/query detection
+is completely real and fully unit-tested
+(`tests/Unit/Core/VersionDetectorTest.php`), it just never gets a chance
+to matter today, since every real route (`routes/mcp.php`) already pins
+an explicit `/v1/`/`/v2/` segment. `ApiVersioningTest::test_execute_v1UrlWithV2AcceptHeader_stillReturnsV1Format`
+codifies this decision as a real HTTP-level regression test, replacing
+the request's own literal (contradictory) example.
+
+**v1 and v2 are, on purpose, the same platform wearing two different
+envelopes — not two different platforms.** Every capability, permission,
+error code, and authentication mechanism is byte-for-byte identical
+between them (`docs/api/v2/changes.md` documents this explicitly,
+`ApiVersioningTest::test_bothVersions_returnTheSameUnderlyingData` proves
+it by calling the same capability through both versions and asserting
+`v1.data === v2.result`). The only real difference: v1 keeps its original
+`{"data": ..., "meta": ...}` shape unchanged, byte-for-byte, from before
+this stage; v2 is `{"result": ..., "metadata": {"api_version", ...,
+"timestamp"}}`. The request's own migration-guide example additionally
+illustrated renamed error codes (`NOT_FOUND` -> `RESOURCE_NOT_FOUND`) as a
+hypothetical "if these were the real differences" — deliberately **not**
+implemented: `MCPExceptionHandler` is explicitly documented as "the one
+place that formats every MCP error," already `mcp/*`-prefix-scoped (so it
+already covers `/mcp/v2/*` with zero changes), and renaming a code every
+existing v1 test/integration asserts on would be a real breaking change
+with no corresponding real behavior change behind it. `docs/api/v1/errors.md`
+records this as a deliberate decision, not an oversight. Same treatment
+for the migration guide's own "New Features in v2" section (batch
+operations, webhooks, real-time updates) — recorded in
+`docs/api/v2/changes.md` as planned-but-not-built, since this stage's
+actual scope is response-shape versioning infrastructure, not new
+platform capabilities.
+
+**The Authenticate -> rate-limit -> authorize -> execute sequence was
+extracted into `AbstractMCPGatewayController`/`AbstractMCPDiscoveryController`
+rather than duplicated per version.** The request's own example code for
+`MCPGatewayControllerV2` was a simplified illustration (calling
+`CapabilityExecutionService` directly, skipping the real permission
+check/rate-limit/language-detection steps `MCPGatewayController` actually
+performs) — not literal production code, since it would have meant either
+copying that whole security-critical sequence a second time (a real risk:
+a future fix applied to v1's own copy but forgotten in v2's would be a
+genuine vulnerability, not just an inconsistency) or building v2 with
+weaker guarantees than v1. Each concrete controller
+(`MCPGatewayController`/`MCPGatewayControllerV2`,
+`MCPDiscoveryController`/`MCPDiscoveryControllerV2`) now implements only
+its own `formatResponse()` — the one thing that's actually
+version-specific. `MCPGatewayController`/`MCPDiscoveryController`
+(v1) keep their exact pre-existing behavior; this is a
+behavior-preserving refactor confirmed by the full pre-existing MCP test
+suite passing unmodified.
+
+**`ApiVersioning` is the first real middleware ever attached to
+`routes/mcp.php`** — not a conflict with the Tech Debt Sprint's own
+established "cross-cutting MCP concerns are explicit Action calls, not
+middleware" precedent (§3 pattern #16, `EnforceRateLimitAction`): that
+precedent's reasoning was specifically that rate limiting needs the
+Agent's own id, not resolved until `AgentAuthenticationService` runs
+inside the controller. Version detection needs only the raw Request (URL
+path/`Accept` header/query string) — already available to a middleware
+before the controller ever runs — so middleware is the natural fit here,
+a different-shaped cross-cutting concern landing on the tool that already
+suits it, not a departure from that precedent. Wraps both the `mcp/v1` and
+`mcp/v2` route groups uniformly; always attaches `X-API-Version`, and
+attaches `Deprecation`/`Sunset`/`Link`/`Warning` + logs one warning line
+only when `DeprecationNotifierInterface::isDeprecated()` says so
+(`config('api.deprecation')`, `v1` only today — v2 gets none of this).
+Both `AbstractMCPGatewayController`/`AbstractMCPDiscoveryController` now
+store the authenticated Agent's id on `$request->attributes` right after
+authentication succeeds — a small, new, additive side effect, added
+specifically so `ApiVersioning` (which runs both before and, via
+`$next($request)`, after the controller) can log which Agent hit a
+deprecated endpoint; nothing else reads this attribute back.
+
+**One naming correction from the request, caught during planning**: the
+request asked for `Infrastructure/Middleware/ApiVersioning.php`. Every
+other HTTP-adapter class in Core (`Controllers/MCP/*`,
+`Requests/MCP/*`) already lives under `Interfaces/HTTP`, not
+`Infrastructure` (reserved for persistence adapters — Eloquent
+Repositories/Models — and external HTTP clients like `WooCommerceClient`).
+Middleware is squarely an HTTP-adapter concern, so it was placed at
+`Interfaces/HTTP/Middleware/ApiVersioning.php` instead, the same kind of
+small layout correction Shipping Stage 2's own "`ShippingProviderRegistry`
+lives in `Application/Services`, not `Domain/Services`" already
+demonstrated (§7.14).
+
+**A real bug caught while wiring the SDK, not requested but found during
+planning**: the request's own example (`private string $version = 'v1'`
+appended onto `baseUrl` at call time) would have double-appended the
+version segment, since `MCPConfig::$baseUrl` already carries it
+(`https://api.opencommerce.ir/mcp/v1`, documented in `MCPConfig`'s own
+docblock since Phase 1). Added `MCPConfig::forVersion(host, version,
+token, ...)` instead — purely additive sugar that builds `baseUrl`
+correctly, changing nothing about how any existing caller already using
+the constructor directly behaves. Investigating this surfaced a second,
+real, pre-existing-but-latent bug: `CapabilityExecutor`/`CapabilityDiscovery`
+both hardcoded reading only `$response['body']['data']`/`['meta']` —
+pointing the SDK at a v2 `baseUrl` would have silently returned empty
+results for every call, no exception, just quietly wrong data. Both now
+check `result`/`metadata` (v2) first, falling back to `data`/`meta` (v1),
+so the same `CapabilityExecutor`/`CapabilityDiscovery` classes work
+against either wire version without the caller needing to know which —
+proven by `CapabilityExecutorTest::test_execute_withV2Envelope_readsResultAndMetadataInstead`/
+`CapabilityDiscoveryTest::test_discover_withV2Envelope_readsTheTopLevelCapabilitiesKey`.
+
+New docs: `docs/api/v1/{README,capabilities,authentication,errors}.md`,
+`docs/api/v2/{README,changes}.md`, `docs/api/migration/v1-to-v2.md` —
+`docs/api/v1/capabilities.md` deliberately links to
+`docs/api-reference.md` (Tech Debt Sprint, §7.13) rather than duplicating
+its generated capability table a second time.
+
+New tests: `tests/Unit/Core/{SunsetDateTest,VersionDetectorTest}.php`
+(4+10, framework-free), `tests/Feature/Core/DeprecationNotifierTest.php`
+(8 — needs a booted container for `config()`, the same reason
+`MCPRateLimitTest` is a Feature test), `tests/Feature/MCP/ApiVersioningTest.php`
+(9 — v1/v2 envelope shapes, deprecation headers present on v1/absent on
+v2, the URL-always-wins regression test, both versions returning
+identical underlying data, the deprecation log line), plus 4 new SDK
+tests (`packages/opencommerce-sdk/tests/MCPConfigTest.php` + 2 new cases
+in `CapabilityExecutorTest`/`CapabilityDiscoveryTest`). 608 tests total
+(577 + 31), zero regressions.
+
 ---
 
 ## 8. Known technical debt (ranked, carried over + Phase 2 additions)
@@ -3641,6 +3888,13 @@ order of how much they'd reuse what already exists:
 - **A dedicated `capabilities:sync` artisan command**, graduating away from
   the seeder pattern — flagged as an open decision since Phase 1, still
   open, now with 70 capabilities across ten seeders instead of 3.
+- **A real v3, or retiring v1 once 2028-01-01 passes** (§7.19) — the
+  versioning infrastructure (`ApiVersion` enum, `ShippingProviderName`-style
+  modeled-but-unimplemented `V3` case, `config('api.deprecation')`) is
+  already in place for either; a real v3 needs only its own route group +
+  `MCPGatewayControllerV3`/`MCPDiscoveryControllerV3` (each implementing
+  just `formatResponse()`, the same shape v2 already established) +
+  a `config/api.php` deprecation entry for whichever version it retires.
 
 Whatever comes next, follow §3's patterns and check §8 before assuming a
 piece of the puzzle doesn't already exist.

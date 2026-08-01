@@ -16,11 +16,18 @@ use OpenCommerce\SDK\Execution\ExecutionResult;
  *
  * ```php
  * $config = new MCPConfig(baseUrl: 'https://api.opencommerce.ir/mcp/v1', token: 'agent_token');
+ * // or, equivalently: MCPConfig::forVersion(host: 'https://api.opencommerce.ir', version: 'v1', token: 'agent_token');
  * $client = new MCPClient($config);
  *
  * $capabilities = $client->discoverCapabilities();
  * $result = $client->execute('commerce.product.search', ['query' => 'laptop']);
  * ```
+ *
+ * Migrating to v2 (docs/api/migration/v1-to-v2.md) is a one-argument
+ * change: construct $config with version: 'v2' instead of 'v1' — nothing
+ * else about this class's own API changes, since v1/v2 only differ in the
+ * server's response envelope shape, and ExecutionResult already normalizes
+ * that (Discovery/CapabilityExecutor's own docblocks).
  *
  * Takes an MCPConfig object rather than flat constructor arguments
  * (baseUrl, token, ...) — a deliberate change from this SDK's first draft

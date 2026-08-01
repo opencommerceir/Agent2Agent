@@ -14,11 +14,15 @@ use App\Core\Domain\Repositories\PermissionRepositoryInterface;
 use App\Core\Domain\Repositories\RoleRepositoryInterface;
 use App\Core\Domain\Repositories\TenantRepositoryInterface;
 use App\Core\Domain\Repositories\UserRepositoryInterface;
+use App\Core\Domain\Services\DeprecationNotifierInterface;
 use App\Core\Domain\Services\TranslationLoaderInterface;
 use App\Core\Domain\Services\TranslationServiceInterface;
+use App\Core\Domain\Services\VersionDetectorInterface;
 use App\Core\Application\Services\CapabilityHandlerRegistry;
+use App\Core\Application\Services\DeprecationNotifier;
 use App\Core\Application\Services\JsonTranslationLoader;
 use App\Core\Application\Services\TranslationService;
+use App\Core\Application\Services\VersionDetector;
 use App\Core\Infrastructure\Repositories\EloquentAgentRepository;
 use App\Core\Infrastructure\Repositories\EloquentAgentTokenRepository;
 use App\Core\Infrastructure\Repositories\EloquentCapabilityRepository;
@@ -52,6 +56,8 @@ class CoreServiceProvider extends ServiceProvider
         $this->app->bind(TranslationLoaderInterface::class, JsonTranslationLoader::class);
         $this->app->bind(TranslationServiceInterface::class, TranslationService::class);
         $this->app->bind(UserRepositoryInterface::class, EloquentUserRepository::class);
+        $this->app->bind(VersionDetectorInterface::class, VersionDetector::class);
+        $this->app->bind(DeprecationNotifierInterface::class, DeprecationNotifier::class);
 
         // Singleton: every provider that registers a capability handler
         // (see DemoServiceProvider) and CapabilityExecutionService must

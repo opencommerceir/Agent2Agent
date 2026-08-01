@@ -73,6 +73,20 @@ class CapabilityExecutorTest extends TestCase
         $executor->execute('commerce.product.search', CapabilityInput::fromArray([]));
     }
 
+    public function test_execute_withV2Envelope_readsResultAndMetadataInstead(): void
+    {
+        $body = json_encode([
+            'result' => ['message' => 'ok'],
+            'metadata' => ['api_version' => 'v2', 'capability' => 'commerce.product.search'],
+        ]);
+
+        $executor = $this->executorWithFakeResponse(new Response(200, ['Content-Type' => 'application/json'], $body));
+        $result = $executor->execute('commerce.product.search', CapabilityInput::fromArray(['query' => 'laptop']));
+
+        $this->assertSame('ok', $result->getData()['message']);
+        $this->assertSame('v2', $result->getMeta()['api_version']);
+    }
+
     public function test_execute_sendsCapabilityAndInputAsJsonBody(): void
     {
         $body = json_encode(['data' => [], 'meta' => []]);

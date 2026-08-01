@@ -52,6 +52,25 @@ class CapabilityDiscoveryTest extends TestCase
         $this->assertSame('commerce.product.search', $capabilities[0]->name);
     }
 
+    public function test_discover_withV2Envelope_readsTheTopLevelCapabilitiesKey(): void
+    {
+        $body = json_encode([
+            'capabilities' => [
+                [
+                    'name' => 'commerce.product.search',
+                    'description' => 'Search products',
+                ],
+            ],
+            'metadata' => ['api_version' => 'v2', 'count' => 1],
+        ]);
+
+        $discovery = $this->discoveryWithFakeResponse(new Response(200, ['Content-Type' => 'application/json'], $body));
+        $capabilities = $discovery->discover();
+
+        $this->assertCount(1, $capabilities);
+        $this->assertSame('commerce.product.search', $capabilities[0]->name);
+    }
+
     public function test_discover_withEmptyList_returnsEmptyArray(): void
     {
         $body = json_encode(['data' => ['capabilities' => []], 'meta' => ['count' => 0]]);
