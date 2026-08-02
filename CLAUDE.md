@@ -177,8 +177,8 @@ Major decisions must be documented.
 
 ## Backend
 
-- Laravel 13
-- PHP 8.3+
+- Laravel 12
+- PHP 8.2+
 
 ## Infrastructure
 

@@ -130,7 +130,7 @@ Negative:
 
 ---
 
-# Decision 003: Laravel 13 as Backend Framework
+# Decision 003: Laravel 12 as Backend Framework
 
 ## Status
 
@@ -157,8 +157,8 @@ Laravel provides:
 
 The backend will be built using:
 
-- Laravel 13
-- PHP 8.3+
+- Laravel 12
+- PHP 8.2+
 
 ## Consequences
 

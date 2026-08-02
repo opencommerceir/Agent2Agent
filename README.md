@@ -210,8 +210,8 @@ OpenCommerce Platform is built using modern technologies and architectural princ
 
 ### Backend
 
-- Laravel 13
-- PHP 8.3+
+- Laravel 12
+- PHP 8.2+
 - MySQL
 - Redis
 - Queue Workers
