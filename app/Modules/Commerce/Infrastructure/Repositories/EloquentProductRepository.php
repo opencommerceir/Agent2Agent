@@ -76,6 +76,7 @@ class EloquentProductRepository implements ProductRepositoryInterface
         $model->price_currency = $product->price()->currency();
         $model->status = $product->status()->value;
         $model->attributes = $product->attributes();
+        $model->is_parent = $product->isParent();
         $model->save();
 
         return $this->toEntity($model);
@@ -100,6 +101,7 @@ class EloquentProductRepository implements ProductRepositoryInterface
             status: ProductStatus::from($model->status),
             attributes: $model->attributes ?? [],
             createdAt: DateTimeImmutable::createFromInterface($model->created_at),
+            isParent: $model->is_parent,
         );
     }
 }

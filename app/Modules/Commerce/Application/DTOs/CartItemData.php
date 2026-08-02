@@ -12,6 +12,7 @@ final class CartItemData
         public readonly int $priceAmount,
         public readonly string $priceCurrency,
         public readonly int $subtotalAmount,
+        public readonly ?int $variantId = null,
     ) {
     }
 
@@ -23,6 +24,7 @@ final class CartItemData
             priceAmount: $item->unitPrice()->amount(),
             priceCurrency: $item->unitPrice()->currency(),
             subtotalAmount: $item->subtotalAmount(),
+            variantId: $item->variantId(),
         );
     }
 
@@ -33,6 +35,7 @@ final class CartItemData
     {
         return [
             'productId' => $this->productId,
+            'variantId' => $this->variantId,
             'quantity' => $this->quantity,
             'priceAmount' => $this->priceAmount,
             'priceCurrency' => $this->priceCurrency,

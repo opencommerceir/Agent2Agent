@@ -9,21 +9,23 @@ use DateTimeImmutable;
 
 class EloquentInventoryRepository implements InventoryRepositoryInterface
 {
-    public function findByProduct(int $productId, int $tenantId): ?InventoryEntity
+    public function findByProduct(int $productId, int $tenantId, ?int $variantId = null): ?InventoryEntity
     {
         $model = InventoryModel::query()
             ->where('tenant_id', $tenantId)
             ->where('product_id', $productId)
+            ->where('variant_id', $variantId)
             ->first();
 
         return $model ? $this->toEntity($model) : null;
     }
 
-    public function findByProductForUpdate(int $productId, int $tenantId): ?InventoryEntity
+    public function findByProductForUpdate(int $productId, int $tenantId, ?int $variantId = null): ?InventoryEntity
     {
         $model = InventoryModel::query()
             ->where('tenant_id', $tenantId)
             ->where('product_id', $productId)
+            ->where('variant_id', $variantId)
             ->lockForUpdate()
             ->first();
 
@@ -47,10 +49,12 @@ class EloquentInventoryRepository implements InventoryRepositoryInterface
             : InventoryModel::query()
                 ->where('tenant_id', $inventory->tenantId())
                 ->where('product_id', $inventory->productId())
+                ->where('variant_id', $inventory->variantId())
                 ->first() ?? new InventoryModel();
 
         $model->tenant_id = $inventory->tenantId();
         $model->product_id = $inventory->productId();
+        $model->variant_id = $inventory->variantId();
         $model->quantity_on_hand = $inventory->quantityOnHand();
         $model->quantity_reserved = $inventory->quantityReserved();
         $model->save();
@@ -67,6 +71,7 @@ class EloquentInventoryRepository implements InventoryRepositoryInterface
             quantityOnHand: $model->quantity_on_hand,
             quantityReserved: $model->quantity_reserved,
             createdAt: DateTimeImmutable::createFromInterface($model->created_at),
+            variantId: $model->variant_id,
         );
     }
 }

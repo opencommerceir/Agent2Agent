@@ -28,6 +28,21 @@ use DateTimeImmutable;
  * (it is no longer "reserved in a cart", it is sold); restore() is
  * commit()'s exact inverse for a cancelled Order, putting stock directly
  * back on hand rather than re-reserving it into a phantom cart.
+ *
+ * variantId (Phase 5, Stage 1 — Product Variants, §7.21) is an optional
+ * trailing field (HANDOFF §3 pattern #6): null means this row tracks the
+ * parent Product itself, exactly as every row did before this stage — a
+ * non-null value means this row tracks one specific ProductVariant's own
+ * stock instead. Reusing this entity's own reserve/commit lifecycle for
+ * variants (rather than a second, simpler stock mechanism living
+ * directly on `product_variants`) was a deliberate architectural choice,
+ * confirmed with the user before writing any code: a bare counter would
+ * have reintroduced the exact concurrent-reservation race the Tech Debt
+ * Sprint already fixed for Products (§7.13/§8.22), just for variants
+ * instead. productId is always the *parent* Product's id on both kinds of
+ * row — even a variant's own Inventory row keeps it, for the same
+ * traceability every other variant-scoped table in this stage keeps its
+ * own product_id.
  */
 final class Inventory
 {
@@ -38,10 +53,11 @@ final class Inventory
         private int $quantityOnHand,
         private int $quantityReserved,
         private readonly DateTimeImmutable $createdAt,
+        private readonly ?int $variantId = null,
     ) {
     }
 
-    public static function stock(int $tenantId, int $productId, int $quantityOnHand): self
+    public static function stock(int $tenantId, int $productId, int $quantityOnHand, ?int $variantId = null): self
     {
         return new self(
             id: null,
@@ -50,6 +66,7 @@ final class Inventory
             quantityOnHand: $quantityOnHand,
             quantityReserved: 0,
             createdAt: new DateTimeImmutable(),
+            variantId: $variantId,
         );
     }
 
@@ -67,8 +84,10 @@ final class Inventory
     public function reserve(Quantity $quantity): void
     {
         if ($quantity->value() > $this->available()) {
+            $subject = $this->variantId !== null ? "variant [{$this->variantId}]" : "product [{$this->productId}]";
+
             throw new InsufficientInventoryException(
-                "Only {$this->available()} unit(s) available for product [{$this->productId}], requested {$quantity->value()}."
+                "Only {$this->available()} unit(s) available for {$subject}, requested {$quantity->value()}."
             );
         }
 
@@ -78,6 +97,23 @@ final class Inventory
     public function release(Quantity $quantity): void
     {
         $this->quantityReserved = max(0, $this->quantityReserved - $quantity->value());
+    }
+
+    /**
+     * A direct administrative override, deliberately *not* part of the
+     * reserve/release/commit/restore lifecycle above — those four are
+     * all relative, event-driven transitions ("N units were sold/
+     * returned/held"); this is the "there are now exactly N units on
+     * hand" operation an operator/system needs for initial stock
+     * provisioning (Phase 5, Stage 1 — Product Variants, §7.21:
+     * CreateProductVariantAction/UpdateProductVariantAction use this to
+     * set a new or existing variant's starting/corrected stock — nothing
+     * before this stage ever needed to set on-hand stock directly rather
+     * than through a Cart/Order event). Never touches quantityReserved.
+     */
+    public function setQuantityOnHand(int $quantity): void
+    {
+        $this->quantityOnHand = max(0, $quantity);
     }
 
     /**
@@ -118,6 +154,11 @@ final class Inventory
     public function productId(): int
     {
         return $this->productId;
+    }
+
+    public function variantId(): ?int
+    {
+        return $this->variantId;
     }
 
     public function quantityOnHand(): int

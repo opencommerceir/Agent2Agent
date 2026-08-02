@@ -32,6 +32,11 @@ use App\Modules\Commerce\Domain\ValueObjects\Quantity;
  *   on-hand stock this made the re-check fail even though nothing was
  *   wrong. quantityOnHand is the correct, single-counted question to ask
  *   at commit time.
+ *
+ * $variantId (Phase 5, Stage 1 — Product Variants, §7.21) is an optional
+ * trailing param on all four methods — null checks the parent Product's
+ * own Inventory row, exactly as every caller did before this stage; a
+ * real value checks that specific ProductVariant's own row instead.
  */
 final class CheckInventoryAction
 {
@@ -40,36 +45,40 @@ final class CheckInventoryAction
     ) {
     }
 
-    public function execute(int $productId, int $tenantId, Quantity $requestedQuantity): bool
+    public function execute(int $productId, int $tenantId, Quantity $requestedQuantity, ?int $variantId = null): bool
     {
-        $inventory = $this->inventories->findByProduct($productId, $tenantId);
+        $inventory = $this->inventories->findByProduct($productId, $tenantId, $variantId);
         $available = $inventory ? $inventory->available() : 0;
 
         return $available >= $requestedQuantity->value();
     }
 
-    public function authorize(int $productId, int $tenantId, Quantity $requestedQuantity): void
+    public function authorize(int $productId, int $tenantId, Quantity $requestedQuantity, ?int $variantId = null): void
     {
-        if (! $this->execute($productId, $tenantId, $requestedQuantity)) {
+        if (! $this->execute($productId, $tenantId, $requestedQuantity, $variantId)) {
+            $subject = $variantId !== null ? "variant [{$variantId}]" : "product [{$productId}]";
+
             throw new InsufficientInventoryException(
-                "Insufficient inventory for product [{$productId}]: requested {$requestedQuantity->value()}."
+                "Insufficient inventory for {$subject}: requested {$requestedQuantity->value()}."
             );
         }
     }
 
-    public function executeCommit(int $productId, int $tenantId, Quantity $requestedQuantity): bool
+    public function executeCommit(int $productId, int $tenantId, Quantity $requestedQuantity, ?int $variantId = null): bool
     {
-        $inventory = $this->inventories->findByProduct($productId, $tenantId);
+        $inventory = $this->inventories->findByProduct($productId, $tenantId, $variantId);
         $onHand = $inventory ? $inventory->quantityOnHand() : 0;
 
         return $onHand >= $requestedQuantity->value();
     }
 
-    public function authorizeCommit(int $productId, int $tenantId, Quantity $requestedQuantity): void
+    public function authorizeCommit(int $productId, int $tenantId, Quantity $requestedQuantity, ?int $variantId = null): void
     {
-        if (! $this->executeCommit($productId, $tenantId, $requestedQuantity)) {
+        if (! $this->executeCommit($productId, $tenantId, $requestedQuantity, $variantId)) {
+            $subject = $variantId !== null ? "variant [{$variantId}]" : "product [{$productId}]";
+
             throw new InsufficientInventoryException(
-                "Insufficient on-hand inventory to commit product [{$productId}]: requested {$requestedQuantity->value()}."
+                "Insufficient on-hand inventory to commit {$subject}: requested {$requestedQuantity->value()}."
             );
         }
     }

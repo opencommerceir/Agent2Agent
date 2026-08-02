@@ -28,6 +28,12 @@ use RuntimeException;
  * confirmed Order (Order::confirm()'s docblock explains why there is no
  * separate confirmation step yet).
  *
+ * Both per-item Inventory passes (Phase 5, Stage 1 — Product Variants,
+ * §7.21) now pass each CartItem's/OrderItem's own variantId through to
+ * CheckInventoryAction/InventoryRepositoryInterface — a variant line
+ * commits against its own Inventory row, never the parent Product's.
+ *
+
  * Ownership is re-verified explicitly here (cartId belongs to *this*
  * tenant *and* this* agent) rather than trusting whatever cart_id the
  * caller supplies — the same CartNotFoundException a genuinely
@@ -110,12 +116,12 @@ final class PlaceOrderAction
             $orderItems = [];
 
             foreach ($cart->items() as $cartItem) {
-                $this->checkInventory->authorizeCommit($cartItem->productId(), $tenantId, $cartItem->quantity());
+                $this->checkInventory->authorizeCommit($cartItem->productId(), $tenantId, $cartItem->quantity(), $cartItem->variantId());
                 $orderItems[] = OrderItem::fromCartItem($cartItem);
             }
 
             foreach ($orderItems as $orderItem) {
-                $inventory = $this->inventories->findByProduct($orderItem->productId(), $tenantId);
+                $inventory = $this->inventories->findByProduct($orderItem->productId(), $tenantId, $orderItem->variantId());
                 $inventory->commit($orderItem->quantity());
                 $this->inventories->save($inventory);
 

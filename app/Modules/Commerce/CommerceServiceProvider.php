@@ -10,23 +10,33 @@ use App\Modules\Commerce\Application\Actions\ApplyCouponAction;
 use App\Modules\Commerce\Application\Actions\CalculatePricingAction;
 use App\Modules\Commerce\Application\Actions\CreateCouponAction;
 use App\Modules\Commerce\Application\Actions\CreateCustomerAction;
+use App\Modules\Commerce\Application\Actions\CreateProductVariantAction;
+use App\Modules\Commerce\Application\Actions\CreateVariantAttributeAction;
+use App\Modules\Commerce\Application\Actions\DeleteProductVariantAction;
+use App\Modules\Commerce\Application\Actions\GenerateVariantCombinationsAction;
 use App\Modules\Commerce\Application\Actions\GetCartAction;
 use App\Modules\Commerce\Application\Actions\GetCustomerAction;
 use App\Modules\Commerce\Application\Actions\GetOrderAction;
+use App\Modules\Commerce\Application\Actions\GetProductVariantAction;
 use App\Modules\Commerce\Application\Actions\GetWooCommerceProductAction;
 use App\Modules\Commerce\Application\Actions\ListCustomersAction;
 use App\Modules\Commerce\Application\Actions\ListOrdersAction;
 use App\Modules\Commerce\Application\Actions\ListProductsAction;
+use App\Modules\Commerce\Application\Actions\ListProductVariantsAction;
+use App\Modules\Commerce\Application\Actions\ListVariantAttributesAction;
 use App\Modules\Commerce\Application\Actions\PlaceOrderAction;
 use App\Modules\Commerce\Application\Actions\ProcessPaymentAction;
 use App\Modules\Commerce\Application\Actions\RefundPaymentAction;
 use App\Modules\Commerce\Application\Actions\SyncWooCommerceProductsAction;
+use App\Modules\Commerce\Application\Actions\UpdateProductVariantAction;
 use App\Modules\Commerce\Application\DTOs\CartData;
 use App\Modules\Commerce\Application\DTOs\CouponData;
 use App\Modules\Commerce\Application\DTOs\CustomerData;
 use App\Modules\Commerce\Application\DTOs\OrderData;
 use App\Modules\Commerce\Application\DTOs\PaymentData;
 use App\Modules\Commerce\Application\DTOs\PricingData;
+use App\Modules\Commerce\Application\DTOs\ProductVariantData;
+use App\Modules\Commerce\Application\DTOs\VariantAttributeData;
 use App\Modules\Commerce\Application\Services\ConnectorRegistry;
 use App\Modules\Commerce\Application\Services\MockPaymentGateway;
 use App\Modules\Commerce\Application\Services\NullTaxRateProvider;
@@ -44,6 +54,8 @@ use App\Modules\Commerce\Domain\Repositories\InventoryRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\OrderRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\PaymentRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\ProductRepositoryInterface;
+use App\Modules\Commerce\Domain\Repositories\ProductVariantRepositoryInterface;
+use App\Modules\Commerce\Domain\Repositories\VariantAttributeRepositoryInterface;
 use App\Modules\Commerce\Domain\Services\WooCommerceProductMapper;
 use App\Modules\Commerce\Infrastructure\Connectors\MockProductConnector;
 use App\Modules\Commerce\Infrastructure\Connectors\WooCommerceProductConnector;
@@ -56,6 +68,8 @@ use App\Modules\Commerce\Infrastructure\Repositories\EloquentInventoryRepository
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentOrderRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentPaymentRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentProductRepository;
+use App\Modules\Commerce\Infrastructure\Repositories\EloquentProductVariantRepository;
+use App\Modules\Commerce\Infrastructure\Repositories\EloquentVariantAttributeRepository;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -92,6 +106,8 @@ class CommerceServiceProvider extends ServiceProvider
         $this->app->bind(PaymentRepositoryInterface::class, EloquentPaymentRepository::class);
         $this->app->bind(CouponRepositoryInterface::class, EloquentCouponRepository::class);
         $this->app->bind(DiscountRepositoryInterface::class, EloquentDiscountRepository::class);
+        $this->app->bind(ProductVariantRepositoryInterface::class, EloquentProductVariantRepository::class);
+        $this->app->bind(VariantAttributeRepositoryInterface::class, EloquentVariantAttributeRepository::class);
         $this->app->bind(PaymentGatewayInterface::class, MockPaymentGateway::class);
 
         $this->app->bind(
@@ -129,6 +145,7 @@ class CommerceServiceProvider extends ServiceProvider
                 ownerId: $context->agentId,
                 productId: (int) $input['product_id'],
                 quantity: (int) $input['quantity'],
+                variantId: isset($input['variant_id']) ? (int) $input['variant_id'] : null,
             );
 
             return ['cart' => $cart->toArray(), 'message' => 'Product added to cart.'];
@@ -262,6 +279,104 @@ class CommerceServiceProvider extends ServiceProvider
             $product = $this->app->make(GetWooCommerceProductAction::class)->execute($input['external_id']);
 
             return ['product' => $product->toArray()];
+        });
+
+        // Phase 5, Stage 1 (Product Variants, §7.21). Three of the
+        // request's own 8 capability names hit the usual 3-dot-segment
+        // gotcha (HANDOFF §3 pattern #13):
+        // commerce.variant.attribute.create/.list (4 segments) renamed to
+        // commerce.attribute.create/.list, and
+        // commerce.variant.combinations.generate (4 segments) renamed to
+        // commerce.variant.generate.
+
+        $handlers->register('commerce.attribute.create', function (array $input, AuthContext $context) {
+            /** @var VariantAttributeData $attribute */
+            $attribute = $this->app->make(CreateVariantAttributeAction::class)->execute(
+                tenantId: $context->tenantId,
+                name: $input['name'],
+                values: $input['values'],
+                displayOrder: isset($input['display_order']) ? (int) $input['display_order'] : 0,
+            );
+
+            return ['attribute' => $attribute->toArray()];
+        });
+
+        $handlers->register(
+            'commerce.attribute.list',
+            fn (array $input, AuthContext $context) => [
+                'attributes' => array_map(
+                    fn (VariantAttributeData $attribute) => $attribute->toArray(),
+                    $this->app->make(ListVariantAttributesAction::class)->execute($context->tenantId),
+                ),
+            ],
+        );
+
+        $handlers->register('commerce.variant.create', function (array $input, AuthContext $context) {
+            /** @var ProductVariantData $variant */
+            $variant = $this->app->make(CreateProductVariantAction::class)->execute(
+                tenantId: $context->tenantId,
+                productId: (int) $input['product_id'],
+                attributes: $input['attributes'],
+                priceAmount: (int) $input['price_amount'],
+                priceCurrency: $input['price_currency'],
+                imageUrl: $input['image_url'] ?? null,
+                initialStock: isset($input['initial_stock']) ? (int) $input['initial_stock'] : 0,
+            );
+
+            return ['variant' => $variant->toArray()];
+        });
+
+        $handlers->register('commerce.variant.update', function (array $input, AuthContext $context) {
+            /** @var ProductVariantData $variant */
+            $variant = $this->app->make(UpdateProductVariantAction::class)->execute(
+                id: (int) $input['variant_id'],
+                tenantId: $context->tenantId,
+                priceAmount: (int) $input['price_amount'],
+                priceCurrency: $input['price_currency'],
+                imageUrl: $input['image_url'] ?? null,
+                isActive: (bool) ($input['is_active'] ?? true),
+                stockQuantity: isset($input['stock_quantity']) ? (int) $input['stock_quantity'] : null,
+            );
+
+            return ['variant' => $variant->toArray()];
+        });
+
+        $handlers->register('commerce.variant.delete', function (array $input, AuthContext $context) {
+            $this->app->make(DeleteProductVariantAction::class)->execute((int) $input['variant_id'], $context->tenantId);
+
+            return ['message' => 'Variant deleted.'];
+        });
+
+        $handlers->register('commerce.variant.get', function (array $input, AuthContext $context) {
+            /** @var ProductVariantData $variant */
+            $variant = $this->app->make(GetProductVariantAction::class)->execute((int) $input['variant_id'], $context->tenantId);
+
+            return ['variant' => $variant->toArray()];
+        });
+
+        $handlers->register(
+            'commerce.variant.list',
+            fn (array $input, AuthContext $context) => [
+                'variants' => array_map(
+                    fn (ProductVariantData $variant) => $variant->toArray(),
+                    $this->app->make(ListProductVariantsAction::class)->execute((int) $input['product_id'], $context->tenantId),
+                ),
+            ],
+        );
+
+        $handlers->register('commerce.variant.generate', function (array $input, AuthContext $context) {
+            $variants = $this->app->make(GenerateVariantCombinationsAction::class)->execute(
+                tenantId: $context->tenantId,
+                productId: (int) $input['product_id'],
+                attributeIds: array_map(intval(...), $input['attribute_ids']),
+                priceAmount: (int) $input['price_amount'],
+                priceCurrency: $input['price_currency'],
+            );
+
+            return [
+                'variants' => array_map(fn (ProductVariantData $variant) => $variant->toArray(), $variants),
+                'count' => count($variants),
+            ];
         });
     }
 }

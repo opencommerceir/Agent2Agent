@@ -29,11 +29,13 @@ class Product extends Model
         'price_currency',
         'status',
         'attributes',
+        'is_parent',
     ];
 
     protected $casts = [
         'attributes' => 'array',
         'price_amount' => 'integer',
+        'is_parent' => 'boolean',
     ];
 
     public function category(): BelongsTo

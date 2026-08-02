@@ -13,6 +13,7 @@ final class OrderItemData
         public readonly string $unitPriceCurrency,
         public readonly int $totalPriceAmount,
         public readonly string $totalPriceCurrency,
+        public readonly ?int $variantId = null,
     ) {
     }
 
@@ -25,6 +26,7 @@ final class OrderItemData
             unitPriceCurrency: $item->unitPrice()->currency(),
             totalPriceAmount: $item->totalAmount(),
             totalPriceCurrency: $item->unitPrice()->currency(),
+            variantId: $item->variantId(),
         );
     }
 
@@ -35,6 +37,7 @@ final class OrderItemData
     {
         return [
             'productId' => $this->productId,
+            'variantId' => $this->variantId,
             'quantity' => $this->quantity,
             'unitPriceAmount' => $this->unitPriceAmount,
             'unitPriceCurrency' => $this->unitPriceCurrency,

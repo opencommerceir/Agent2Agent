@@ -9,7 +9,8 @@ Foundation), Stage 2 (Shipping Provider Connector, §7.14), Stage 3
 Infrastructure, §7.16), Stage 5 (Admin Dashboard + Human Authentication,
 §7.17), Stage 6 (Advanced Analytics & KPIs, §7.18), Stage 7 (API
 Versioning System, §7.19), and Stage 8 (Performance Optimization, §7.20 —
-the last Stage of Phase 4).
+the last Stage of Phase 4). Phase 5 (Advanced Commerce) is under way:
+Stage 1 (Product Variants, §7.21) is complete.
 
 The paragraphs below are in build order — read top to bottom for the
 actual chronological story. Finance supplies Commerce's own checkout
@@ -281,23 +282,81 @@ against production must never *write* fake Orders into it every time
 someone wants a timing number). See §7.20 for the full detail.**
 
 648 tests passing (609 + 39 new), zero known regressions. Phase 4 is now
-fully complete (all 8 Stages). Next up: Phase 5 or further Phase 4
-polish — Shipping Zones/partial fulfillment/folding `shipping_cost` into
-checkout pricing (§8.37/§8.35/§8.36), a real carrier implementation of
-`ShippingProviderInterface` (USPS/FedEx/DHL — `MockShippingProviderAdapter`
-is now the template, the same role `WooCommerceProductConnector` played
-for a second real Commerce Connector), a real SMS gateway behind
-`SmsSender` (still an explicit stub — §7.15/§8), wiring
-`HighValueOrderListener`/CRM's own `ticket_created` notification type
-(both scaffolded, still the cheapest available increments — §9), a real
-v3 (or retiring v1 once its sunset date passes — §7.19), extending
-CacheService's own reference integration to more than one module's read
-path (§7.20 — Commerce Product is the only one wired so far), or any
-remaining deferred item in §8/§9. Note: `WorkflowsCapabilityTest`'s own
-docblock still describes working around the now-fixed §8.22 ceiling
-(6-on-hand/order-3, kept under half of stock) — harmless (the test still
-passes either way) but worth a quick cleanup pass since the constraint
-that motivated it is gone.**
+fully complete (all 8 Stages).**
+
+**Phase 5, Stage 1 (Product Variants, §7.21) — the biggest single
+architectural fork of this whole session, confirmed with the user before
+writing any code, the same weight Stage 6's own "reuse Reporting"
+correction carried. The request's own schema put a bare `stock_quantity`
+column directly on `product_variants`, independent of the existing
+`inventories` table's two-phase reserve/commit lifecycle
+(`Inventory::reserve()`/`release()`/`commit()`/`restore()`,
+concurrency-safe row locking via `findByProductForUpdate()`). Building it
+as literally specified would have created a second, parallel
+stock-tracking mechanism for variants alone — reintroducing the exact
+concurrent-reservation race the Tech Debt Sprint already fixed for plain
+Products (§7.13/§8.22), just for variants this time, and leaving
+Workflows'/Analytics' own Inventory-aware code (`InventoryLowListener`,
+`listLowStock()`) blind to variant stock entirely. Confirmed: extend
+`Inventory` instead — a new, optional trailing `?int $variantId = null`
+(HANDOFF §3 pattern #6) threaded through the entity, `inventories`
+migration (nullable `variant_id`, widened unique constraint),
+`InventoryRepositoryInterface`, `CheckInventoryAction`,
+`AddToCartAction`, and `PlaceOrderAction` — every one of Commerce's
+existing, hardened inventory call sites now optionally targets a specific
+variant instead of only ever the parent Product, and every existing
+caller that never passes `variantId` is 100% behaviorally unchanged
+(the full pre-existing 648-test suite passed unmodified, module-wide,
+confirming this). `product_variants` itself carries no stock column at
+all — see that migration's own docblock. One new Inventory capability
+this stage genuinely needed and didn't have: `setQuantityOnHand()`, a
+direct administrative override for initial stock provisioning,
+deliberately kept outside the reserve/commit/restore lifecycle (those are
+all relative, event-driven transitions; provisioning needs an absolute
+"there are now exactly N units" operation).
+
+`CartItem`/`OrderItem`/`Cart::findItem()`/`removeItem()` all gained the
+same optional `variantId` — two different variants of the same Product
+are now always two separate lines, matching a real, pre-existing DB-level
+`unique(cart_id, product_id)` constraint on `cart_items` that had to widen
+to `unique(cart_id, product_id, variant_id)` too (found and fixed during
+planning, not left to fail at runtime). `RemoveFromCartAction`/
+`UpdateCartItemQuantityAction` — neither wired to MCP, per §6 — were
+widened too, for internal correctness (a variant line must be
+removable/adjustable correctly, even though nothing in this stage's own
+request asked for it).
+
+Three of the request's own 8 capability names hit the recurring 3-segment
+gotcha (§3 pattern #13, the same shape WooCommerce/CRM/Workflows/Shipping/
+Notifications already hit): `commerce.variant.attribute.create`/`.list`
+(4 segments) renamed to `commerce.attribute.create`/`.list`, and
+`commerce.variant.combinations.generate` (4 segments) renamed to
+`commerce.variant.generate`. Two "missing piece implied by the request"
+additions (§3 pattern #12): `ListVariantAttributesAction` (the request's
+own Action list named only `CreateVariantAttributeAction`, but its own
+capability list included `commerce.attribute.list`, which needs a real
+Action behind it), and `VariantAttributeNotFoundException`/
+`DuplicateVariantAttributeException` (two small exception types the
+request's own list of 3 didn't name — a real 404 for
+`GenerateVariantCombinationsAction` referencing an unknown attribute id,
+and a real 409 for `variant_attributes`' own DB-level unique(tenant_id,
+name) constraint, rather than either surfacing as a raw, unhandled
+failure). `GenerateVariantCombinationsAction` is idempotent by
+composition (Actions composing Actions, §3 pattern #3) — it calls
+`CreateProductVariantAction` per computed combination and silently skips
+any `DuplicateVariantException`, so re-running it after adding a new
+attribute value only ever creates the genuinely new combinations.
+`products.is_parent` is a documented, deliberately-accepted denormalized
+convenience flag, not a source of truth — see its own migration's
+docblock. See §7.21 for the full detail.**
+
+666 tests passing (648 + 18 new), zero known regressions. Next up:
+whatever Phase 5's own Stage 2 turns out to be (not yet scoped), or
+extending Product Variants itself — Bundle products, per-variant
+weight/shipping (Shipping's own `weight_grams` convention currently only
+reads `Product.attributes`, never a variant's own), a Dashboard UI for
+managing attributes/variants (every other Phase 4 Stage 5/6 resource got
+one, variants didn't this stage), or any remaining deferred item in §8/§9.
 
 This file is a working-state snapshot for picking up development in a new
 session. It assumes you've already read `CLAUDE.md` and `docs/*.md` (the
@@ -337,12 +396,13 @@ from `App\Modules\*`.
 | **Performance Optimization (Stage 8, §7.20)** | `Application/Services/{CacheService,PerformanceMonitor,LazyLoadingDetector}.php`, `Application/Actions/OptimizeQueriesAction.php`, `Infrastructure/Logging/QueryLogger.php` | `CacheService` is tag-aware (`Cache::tags()`, confirmed working under `CACHE_STORE=array` too, not Redis-only) and wired into exactly one module's read path so far — Commerce's `GetProductAction`/`UpdateProductAction`/`DeleteProductAction` (§7.20's own "extend this" note, §9). `PerformanceMonitor` is a lightweight, documented best-effort operational monitor, not a production APM replacement. `QueryLogger` is registered via `DB::listen()` in `CoreServiceProvider::boot()`, skipped during the test suite — see that provider's own docblock for a real `runningUnitTests()` timing gotcha worth knowing before relying on that flag inside a `ServiceProvider::boot()` elsewhere. |
 | **Human/Dashboard Auth (Stage 5, §7.17)** | `Domain/Entities/User.php`, `Domain/ValueObjects/{Email,HashedPassword,UserRole,UserStatus}.php`, `Domain/Repositories/UserRepositoryInterface.php`, `Application/Actions/{CreateUserAction,UpdateUserAction,GetUserAction,ListUsersAction,AuthenticateUserAction}.php`, `Infrastructure/Models/User.php` (extends `Authenticatable`) | Platform-level (no tenant_id) — the second Core entity above tenancy alongside `Tenant` itself, since the Dashboard's own Tenants Management page does full cross-tenant CRUD. Gates the whole `/dashboard/*` route group via a plain `UserRole::Admin`/`Operator` enum + the `admin` route-middleware alias, **not** the tenant-scoped Role/Permission system above. `HashedPassword` uses PHP's own `password_hash()`/`password_verify()`, never Laravel's `Hash` facade (keeps this Domain class framework-free like every other one). Seeded by default: `admin@opencommerce.test` / `password` (`DatabaseSeeder`). |
 
-### `app/Modules/Commerce/` — **no longer a skeleton. Product, Category, Cart, Inventory, Order, Customer, Payment, Coupon, Discount are all real, tested, and MCP-reachable — and Stage 6 added the first real external Connector.**
+### `app/Modules/Commerce/` — **no longer a skeleton. Product, Category, Cart, Inventory, Order, Customer, Payment, Coupon, Discount are all real, tested, and MCP-reachable — Stage 6 added the first real external Connector, and Phase 5 Stage 1 added Product Variants (§7.21), reusing Inventory's own reserve/commit lifecycle rather than a second stock mechanism.**
 
 See §7 for the full stage-by-stage breakdown (what was built, in what order,
-and why). At a glance, the module now has 9 Domain Entities, ~28 Value
-Objects/enums, 3 Domain Services, ~32 Application Actions, 9 Eloquent
-Repositories, and 20 numbered migrations, backing 15 MCP capabilities.
+and why). At a glance, the module now has 12 Domain Entities (9 + `VariantAttribute`/
+`VariantAttributeValue`/`ProductVariant`), ~30 Value Objects/enums, 3 Domain
+Services, ~40 Application Actions, 11 Eloquent Repositories, and 27 numbered
+migrations, backing 23 MCP capabilities.
 
 `Domain/UCP/*` (the 6 normalized value objects for *external* connector
 data — never persisted, never touched by any Stage 1–5 work) is unchanged
@@ -1686,7 +1746,7 @@ php artisan storage:link   # Stage 6, §7.18 — required for analytics.report.e
                             # buttons stream directly and don't need this
 
 # Tests
-php artisan test                                                  # full app suite — 648 tests, ~18s
+php artisan test                                                  # full app suite — 666 tests, ~20s
 cd packages/opencommerce-sdk; vendor/bin/phpunit tests; cd ../..   # SDK's own suite (unaffected by Phase 2)
 
 # Manual/live verification
@@ -1737,12 +1797,12 @@ end to end.
 
 ---
 
-## 6. The 70 MCP capabilities that exist right now
+## 6. The 78 MCP capabilities that exist right now
 
 | Capability | Phase/Stage | Permission | Notes |
 |---|---|---|---|
 | `commerce.product.search` | P2.1 | `commerce.products.read` | Active products only. |
-| `commerce.cart.add` | P2.2 | `commerce.cart.manage` | Reserves Inventory. |
+| `commerce.cart.add` | P2.2 | `commerce.cart.manage` | Reserves Inventory. Optional `variant_id` since P5.1 (§7.21) — omitted, adds the parent Product itself. |
 | `commerce.cart.get` | P2.2 | `commerce.cart.read` | Never persists an empty Cart. |
 | `commerce.order.place` | P2.3 | `commerce.orders.create` | No tax/discount applied (see §8.3). |
 | `commerce.order.get` | P2.3 | `commerce.orders.read` | Tenant-wide, not owner-scoped. |
@@ -1811,6 +1871,14 @@ end to end.
 | `analytics.dashboard.stats` | P4.6 | `analytics.dashboard.read` | The 6 headline KPIs + Top 5 Products + 5 most recent Orders, always "this calendar month, to date." |
 | `analytics.snapshot.generate` | P4.6 | `analytics.snapshots.create` | Computes and upserts today's `AnalyticsSnapshot` — same idempotent-upsert-by-date shape the scheduled command also relies on. |
 | `analytics.report.export` | P4.6 | `analytics.reports.export` | `format: csv\|pdf`. Only `report_type: kpi_summary` is implemented (§8.53). Writes to the `public` disk, returns a URL (an MCP JSON body can't carry raw file bytes). |
+| `commerce.attribute.create` | P5.1 | `commerce.attributes.manage` | Renamed from the requested `commerce.variant.attribute.create` — 4 segments, see §7.21. Creates a tenant-scoped attribute (e.g. "Color") together with all of its values in one call. |
+| `commerce.attribute.list` | P5.1 | `commerce.attributes.read` | Renamed from `commerce.variant.attribute.list` — same reason. |
+| `commerce.variant.create` | P5.1 | `commerce.variants.manage` | Direct, free-form `attributes` input — no registry check against a real VariantAttribute/Value row (§7.21). 409 on a duplicate combination. |
+| `commerce.variant.update` | P5.1 | `commerce.variants.manage` | SKU/attributes not updatable. Optional `stock_quantity` — a direct administrative override (`Inventory::setQuantityOnHand()`), not a reserve/commit operation. |
+| `commerce.variant.delete` | P5.1 | `commerce.variants.manage` | Soft-delete, mirrors `commerce.product.delete`'s own convention. |
+| `commerce.variant.get` | P5.1 | `commerce.variants.read` | Includes the variant's own current stock (`quantityOnHand`/`quantityAvailable`). |
+| `commerce.variant.list` | P5.1 | `commerce.variants.read` | Lists one Product's own variants. |
+| `commerce.variant.generate` | P5.1 | `commerce.variants.manage` | Renamed from the requested `commerce.variant.combinations.generate` — 4 segments, see §7.21. Registry-driven (real VariantAttribute/Value rows only); idempotent — a re-run only creates genuinely new combinations. |
 
 **Deliberately NOT wired to MCP** despite the underlying Action existing and
 being fully tested (see §8.2 for why, and the same reasoning each time):
@@ -3755,6 +3823,206 @@ Feature test, §7.19),
 lifecycle/invalidation/cross-tenant-isolation scenario),
 `tests/Feature/Dashboard/PerformancePageTest.php` (3). 648 tests total
 (609 + 39), 1522 assertions, ~18s runtime (`php artisan test`).
+
+### 7.21 Phase 5, Stage 1 — Product Variants
+
+New Commerce Domain: `ValueObjects/{VariantSKU,VariantCombination}.php`,
+`Entities/{VariantAttribute,VariantAttributeValue,ProductVariant}.php`,
+`Events/{VariantWasCreated,VariantWasUpdated,VariantWasDeleted}.php`,
+`Exceptions/{VariantNotFoundException,DuplicateVariantException,
+InvalidVariantCombinationException,VariantAttributeNotFoundException,
+DuplicateVariantAttributeException}.php` (the last two added unprompted,
+see below), `Repositories/{ProductVariantRepositoryInterface,
+VariantAttributeRepositoryInterface}.php`. New Application:
+`Actions/{CreateVariantAttributeAction,ListVariantAttributesAction,
+CreateProductVariantAction,UpdateProductVariantAction,
+DeleteProductVariantAction,GetProductVariantAction,
+ListProductVariantsAction,GenerateVariantCombinationsAction}.php` (the
+2nd added unprompted), `DTOs/{ProductVariantData,VariantAttributeData,
+VariantCombinationData}.php`. New Infrastructure: 3 Eloquent Models
+(`VariantAttribute`, `VariantAttributeValue`, `ProductVariant`), 2
+Eloquent Repositories. 7 new migrations + widening 3 existing entities
+(`Inventory`, `CartItem`, `OrderItem`) and 4 existing Actions
+(`CheckInventoryAction`, `AddToCartAction`, `PlaceOrderAction`, plus
+`RemoveFromCartAction`/`UpdateCartItemQuantityAction` for internal
+correctness). 8 new MCP capabilities (3 renamed, see §3 pattern #13's own
+entry below).
+
+**The single biggest architectural fork of this whole session — confirmed
+with the user before writing any code, the same weight Stage 6's own
+"reuse Reporting instead of duplicating" correction carried (§7.18).**
+The request's own DB schema put a bare `stock_quantity` integer column
+directly on `product_variants`, entirely independent of the existing
+`inventories` table's own two-phase reserve/commit lifecycle
+(`Inventory::reserve()`/`release()`/`commit()`/`restore()`, HANDOFF §3
+pattern #5) and its concurrency-safe row locking
+(`findByProductForUpdate()`, the exact mechanism the Tech Debt Sprint
+added specifically to close a reservation race, §7.13/§8.22). Building it
+as literally specified would have meant: a second, parallel
+stock-tracking mechanism living alongside the first, forever; variant
+stock with no soft-hold at cart-time (a plain counter checked-then-decremented
+has no reservation phase at all, unless a second, simpler
+mechanism were built just for it — reintroducing the exact race §7.13
+already fixed, just for variants); and Workflows'
+`InventoryLowListener`/Analytics' `listLowStock()` both blind to variant
+stock entirely, since neither would know a second table existed. Raised
+as an explicit architecture question before writing any code (this
+document's AskUserQuestion-equivalent moment); the user confirmed
+extending `Inventory` instead. Concretely: `Inventory` gained an optional
+trailing `?int $variantId = null` (constructor + `stock()` factory +
+`variantId()` getter, HANDOFF §3 pattern #6 — the identical "widen with
+an optional trailing param" shape `customerId`/`tax`/`discount`/`total`/
+Shipping's `providerName` all already used), threaded through the
+`inventories` migration (new nullable `variant_id` FK to
+`product_variants`, `nullOnDelete()`; the old
+`unique(tenant_id, product_id)` constraint widened to
+`unique(tenant_id, product_id, variant_id)` — with a documented, accepted
+gap: MySQL/SQLite treat every NULL as distinct in a unique index, so this
+alone doesn't stop two parent-level rows; the real safety net, matching
+this codebase's own existing style, is
+`EloquentInventoryRepository::save()`'s own find-or-new lookup, which
+already queries the full tuple before inserting), through
+`InventoryRepositoryInterface::findByProduct()`/`findByProductForUpdate()`,
+and through `CheckInventoryAction`'s all four methods
+(`execute`/`authorize`/`executeCommit`/`authorizeCommit`). Every one of
+Commerce's existing, hardened inventory call sites now optionally targets
+one specific variant instead of only ever the parent Product — and every
+existing caller that never passes `variantId` is 100% behaviorally
+unchanged, proven by the complete pre-existing 648-test suite passing
+unmodified (only one file needed a mechanical fix: an existing Mockery
+unit test's `->with(100, 1)` expectation became `->with(100, 1, null)`,
+a test-expectation update, not a behavior change).
+
+`product_variants` itself was built with **no stock column at all** — see
+that table's own migration docblock for the full "why not" alongside the
+"why extend Inventory instead" reasoning above. One genuinely new
+capability this stage needed that `Inventory` didn't have yet:
+`setQuantityOnHand(int $quantity)` — a direct administrative override for
+initial stock provisioning (`CreateProductVariantAction`'s own
+`initialStock` param, `UpdateProductVariantAction`'s own
+`stockQuantity` param), deliberately kept separate from
+reserve/release/commit/restore: those four are all *relative*,
+event-driven transitions ("N units were sold/returned/held"); "there are
+now exactly N units on hand" is a different kind of operation nothing
+before this stage ever needed, and conflating the two would have meant
+either abusing `restore()` (semantically "an Order was cancelled", not
+"we're stocking a new variant for the first time") or `commit()` with a
+negative-shaped workaround.
+
+**`CartItem`/`OrderItem`/`Cart` all needed the identical widening, plus
+one real DB constraint the request's own schema section never
+mentioned.** `CartItem::create()`/`OrderItem::create()`/
+`OrderItem::fromCartItem()` all gained the same optional trailing
+`variantId`; `Cart::findItem()`/`addItem()`/`removeItem()` now match on
+`(productId, variantId)` together, so two different variants of the same
+Product are always two separate CartItem lines, never merged into one —
+the same "identity is the pair, not just productId" correction this
+stage's own request implied but didn't spell out for the *existing*
+`cart_items` table's own **real, pre-existing** `unique(cart_id,
+product_id)` DB constraint (`2026_07_30_000011_create_cart_items_table.php`,
+Stage 2, Phase 2): left alone, adding a second variant of the same
+Product to a Cart would have hit a raw DB uniqueness violation instead of
+succeeding. Found and fixed during planning (this stage's own migration
+widens it to `unique(cart_id, product_id, variant_id)`), not left to
+surface as a confusing runtime failure. `order_items` never had an
+equivalent constraint (Immutable Order Items rule — no dedup invariant
+exists there at all), so its own widening is a pure addition.
+`RemoveFromCartAction`/`UpdateCartItemQuantityAction` — neither wired to
+MCP (§6) — were widened the identical way too, for internal correctness:
+leaving them un-widened would have meant removing/adjusting a variant
+line silently released/reserved the *parent Product's* Inventory instead
+of the variant's own, a real, latent bug nothing in this stage's own
+request called out but that the widening above makes unavoidable to fix
+correctly.
+
+**Three of the request's own 8 capability names hit the recurring
+3-dot-segment gotcha (HANDOFF §3 pattern #13)** — the same shape
+WooCommerce/CRM/Workflows/Shipping (twice)/Notifications (three times)
+already hit: `commerce.variant.attribute.create`/`.list` (4 segments
+each) renamed to `commerce.attribute.create`/`.list` (treating
+"attribute" as its own resource, parallel to "variant", both still under
+`commerce`); `commerce.variant.combinations.generate` (4 segments)
+renamed to `commerce.variant.generate` (the resource stays "variant", the
+verb "generate" already implies combinations).
+
+**Two "missing piece implied by the request" additions (HANDOFF §3
+pattern #12):**
+1. `ListVariantAttributesAction` — the request's own Application-layer
+   Action list named only `CreateVariantAttributeAction`, but its own
+   capability list named `commerce.variant.attribute.list` (renamed to
+   `commerce.attribute.list` above), which needs a real Action behind it
+   regardless of what got left off the Action list.
+2. `VariantAttributeNotFoundException` and
+   `DuplicateVariantAttributeException` — two exception types the
+   request's own list of 3 (`VariantNotFoundException`/
+   `DuplicateVariantException`/`InvalidVariantCombinationException`)
+   didn't name. The first gives `GenerateVariantCombinationsAction` a
+   real 404 for an attribute id that doesn't exist/belong to this
+   tenant, rather than a silently-empty combination set; the second gives
+   `CreateVariantAttributeAction` a real 409 for `variant_attributes`'
+   own real DB-level `unique(tenant_id, name)` constraint, rather than
+   letting a raw uniqueness violation surface as an unhandled 500 — the
+   same reasoning every prior "add an exception unprompted" precedent in
+   this codebase already established (CRM's `TagNotFoundException`,
+   Finance's `OrderNotFoundException`, Shipping's
+   `OrderNotFoundException`, this stage's own docblocks all point back to
+   the same pattern).
+
+**`CreateProductVariantAction` (direct, free-form path) and
+`GenerateVariantCombinationsAction` (registry-driven path) are
+deliberately two different levels of strictness, not an inconsistency.**
+`CreateProductVariantAction`'s own `attributes` input
+(`array<string, string>`, e.g. `['Color' => 'Red', 'Size' => 'L']`) is
+taken at face value for the SKU/JSON snapshot, with no check that "Color"/
+"Red" match a real `VariantAttribute`/`VariantAttributeValue` row — the
+same deliberate looseness `Product.attributes['weight_grams']` already
+has (Shipping, §8.34: "nothing stops X from being wrong, no
+InvalidXException raised for a bad attribute"). `GenerateVariantCombinationsAction`
+is the registry-driven counterpart: every attribute/value it uses comes
+from a real, tenant-owned `VariantAttribute`/`VariantAttributeValue` row,
+ordered by each attribute's own `displayOrder` (both which attributes,
+in the order `attribute_ids` names them, and each attribute's own
+values) — and it's idempotent by composition (Actions composing Actions,
+§3 pattern #3): it calls `CreateProductVariantAction` once per computed
+Cartesian-product combination and silently catches/skips
+`DuplicateVariantException`, so re-running it after a Product gains a new
+attribute or a new value only ever creates the genuinely new
+combinations, proven directly by
+`ProductVariantCapabilityTest::test_fullVariantLifecycle_fromAttributesToPlacedOrder`'s
+own regenerate-is-a-no-op assertion.
+
+**`products.is_parent` is a documented, deliberately-accepted
+denormalized convenience flag, not the source of truth for "does this
+Product have variants"** — that fact is always derivable from whether
+`product_variants` has any row for this `product_id`. Kept because it
+lets `AddToCartAction`/a future Dashboard page answer that question with
+a plain column read instead of an `EXISTS` query on every add-to-cart
+call; maintained by `CreateProductVariantAction` (set `true` on a
+Product's first variant) with a known, accepted drift risk — nothing
+currently reverts it to `false` if every variant is later deleted, the
+same kind of accepted minor drift `KPIValue.value_currency` doubling as a
+unit tag already established (§7.18) rather than adding more machinery
+just to keep one boolean perfectly in sync.
+
+**`VariantAttribute`'s own values are frozen at creation, mirroring
+Workflow's own "rules/actions frozen at creation" shape exactly (§7.9,
+§8.25)** — `CreateVariantAttributeAction`'s own `values` input names
+every value an attribute will ever have, all at once; there is no "add a
+value to an existing attribute" operation this stage, the same
+documented gap Workflows' own rules/actions have carried since Phase 3.
+
+New tests: `tests/Unit/Commerce/{VariantSKUTest,VariantCombinationTest,
+ProductVariantTest,VariantAttributeTest}.php` (6+2+5+3, framework-free),
+`tests/Feature/Commerce/ProductVariantCapabilityTest.php` (2 — the
+literal end-to-end scenario from the request: Product -> 2 attributes
+(Color x3, Size x3) -> generate 9 combinations -> confirm every SKU
+matches `PARENT-ATTR1-ATTR2` -> regenerate is a no-op -> set a real
+price/stock on one variant -> add it to Cart at its own price, not the
+parent's -> place the Order -> confirm the *variant's own* Inventory
+moved, not the parent's (which was never created at all) -> confirm
+`products.is_parent` flipped -> confirm the exact same combination is
+rejected with `DuplicateVariantException`/409; plus tenant isolation on
+`commerce.variant.get`). 666 tests total (648 + 18), zero regressions.
 
 ---
 

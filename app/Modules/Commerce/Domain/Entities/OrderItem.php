@@ -11,6 +11,11 @@ use App\Modules\Commerce\Domain\ValueObjects\Quantity;
  * what was ordered. unitPrice is copied from the CartItem's own snapshot
  * price, one snapshot layer further removed from the live Product price
  * than CartItem already was.
+ *
+ * variantId (Phase 5, Stage 1 — Product Variants, §7.21) is an optional
+ * trailing field, copied straight through from the CartItem being frozen
+ * — null for a plain Product line, exactly as every OrderItem was before
+ * this stage.
  */
 final class OrderItem
 {
@@ -18,22 +23,28 @@ final class OrderItem
         private readonly int $productId,
         private readonly Quantity $quantity,
         private readonly Money $unitPrice,
+        private readonly ?int $variantId = null,
     ) {
     }
 
-    public static function create(int $productId, Quantity $quantity, Money $unitPrice): self
+    public static function create(int $productId, Quantity $quantity, Money $unitPrice, ?int $variantId = null): self
     {
-        return new self($productId, $quantity, $unitPrice);
+        return new self($productId, $quantity, $unitPrice, $variantId);
     }
 
     public static function fromCartItem(CartItem $cartItem): self
     {
-        return new self($cartItem->productId(), $cartItem->quantity(), $cartItem->unitPrice());
+        return new self($cartItem->productId(), $cartItem->quantity(), $cartItem->unitPrice(), $cartItem->variantId());
     }
 
     public function productId(): int
     {
         return $this->productId;
+    }
+
+    public function variantId(): ?int
+    {
+        return $this->variantId;
     }
 
     public function quantity(): Quantity

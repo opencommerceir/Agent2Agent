@@ -102,6 +102,7 @@ class EloquentOrderRepository implements OrderRepositoryInterface
             foreach ($order->items() as $item) {
                 $model->items()->create([
                     'product_id' => $item->productId(),
+                    'variant_id' => $item->variantId(),
                     'quantity' => $item->quantity()->value(),
                     'unit_price_amount' => $item->unitPrice()->amount(),
                     'unit_price_currency' => $item->unitPrice()->currency(),
@@ -120,6 +121,7 @@ class EloquentOrderRepository implements OrderRepositoryInterface
             productId: $itemModel->product_id,
             quantity: new Quantity($itemModel->quantity),
             unitPrice: Money::fromAmount($itemModel->unit_price_amount, $itemModel->unit_price_currency),
+            variantId: $itemModel->variant_id,
         ))->all();
 
         return new OrderEntity(

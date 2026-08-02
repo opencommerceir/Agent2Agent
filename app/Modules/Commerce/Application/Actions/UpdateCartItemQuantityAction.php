@@ -16,6 +16,11 @@ use InvalidArgumentException;
  * increase only needs to reserve the difference (and is checked against
  * availability the same way AddToCartAction is); a decrease only needs
  * to release the difference.
+ *
+ * $variantId (Phase 5, Stage 1 — Product Variants, §7.21) is an optional
+ * trailing param — null targets the parent Product's own line, exactly
+ * as before this stage; a real value targets that specific
+ * ProductVariant's line and its own Inventory row instead.
  */
 final class UpdateCartItemQuantityAction
 {
@@ -32,6 +37,7 @@ final class UpdateCartItemQuantityAction
         int $ownerId,
         int $productId,
         int $newQuantity,
+        ?int $variantId = null,
     ): CartData {
         $cart = $this->carts->findActiveByOwner($tenantId, $ownerType, $ownerId);
 
@@ -39,7 +45,7 @@ final class UpdateCartItemQuantityAction
             throw new CartNotFoundException('No active cart found for this owner.');
         }
 
-        $item = $cart->findItem($productId);
+        $item = $cart->findItem($productId, $variantId);
 
         if (! $item) {
             throw new InvalidArgumentException("Product [{$productId}] is not in this cart.");
@@ -47,10 +53,10 @@ final class UpdateCartItemQuantityAction
 
         $newQty = new Quantity($newQuantity);
         $delta = $newQty->value() - $item->quantity()->value();
-        $inventory = $this->inventories->findByProduct($productId, $tenantId);
+        $inventory = $this->inventories->findByProduct($productId, $tenantId, $variantId);
 
         if ($delta > 0) {
-            $this->checkInventory->authorize($productId, $tenantId, new Quantity($delta));
+            $this->checkInventory->authorize($productId, $tenantId, new Quantity($delta), $variantId);
             $inventory?->reserve(new Quantity($delta));
         } elseif ($delta < 0) {
             $inventory?->release(new Quantity(abs($delta)));

@@ -6,19 +6,27 @@ use App\Modules\Commerce\Domain\Entities\Inventory;
 
 interface InventoryRepositoryInterface
 {
-    public function findByProduct(int $productId, int $tenantId): ?Inventory;
+    /**
+     * $variantId (Phase 5, Stage 1 — Product Variants, §7.21) is an
+     * optional trailing param, the same "widen, don't duplicate" shape
+     * every other cross-stage Inventory extension has used — null looks
+     * up the parent Product's own row (unchanged behavior for every
+     * existing caller that doesn't pass it), a real value looks up that
+     * specific ProductVariant's own row instead.
+     */
+    public function findByProduct(int $productId, int $tenantId, ?int $variantId = null): ?Inventory;
 
     /**
      * Same lookup as findByProduct(), but takes a row-level lock
      * (`SELECT ... FOR UPDATE`) so a concurrent reservation against the
-     * same product serializes instead of racing. Only meaningful inside
-     * an active DB::transaction() — used by AddToCartAction to close the
-     * check-then-act gap between reading available() and writing the new
-     * reservation, which previously let two concurrent Agents each pass
-     * the availability check before either had committed, over-reserving
-     * stock beyond quantityOnHand.
+     * same product (or variant) serializes instead of racing. Only
+     * meaningful inside an active DB::transaction() — used by
+     * AddToCartAction to close the check-then-act gap between reading
+     * available() and writing the new reservation, which previously let
+     * two concurrent Agents each pass the availability check before
+     * either had committed, over-reserving stock beyond quantityOnHand.
      */
-    public function findByProductForUpdate(int $productId, int $tenantId): ?Inventory;
+    public function findByProductForUpdate(int $productId, int $tenantId, ?int $variantId = null): ?Inventory;
 
     /**
      * Added for Analytics' own Low Stock Products KPI (Phase 4 Stage 6,

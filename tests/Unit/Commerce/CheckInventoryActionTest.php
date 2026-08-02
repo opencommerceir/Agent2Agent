@@ -26,7 +26,7 @@ class CheckInventoryActionTest extends TestCase
         $inventory = Inventory::stock(1, 100, 5);
 
         $inventories = Mockery::mock(InventoryRepositoryInterface::class);
-        $inventories->shouldReceive('findByProduct')->once()->with(100, 1)->andReturn($inventory);
+        $inventories->shouldReceive('findByProduct')->once()->with(100, 1, null)->andReturn($inventory);
 
         $result = (new CheckInventoryAction($inventories))->execute(100, 1, new Quantity(3));
 
@@ -39,7 +39,7 @@ class CheckInventoryActionTest extends TestCase
         $inventory->reserve(new Quantity(4));
 
         $inventories = Mockery::mock(InventoryRepositoryInterface::class);
-        $inventories->shouldReceive('findByProduct')->once()->with(100, 1)->andReturn($inventory);
+        $inventories->shouldReceive('findByProduct')->once()->with(100, 1, null)->andReturn($inventory);
 
         $result = (new CheckInventoryAction($inventories))->execute(100, 1, new Quantity(2));
 
@@ -49,7 +49,7 @@ class CheckInventoryActionTest extends TestCase
     public function test_execute_withNoInventoryRecordAtAll_returnsFalse(): void
     {
         $inventories = Mockery::mock(InventoryRepositoryInterface::class);
-        $inventories->shouldReceive('findByProduct')->once()->with(100, 1)->andReturn(null);
+        $inventories->shouldReceive('findByProduct')->once()->with(100, 1, null)->andReturn(null);
 
         $result = (new CheckInventoryAction($inventories))->execute(100, 1, new Quantity(1));
 
@@ -59,7 +59,7 @@ class CheckInventoryActionTest extends TestCase
     public function test_authorize_withInsufficientStock_throwsInsufficientInventoryException(): void
     {
         $inventories = Mockery::mock(InventoryRepositoryInterface::class);
-        $inventories->shouldReceive('findByProduct')->once()->with(100, 1)->andReturn(null);
+        $inventories->shouldReceive('findByProduct')->once()->with(100, 1, null)->andReturn(null);
 
         $this->expectException(InsufficientInventoryException::class);
 
@@ -71,7 +71,7 @@ class CheckInventoryActionTest extends TestCase
         $inventory = Inventory::stock(1, 100, 5);
 
         $inventories = Mockery::mock(InventoryRepositoryInterface::class);
-        $inventories->shouldReceive('findByProduct')->once()->with(100, 1)->andReturn($inventory);
+        $inventories->shouldReceive('findByProduct')->once()->with(100, 1, null)->andReturn($inventory);
 
         (new CheckInventoryAction($inventories))->authorize(100, 1, new Quantity(5));
 

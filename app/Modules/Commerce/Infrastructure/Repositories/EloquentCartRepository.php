@@ -89,6 +89,7 @@ class EloquentCartRepository implements CartRepositoryInterface
             foreach ($cart->items() as $item) {
                 $model->items()->create([
                     'product_id' => $item->productId(),
+                    'variant_id' => $item->variantId(),
                     'quantity' => $item->quantity()->value(),
                     'price_amount' => $item->unitPrice()->amount(),
                     'price_currency' => $item->unitPrice()->currency(),
@@ -105,6 +106,7 @@ class EloquentCartRepository implements CartRepositoryInterface
             productId: $itemModel->product_id,
             quantity: new Quantity($itemModel->quantity),
             unitPrice: Money::fromAmount($itemModel->price_amount, $itemModel->price_currency),
+            variantId: $itemModel->variant_id,
         ))->all();
 
         return new CartEntity(

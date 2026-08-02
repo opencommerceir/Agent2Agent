@@ -33,6 +33,7 @@ final class Product
         private ProductStatus $status,
         private array $attributes,
         private readonly DateTimeImmutable $createdAt,
+        private bool $isParent = false,
     ) {
     }
 
@@ -145,5 +146,21 @@ final class Product
     public function isActive(): bool
     {
         return $this->status === ProductStatus::Active;
+    }
+
+    /**
+     * A denormalized convenience flag, not the source of truth for
+     * "does this Product have variants" — see this stage's own
+     * `add_is_parent_to_products_table` migration docblock (Phase 5,
+     * Stage 1, §7.21) for the full reasoning and its known drift risk.
+     */
+    public function isParent(): bool
+    {
+        return $this->isParent;
+    }
+
+    public function markAsParent(): void
+    {
+        $this->isParent = true;
     }
 }

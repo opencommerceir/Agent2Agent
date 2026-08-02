@@ -21,6 +21,11 @@ use InvalidArgumentException;
  * addItem() is where the "one row per product per cart" rule
  * (CartItem Uniqueness) actually lives: adding a product already in the
  * cart increases its quantity instead of creating a second line.
+ *
+ * Since Phase 5, Stage 1 (Product Variants, §7.21), that identity is
+ * really (productId, variantId) together — findItem() matches on both,
+ * so two different variants of the same Product are always two separate
+ * lines, never merged.
  */
 final class Cart
 {
@@ -51,9 +56,9 @@ final class Cart
         );
     }
 
-    public function addItem(int $productId, Quantity $quantity, Money $unitPrice): void
+    public function addItem(int $productId, Quantity $quantity, Money $unitPrice, ?int $variantId = null): void
     {
-        $existing = $this->findItem($productId);
+        $existing = $this->findItem($productId, $variantId);
 
         if ($existing) {
             $existing->increaseQuantity($quantity);
@@ -61,12 +66,12 @@ final class Cart
             return;
         }
 
-        $this->items[] = CartItem::create($productId, $quantity, $unitPrice);
+        $this->items[] = CartItem::create($productId, $quantity, $unitPrice, $variantId);
     }
 
-    public function removeItem(int $productId): CartItem
+    public function removeItem(int $productId, ?int $variantId = null): CartItem
     {
-        $item = $this->findItem($productId);
+        $item = $this->findItem($productId, $variantId);
 
         if (! $item) {
             throw new InvalidArgumentException("Product [{$productId}] is not in this cart.");
@@ -74,16 +79,16 @@ final class Cart
 
         $this->items = array_values(array_filter(
             $this->items,
-            fn (CartItem $cartItem) => $cartItem->productId() !== $productId,
+            fn (CartItem $cartItem) => ! ($cartItem->productId() === $productId && $cartItem->variantId() === $variantId),
         ));
 
         return $item;
     }
 
-    public function findItem(int $productId): ?CartItem
+    public function findItem(int $productId, ?int $variantId = null): ?CartItem
     {
         foreach ($this->items as $item) {
-            if ($item->productId() === $productId) {
+            if ($item->productId() === $productId && $item->variantId() === $variantId) {
                 return $item;
             }
         }
