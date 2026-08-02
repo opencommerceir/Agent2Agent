@@ -8,6 +8,9 @@ use App\Core\Domain\ValueObjects\MemberType;
 use App\Modules\Commerce\Application\Actions\AddToCartAction;
 use App\Modules\Commerce\Application\Actions\ApplyCouponAction;
 use App\Modules\Commerce\Application\Actions\ApproveWarehouseTransferAction;
+use App\Modules\Commerce\Application\Actions\BulkInventoryUpdateAction;
+use App\Modules\Commerce\Application\Actions\BulkPriceUpdateAction;
+use App\Modules\Commerce\Application\Actions\BulkStatusUpdateAction;
 use App\Modules\Commerce\Application\Actions\CalculatePricingAction;
 use App\Modules\Commerce\Application\Actions\CompleteWarehouseTransferAction;
 use App\Modules\Commerce\Application\Actions\CreateCouponAction;
@@ -16,8 +19,10 @@ use App\Modules\Commerce\Application\Actions\CreateProductVariantAction;
 use App\Modules\Commerce\Application\Actions\CreateVariantAttributeAction;
 use App\Modules\Commerce\Application\Actions\CreateWarehouseAction;
 use App\Modules\Commerce\Application\Actions\DeleteProductVariantAction;
+use App\Modules\Commerce\Application\Actions\ExportOrdersAction;
 use App\Modules\Commerce\Application\Actions\FindNearestWarehouseAction;
 use App\Modules\Commerce\Application\Actions\GenerateVariantCombinationsAction;
+use App\Modules\Commerce\Application\Actions\GetBulkOperationAction;
 use App\Modules\Commerce\Application\Actions\GetCartAction;
 use App\Modules\Commerce\Application\Actions\GetCustomerAction;
 use App\Modules\Commerce\Application\Actions\GetOrderAction;
@@ -25,6 +30,9 @@ use App\Modules\Commerce\Application\Actions\GetProductVariantAction;
 use App\Modules\Commerce\Application\Actions\GetWarehouseAction;
 use App\Modules\Commerce\Application\Actions\GetWarehouseStockAction;
 use App\Modules\Commerce\Application\Actions\GetWooCommerceProductAction;
+use App\Modules\Commerce\Application\Actions\ImportCustomersAction;
+use App\Modules\Commerce\Application\Actions\ImportProductsAction;
+use App\Modules\Commerce\Application\Actions\ListBulkOperationsAction;
 use App\Modules\Commerce\Application\Actions\ListCustomersAction;
 use App\Modules\Commerce\Application\Actions\ListOrdersAction;
 use App\Modules\Commerce\Application\Actions\ListProductsAction;
@@ -38,6 +46,7 @@ use App\Modules\Commerce\Application\Actions\RequestWarehouseTransferAction;
 use App\Modules\Commerce\Application\Actions\SyncWooCommerceProductsAction;
 use App\Modules\Commerce\Application\Actions\UpdateProductVariantAction;
 use App\Modules\Commerce\Application\Actions\UpdateWarehouseAction;
+use App\Modules\Commerce\Application\DTOs\BulkOperationData;
 use App\Modules\Commerce\Application\DTOs\CartData;
 use App\Modules\Commerce\Application\DTOs\CouponData;
 use App\Modules\Commerce\Application\DTOs\CustomerData;
@@ -48,6 +57,10 @@ use App\Modules\Commerce\Application\DTOs\ProductVariantData;
 use App\Modules\Commerce\Application\DTOs\VariantAttributeData;
 use App\Modules\Commerce\Application\DTOs\WarehouseData;
 use App\Modules\Commerce\Application\DTOs\WarehouseTransferData;
+use App\Modules\Commerce\Application\Services\CsvParser;
+use App\Modules\Commerce\Application\Services\CsvValidator;
+use App\Modules\Commerce\Domain\Services\CsvParserInterface;
+use App\Modules\Commerce\Domain\Services\CsvValidatorInterface;
 use App\Modules\Commerce\Application\Services\ConnectorRegistry;
 use App\Modules\Commerce\Application\Services\MockPaymentGateway;
 use App\Modules\Commerce\Application\Services\NullTaxRateProvider;
@@ -66,6 +79,7 @@ use App\Modules\Commerce\Domain\Repositories\OrderRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\PaymentRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\ProductRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\ProductVariantRepositoryInterface;
+use App\Modules\Commerce\Domain\Repositories\BulkOperationRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\VariantAttributeRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\WarehouseRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\WarehouseTransferRepositoryInterface;
@@ -82,6 +96,7 @@ use App\Modules\Commerce\Infrastructure\Repositories\EloquentOrderRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentPaymentRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentProductRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentProductVariantRepository;
+use App\Modules\Commerce\Infrastructure\Repositories\EloquentBulkOperationRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentVariantAttributeRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentWarehouseRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentWarehouseTransferRepository;
@@ -125,6 +140,9 @@ class CommerceServiceProvider extends ServiceProvider
         $this->app->bind(VariantAttributeRepositoryInterface::class, EloquentVariantAttributeRepository::class);
         $this->app->bind(WarehouseRepositoryInterface::class, EloquentWarehouseRepository::class);
         $this->app->bind(WarehouseTransferRepositoryInterface::class, EloquentWarehouseTransferRepository::class);
+        $this->app->bind(BulkOperationRepositoryInterface::class, EloquentBulkOperationRepository::class);
+        $this->app->bind(CsvParserInterface::class, CsvParser::class);
+        $this->app->bind(CsvValidatorInterface::class, CsvValidator::class);
         $this->app->bind(PaymentGatewayInterface::class, MockPaymentGateway::class);
 
         $this->app->bind(
@@ -507,5 +525,102 @@ class CommerceServiceProvider extends ServiceProvider
 
             return ['transfer' => $transfer->toArray()];
         });
+
+        // Phase 5, Stage 3 (Bulk Operations, §7.23). See
+        // CommerceCapabilities' own docblock for the 8-for-8 capability
+        // renames this stage needed (the recurring 3-dot-segment gotcha).
+
+        $handlers->register('commerce.bulk.import_products', function (array $input, AuthContext $context) {
+            /** @var BulkOperationData $operation */
+            $operation = $this->app->make(ImportProductsAction::class)->execute(
+                tenantId: $context->tenantId,
+                createdBy: $context->agentId,
+                filePath: $input['file_path'],
+                options: $input['options'] ?? [],
+            );
+
+            return ['operation' => $operation->toArray()];
+        });
+
+        $handlers->register('commerce.bulk.import_customers', function (array $input, AuthContext $context) {
+            /** @var BulkOperationData $operation */
+            $operation = $this->app->make(ImportCustomersAction::class)->execute(
+                tenantId: $context->tenantId,
+                createdBy: $context->agentId,
+                filePath: $input['file_path'],
+            );
+
+            return ['operation' => $operation->toArray()];
+        });
+
+        $handlers->register('commerce.bulk.export_orders', function (array $input, AuthContext $context) {
+            /** @var array{operation: BulkOperationData, downloadUrl: ?string} $result */
+            $result = $this->app->make(ExportOrdersAction::class)->execute(
+                tenantId: $context->tenantId,
+                createdBy: $context->agentId,
+                startDate: $input['start_date'] ?? null,
+                endDate: $input['end_date'] ?? null,
+                status: $input['status'] ?? null,
+            );
+
+            return ['operation' => $result['operation']->toArray(), 'download_url' => $result['downloadUrl']];
+        });
+
+        $handlers->register('commerce.bulk.update_price', function (array $input, AuthContext $context) {
+            /** @var BulkOperationData $operation */
+            $operation = $this->app->make(BulkPriceUpdateAction::class)->execute(
+                tenantId: $context->tenantId,
+                createdBy: $context->agentId,
+                productIds: array_map(intval(...), $input['product_ids']),
+                newPriceAmount: (int) $input['new_price'],
+                newPriceCurrency: $input['currency'],
+            );
+
+            return ['operation' => $operation->toArray()];
+        });
+
+        $handlers->register('commerce.bulk.update_status', function (array $input, AuthContext $context) {
+            /** @var BulkOperationData $operation */
+            $operation = $this->app->make(BulkStatusUpdateAction::class)->execute(
+                tenantId: $context->tenantId,
+                createdBy: $context->agentId,
+                productIds: array_map(intval(...), $input['product_ids']),
+                newStatus: $input['new_status'],
+            );
+
+            return ['operation' => $operation->toArray()];
+        });
+
+        $handlers->register('commerce.bulk.update_inventory', function (array $input, AuthContext $context) {
+            /** @var BulkOperationData $operation */
+            $operation = $this->app->make(BulkInventoryUpdateAction::class)->execute(
+                tenantId: $context->tenantId,
+                createdBy: $context->agentId,
+                updates: $input['updates'],
+            );
+
+            return ['operation' => $operation->toArray()];
+        });
+
+        $handlers->register('commerce.bulk.get', function (array $input, AuthContext $context) {
+            /** @var BulkOperationData $operation */
+            $operation = $this->app->make(GetBulkOperationAction::class)->execute((int) $input['operation_id'], $context->tenantId);
+
+            return ['operation' => $operation->toArray()];
+        });
+
+        $handlers->register(
+            'commerce.bulk.list',
+            fn (array $input, AuthContext $context) => [
+                'operations' => array_map(
+                    fn (BulkOperationData $operation) => $operation->toArray(),
+                    $this->app->make(ListBulkOperationsAction::class)->execute(
+                        $context->tenantId,
+                        $input['type'] ?? null,
+                        $input['status'] ?? null,
+                    ),
+                ),
+            ],
+        );
     }
 }

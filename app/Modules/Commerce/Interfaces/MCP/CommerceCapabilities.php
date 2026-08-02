@@ -303,6 +303,75 @@ final class CommerceCapabilities
                 'outputSchema' => ['transfer' => 'array'],
                 'requiredPermissions' => ['commerce.transfers.manage'],
             ],
+            // Phase 5, Stage 3 (Bulk Operations, §7.23). All 8 of the
+            // request's own capability names were 4 dot-separated segments
+            // — CapabilityName requires exactly 3 (HANDOFF gotcha #2/§3
+            // pattern #13) — renamed below by folding the resource+verb
+            // pair into one underscored action segment (the regex allows
+            // underscores within a segment): commerce.bulk.import.products
+            // -> commerce.bulk.import_products, commerce.bulk.export.orders
+            // -> commerce.bulk.export_orders, commerce.bulk.price.update ->
+            // commerce.bulk.update_price, commerce.bulk.operation.get ->
+            // commerce.bulk.get, and so on.
+            [
+                'name' => 'commerce.bulk.import_products',
+                'description' => 'Import Products in bulk from a CSV file (sku,name,price,currency,category,status,stock_quantity), processed as a background BulkOperation',
+                // options is optional (reserved, unused this stage).
+                'inputSchema' => ['file_path' => 'string'],
+                'outputSchema' => ['operation' => 'array'],
+                'requiredPermissions' => ['commerce.products.import'],
+            ],
+            [
+                'name' => 'commerce.bulk.import_customers',
+                'description' => 'Import Customers in bulk from a CSV file (email,first_name,last_name,phone), processed as a background BulkOperation',
+                'inputSchema' => ['file_path' => 'string'],
+                'outputSchema' => ['operation' => 'array'],
+                'requiredPermissions' => ['commerce.customers.import'],
+            ],
+            [
+                'name' => 'commerce.bulk.export_orders',
+                'description' => 'Export Orders to CSV (order_number,customer_email,total_amount,status,created_at) within an optional date range/status filter',
+                // start_date, end_date, and status are all optional.
+                'inputSchema' => [],
+                'outputSchema' => ['operation' => 'array', 'download_url' => 'string'],
+                'requiredPermissions' => ['commerce.orders.export'],
+            ],
+            [
+                'name' => 'commerce.bulk.update_price',
+                'description' => 'Update the price of many Products at once, tracked as a background BulkOperation',
+                'inputSchema' => ['product_ids' => 'array', 'new_price' => 'integer', 'currency' => 'string'],
+                'outputSchema' => ['operation' => 'array'],
+                'requiredPermissions' => ['commerce.products.update'],
+            ],
+            [
+                'name' => 'commerce.bulk.update_status',
+                'description' => 'Update the status of many Products at once, tracked as a background BulkOperation',
+                'inputSchema' => ['product_ids' => 'array', 'new_status' => 'string'],
+                'outputSchema' => ['operation' => 'array'],
+                'requiredPermissions' => ['commerce.products.update'],
+            ],
+            [
+                'name' => 'commerce.bulk.update_inventory',
+                'description' => 'Set on-hand Inventory for many Products/ProductVariants at once, tracked as a background BulkOperation',
+                'inputSchema' => ['updates' => 'array'],
+                'outputSchema' => ['operation' => 'array'],
+                'requiredPermissions' => ['commerce.inventory.update'],
+            ],
+            [
+                'name' => 'commerce.bulk.get',
+                'description' => 'Get a BulkOperation by id, including its real-time progress',
+                'inputSchema' => ['operation_id' => 'integer'],
+                'outputSchema' => ['operation' => 'array'],
+                'requiredPermissions' => ['commerce.bulk.read'],
+            ],
+            [
+                'name' => 'commerce.bulk.list',
+                'description' => "List the tenant's own BulkOperations",
+                // type and status are both optional.
+                'inputSchema' => [],
+                'outputSchema' => ['operations' => 'array'],
+                'requiredPermissions' => ['commerce.bulk.read'],
+            ],
         ];
     }
 }

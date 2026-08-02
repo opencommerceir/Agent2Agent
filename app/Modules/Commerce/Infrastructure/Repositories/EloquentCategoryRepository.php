@@ -16,6 +16,13 @@ class EloquentCategoryRepository implements CategoryRepositoryInterface
         return $model ? $this->toEntity($model) : null;
     }
 
+    public function findByName(string $name, int $tenantId): ?CategoryEntity
+    {
+        $model = CategoryModel::query()->where('tenant_id', $tenantId)->where('name', $name)->first();
+
+        return $model ? $this->toEntity($model) : null;
+    }
+
     public function slugExists(string $slug, int $tenantId): bool
     {
         return CategoryModel::query()->where('tenant_id', $tenantId)->where('slug', $slug)->exists();

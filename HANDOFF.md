@@ -10,8 +10,8 @@ Infrastructure, §7.16), Stage 5 (Admin Dashboard + Human Authentication,
 §7.17), Stage 6 (Advanced Analytics & KPIs, §7.18), Stage 7 (API
 Versioning System, §7.19), and Stage 8 (Performance Optimization, §7.20 —
 the last Stage of Phase 4). Phase 5 (Advanced Commerce) is under way:
-Stage 1 (Product Variants, §7.21) and Stage 2 (Multi-warehouse Inventory,
-§7.22) are both complete.
+Stage 1 (Product Variants, §7.21), Stage 2 (Multi-warehouse Inventory,
+§7.22), and Stage 3 (Bulk Operations, §7.23) are all complete.
 
 The paragraphs below are in build order — read top to bottom for the
 actual chronological story. Finance supplies Commerce's own checkout
@@ -452,13 +452,135 @@ seeding the repository directly, the same "built the mechanism, no
 Action-level entry point requested yet" gap this codebase has carried
 before (§6/§8.2) — see `GetWarehouseStockAction`'s own docblock.
 
-720 tests passing (666 + 54 new), zero known regressions. Next up:
-whatever Phase 5's own Stage 3 turns out to be (not yet scoped — Bundle
-products, a Dashboard UI for Warehouses/Transfers/attributes-and-variants,
-wiring `CreateShippingMethodAction`/`UpdateWarehouseAction`-equivalents
-for `rate_per_km`, a `MarkTransferInTransitAction` to reach
-`TransferStatus::InTransit` for real), or any remaining deferred item in
-§8/§9.
+720 tests passing (666 + 54 new), zero known regressions.
+
+**Phase 5, Stage 3 (Bulk Operations, §7.23) — the same foundation-first,
+then-parallelize orchestration §7.22 established, run a second time, this
+time genuinely two-for-two independent slices from the start rather than
+a corrected split.** Unlike Stage 2's own request (which framed 4 parts
+with a real A->B->C/D dependency chain that had to be restructured), this
+stage's own 3-part split (CSV Engine / Bulk Update Actions / Background
+Jobs) already contained one real seam worth widening: Bulk Update
+(price/status/inventory) never touches a CSV file at all — every one of
+its 3 capabilities takes a plain array of ids directly — so it never
+depended on the CSV Engine to begin with. The orchestrating session
+folded "Background Jobs" into whichever of the other two slices actually
+produces each Job (Import/Export's own two Jobs went with the CSV Engine
+slice; Bulk Update's own one Job went with the Bulk Update slice) rather
+than keeping Jobs as a third, artificially-separate bucket that would
+have needed both other slices finished first — turning a 3-part sequence
+into 2 fully parallel slices after the shared foundation. Both returned
+clean on the first run against the full pre-existing suite; the
+orchestrating session's own review found exactly one real gap in the
+foundation it had built (`BulkOperation` had `setErrorFilePath()` but no
+`setFilePath()` — the Export slice's own Job needed one to record its
+output file) — fixed directly on the entity rather than left as either
+agent's own workaround, the same "the orchestrator owns and repairs the
+shared foundation" principle §7.22's own retrospective already
+recommended.
+
+This stage is also this codebase's first real background Job — no
+`app/Jobs`-equivalent directory (`app/Modules/Commerce/Application/Jobs/`)
+existed anywhere before it. `QUEUE_CONNECTION=database` (`.env`) and
+`=sync` (`phpunit.xml`) were both already configured (the default Laravel
+scaffold, unused until now) — every Job in this stage takes only
+primitive constructor arguments (ids, strings, plain arrays), never a
+Repository/Service instance, since a queued Job's constructor arguments
+are serialized onto the queue; every dependency is method-injected into
+`handle()` itself instead, the same way a Controller action receives its
+own dependencies. Under the `sync` driver every test in this stage
+observes a Job's *final* state immediately (no polling needed) — every
+MCP-facing Action re-fetches the `BulkOperation` from the repository
+after `dispatch()` rather than returning the just-created Pending
+snapshot, specifically so this holds true under `sync` without lying
+under `database` (where the same Action would correctly return a still-
+Pending operation for a real caller to poll via `commerce.bulk.get`).
+
+`BulkOperation` deliberately does NOT hold its own `BulkOperationItem[]`
+collection the way `WarehouseTransfer` holds its frozen
+`WarehouseTransferItem[]` (§7.22) — a Transfer's items are a handful,
+fixed at creation; a BulkOperation's items are potentially thousands,
+appended one at a time by a long-running Job.
+`BulkOperationRepositoryInterface::saveItem()` appends a single row
+directly instead of re-saving a growing in-memory array on every tick —
+see `BulkOperation`'s own docblock for the full reasoning, a new,
+documented departure from the "repo owns and re-saves the whole child
+collection" shape `Invoice`/`WarehouseTransfer` both established, driven
+by cardinality, not inconsistency. Every chunk of up to 100 rows (rule
+§د.2) runs inside its own `DB::transaction()`, with each row's own
+try/catch living *inside* that transaction's closure — a caught,
+ordinary row failure is just a recorded outcome (never rolls back the
+other rows already written in that same chunk), while a genuinely
+uncaught/fatal error still rolls back the whole chunk correctly; a
+separate, outer try/catch around each Job's entire `handle()` body maps
+anything unrecoverable to `BulkOperation::fail()`, a different failure
+class than an ordinary per-row one. `BulkOperation::complete()` picks
+its own terminal status (`Completed`/`Partial`/`Failed`) from the final
+row counts rather than requiring the caller to name one — the same
+"entity decides its own outcome from the facts it already holds" shape
+`WarehouseTransfer`'s own `ALLOWED_TRANSITIONS` establishes, one level
+more automatic.
+
+`BulkInventoryUpdate` wasn't in the request's own 5-case
+`BulkOperationType` enum list, but `BulkInventoryUpdateAction`/
+`commerce.bulk.update_inventory` were both explicitly requested elsewhere
+in the same brief — added unprompted, same reasoning every prior "add
+unprompted what the request's own other sections already imply" precedent
+in this codebase gives (§3 pattern #12). All 8 of the request's own
+capability names were 4 dot-separated segments (every single one, the
+worst hit rate of any stage so far) — renamed by folding the
+resource+verb pair into one underscored action segment
+(`CapabilityName`'s own regex permits underscores within a segment):
+`commerce.bulk.import.products`/`.customers` -> `commerce.bulk.import_products`/
+`import_customers`, `commerce.bulk.export.orders` ->
+`commerce.bulk.export_orders`, `commerce.bulk.price.update`/
+`.status.update`/`.inventory.update` -> `commerce.bulk.update_price`/
+`update_status`/`update_inventory`, `commerce.bulk.operation.get`/`.list`
+-> `commerce.bulk.get`/`.list`.
+
+Two exceptions weren't in the original request's list of 3 in the sense
+that their exact shape needed a call: `InvalidCsvFormatException`
+(extends `InvalidArgumentException` directly, no marker interface, same
+shape `InvalidSKUException` has — maps to `VALIDATION_ERROR`/422 via
+`MCPExceptionHandler`'s existing handling of a plain
+`InvalidArgumentException`, thrown for a *whole-file* problem, never a
+single row's own failure, which `ValidationResult`/`BulkOperationItem`
+handle instead without ever throwing) and `BulkOperationException`
+(implements neither marker interface, same reasoning
+`WooCommerceApiException`/`ShippingProviderException` already give — maps
+to `INTERNAL_ERROR`/500, though in practice this stage's own Jobs map an
+unrecoverable failure to `BulkOperation::fail()` + a domain event rather
+than ever letting an exception reach MCP at all, since a Job's own
+failure has no HTTP request left to answer by the time it happens).
+
+New tests: `tests/Unit/Commerce/{BulkOperationTest,ValidationResultTest,
+CsvParserTest,CsvValidatorTest}.php` (10+3+~6+~5, framework-free except
+`CsvParserTest`'s real temp file),
+`tests/Feature/Commerce/{ImportProductsActionTest,ImportCustomersActionTest,
+ExportOrdersActionTest,BulkPriceUpdateActionTest,BulkStatusUpdateActionTest,
+BulkInventoryUpdateActionTest}.php` (Action-level, real DB + faked disks),
+and `tests/Feature/Commerce/BulkOperationCapabilityTest.php` (1 test — the
+literal 10-step end-to-end scenario from the request, entirely through
+MCP: a 50-row Product CSV with 5 deliberately invalid rows -> import ->
+real-time progress already final under `sync` -> `status: partial`,
+`successRows: 45`, `failedRows: 5` -> the error CSV on the `public` disk
+lists exactly those 5 rows -> a bulk price update and a bulk status
+change across the imported Products, each its own `BulkOperation` ->
+an Orders export with a date filter, downloadable -> the tenant's own
+`commerce.bulk.list` shows all 4 operations -> tenant isolation on both
+`commerce.bulk.get`/`.list`). Kept at 50 rows, not the request's own
+literal 1000, the same "prove the proportional behavior, not raw
+throughput" scope this codebase's own test suite always uses for a
+data-volume claim.
+
+762 tests passing (720 + 42 new), zero known regressions. Next up:
+whatever Phase 5's own Stage 4 turns out to be (not yet scoped — Bundle
+products, a Dashboard UI across every Phase 5 resource so far
+(Warehouses/Transfers/attributes-and-variants/BulkOperations, none of
+which got one this Phase), a real file-upload endpoint for
+`commerce.bulk.import_products`/`.import_customers` so an Agent doesn't
+need to place a CSV on the server's own `local` disk out of band, or any
+remaining deferred item in §8/§9.
 
 This file is a working-state snapshot for picking up development in a new
 session. It assumes you've already read `CLAUDE.md` and `docs/*.md` (the
@@ -498,14 +620,14 @@ from `App\Modules\*`.
 | **Performance Optimization (Stage 8, §7.20)** | `Application/Services/{CacheService,PerformanceMonitor,LazyLoadingDetector}.php`, `Application/Actions/OptimizeQueriesAction.php`, `Infrastructure/Logging/QueryLogger.php` | `CacheService` is tag-aware (`Cache::tags()`, confirmed working under `CACHE_STORE=array` too, not Redis-only) and wired into exactly one module's read path so far — Commerce's `GetProductAction`/`UpdateProductAction`/`DeleteProductAction` (§7.20's own "extend this" note, §9). `PerformanceMonitor` is a lightweight, documented best-effort operational monitor, not a production APM replacement. `QueryLogger` is registered via `DB::listen()` in `CoreServiceProvider::boot()`, skipped during the test suite — see that provider's own docblock for a real `runningUnitTests()` timing gotcha worth knowing before relying on that flag inside a `ServiceProvider::boot()` elsewhere. |
 | **Human/Dashboard Auth (Stage 5, §7.17)** | `Domain/Entities/User.php`, `Domain/ValueObjects/{Email,HashedPassword,UserRole,UserStatus}.php`, `Domain/Repositories/UserRepositoryInterface.php`, `Application/Actions/{CreateUserAction,UpdateUserAction,GetUserAction,ListUsersAction,AuthenticateUserAction}.php`, `Infrastructure/Models/User.php` (extends `Authenticatable`) | Platform-level (no tenant_id) — the second Core entity above tenancy alongside `Tenant` itself, since the Dashboard's own Tenants Management page does full cross-tenant CRUD. Gates the whole `/dashboard/*` route group via a plain `UserRole::Admin`/`Operator` enum + the `admin` route-middleware alias, **not** the tenant-scoped Role/Permission system above. `HashedPassword` uses PHP's own `password_hash()`/`password_verify()`, never Laravel's `Hash` facade (keeps this Domain class framework-free like every other one). Seeded by default: `admin@opencommerce.test` / `password` (`DatabaseSeeder`). |
 
-### `app/Modules/Commerce/` — **no longer a skeleton. Product, Category, Cart, Inventory, Order, Customer, Payment, Coupon, Discount are all real, tested, and MCP-reachable — Stage 6 added the first real external Connector, Phase 5 Stage 1 added Product Variants (§7.21), and Phase 5 Stage 2 added Multi-warehouse Inventory (§7.22), both reusing Inventory's own reserve/commit lifecycle rather than a second stock mechanism.**
+### `app/Modules/Commerce/` — **no longer a skeleton. Product, Category, Cart, Inventory, Order, Customer, Payment, Coupon, Discount are all real, tested, and MCP-reachable — Stage 6 added the first real external Connector, Phase 5 Stage 1 added Product Variants (§7.21), Phase 5 Stage 2 added Multi-warehouse Inventory (§7.22), and Phase 5 Stage 3 added Bulk Operations (§7.23) — this codebase's first background Jobs.**
 
 See §7 for the full stage-by-stage breakdown (what was built, in what order,
-and why). At a glance, the module now has 15 Domain Entities (12 +
-`Warehouse`/`WarehouseTransfer`/`WarehouseTransferItem`), ~33 Value
-Objects/enums, 5 Domain Services (+ `WarehouseDistanceCalculator`/
-`NearestWarehouseFinder`), ~52 Application Actions, 13 Eloquent
-Repositories, and 32 numbered migrations, backing 32 MCP capabilities.
+and why). At a glance, the module now has 17 Domain Entities (15 +
+`BulkOperation`/`BulkOperationItem`), ~36 Value Objects/enums, 5 Domain
+Services, ~60 Application Actions, 14 Eloquent Repositories, 3 Jobs
+(`app/Modules/Commerce/Application/Jobs/`, new this stage), and 34
+numbered migrations, backing 40 MCP capabilities.
 
 `Domain/UCP/*` (the 6 normalized value objects for *external* connector
 data — never persisted, never touched by any Stage 1–5 work) is unchanged
@@ -1917,7 +2039,7 @@ end to end.
 
 ---
 
-## 6. The 87 MCP capabilities that exist right now
+## 6. The 95 MCP capabilities that exist right now
 
 | Capability | Phase/Stage | Permission | Notes |
 |---|---|---|---|
@@ -2008,6 +2130,14 @@ end to end.
 | `commerce.transfer.request` | P5.2 | `commerce.transfers.manage` | Renamed from `commerce.warehouse.transfer.request` — same reason. No Inventory side effect yet (Pending). |
 | `commerce.transfer.approve` | P5.2 | `commerce.transfers.manage` | Renamed from `commerce.warehouse.transfer.approve` — same reason. Reserves at the source Warehouse; 409 (`InsufficientWarehouseStockException`) if any item can't be covered. |
 | `commerce.transfer.complete` | P5.2 | `commerce.transfers.manage` | Renamed from `commerce.warehouse.transfer.complete` — same reason. Commits at the source, `receiveStock()`s the destination. |
+| `commerce.bulk.import_products` | P5.3 | `commerce.products.import` | Renamed from `commerce.bulk.import.products` — 4 segments, see §7.23. Upserts by SKU; returns immediately with the (under `sync`, already-final) `BulkOperation`. |
+| `commerce.bulk.import_customers` | P5.3 | `commerce.customers.import` | Renamed from `commerce.bulk.import.customers` — same reason. Upserts by email. |
+| `commerce.bulk.export_orders` | P5.3 | `commerce.orders.export` | Renamed from `commerce.bulk.export.orders` — same reason. `start_date`/`end_date`/`status` all optional; every exported row is always a success (no per-row failure concept). |
+| `commerce.bulk.update_price` | P5.3 | `commerce.products.update` | Renamed from `commerce.bulk.price.update` — same reason. Chunks of 100, one `DB::transaction()` each. |
+| `commerce.bulk.update_status` | P5.3 | `commerce.products.update` | Renamed from `commerce.bulk.status.update` — same reason. A bogus status name fails fast, before any `BulkOperation` is created. |
+| `commerce.bulk.update_inventory` | P5.3 | `commerce.inventory.update` | Renamed from `commerce.bulk.inventory.update` — same reason. Direct `setQuantityOnHand()`, not reserve/commit. |
+| `commerce.bulk.get` | P5.3 | `commerce.bulk.read` | Renamed from `commerce.bulk.operation.get` — same reason. |
+| `commerce.bulk.list` | P5.3 | `commerce.bulk.read` | Renamed from `commerce.bulk.operation.list` — same reason. Optional `type`/`status`. |
 
 **Deliberately NOT wired to MCP** despite the underlying Action existing and
 being fully tested (see §8.2 for why, and the same reasoning each time):
@@ -4366,6 +4496,123 @@ Transfer against Shiraz's own zero stock rejected 409 at Approve -> tenant
 isolation on `commerce.warehouse.get` -> the pre-existing non-warehouse
 Cart/Order flow proven unaffected). 720 tests total (666 + 54), zero
 regressions.
+
+### 7.23 Phase 5, Stage 3 — Bulk Operations
+
+New Commerce Domain: `ValueObjects/{BulkOperationType,BulkOperationStatus,
+ValidationResult}.php`, `Entities/{BulkOperation,BulkOperationItem}.php`,
+`Events/{BulkOperationStarted,BulkOperationCompleted,BulkOperationFailed}.php`,
+`Exceptions/{BulkOperationNotFoundException,InvalidCsvFormatException,
+BulkOperationException}.php`, `Repositories/BulkOperationRepositoryInterface.php`,
+`Services/{CsvParserInterface,CsvValidatorInterface}.php`. New
+Application: `Actions/{ImportProductsAction,ImportCustomersAction,
+ExportOrdersAction,BulkPriceUpdateAction,BulkStatusUpdateAction,
+BulkInventoryUpdateAction,GetBulkOperationAction,ListBulkOperationsAction}.php`,
+`DTOs/{BulkOperationData,BulkOperationItemData,ValidationResultData}.php`,
+`Services/{CsvParser,CsvValidator}.php` (the one real implementation each
+of the two Domain contracts), `Jobs/{ProcessBulkImportJob,
+ProcessBulkExportJob,ProcessBulkUpdateJob}.php` — this codebase's first
+ever queued Jobs, `app/Modules/Commerce/Application/Jobs/` didn't exist
+before this stage. New Infrastructure: 2 Eloquent Models
+(`BulkOperation`, `BulkOperationItem`), 1 Eloquent Repository. 2 new
+migrations + two small, unprompted widenings of existing files
+(`OrderRepositoryInterface::listByTenant()` gained an optional trailing
+date-range pair for `ExportOrdersAction`'s own filter;
+`CategoryRepositoryInterface` gained `findByName()` so
+`ImportProductsAction`'s own CSV `category` column — a name, not an id —
+can be resolved). 8 new MCP capabilities, all 8 renamed (see the intro
+paragraph above for the full mapping and reasoning — the worst
+segment-count hit rate of any stage so far).
+
+**Orchestration note, continuing §7.22's own retrospective.** This
+stage's request already came pre-split into what looked like 3
+sequential parts (CSV Engine -> Bulk Update -> Background Jobs, the last
+explicitly dependent on the first two). The orchestrating session found
+one genuine seam the request's own split didn't name: Bulk Update
+(price/status/inventory) never reads a CSV file — its 3 capabilities all
+take a plain array of ids — so it was never actually dependent on the
+CSV Engine slice at all, only on the shared `BulkOperation` foundation
+both slices need regardless. Folding each Job into whichever slice
+produces it (Import/Export's own 2 Jobs with the CSV Engine agent;
+Update's own 1 Job with the Bulk Update agent) turned the request's own
+3-part sequence into 2 fully independent, fully parallel slices once the
+foundation existed — the same category of correction §7.22 made to its
+own request's stated A->B->C/D chain, applied a second time to a
+different, subtler seam. Both slices returned clean, passing,
+non-overlapping diffs on the first try. The orchestrating session's own
+integration review found exactly one real gap in the foundation it had
+built: `BulkOperation` shipped with `setErrorFilePath()` but no
+`setFilePath()`, leaving `ProcessBulkExportJob` (built by the agent, who
+correctly flagged the gap rather than silently working around it by
+touching the off-limits entity file) to reconstruct a whole new
+`BulkOperation` instance via its own public constructor just to change
+one field. Fixed directly — `setFilePath()` added to the entity,
+mirroring `setErrorFilePath()` exactly, the reconstruction workaround
+deleted — the same "the orchestrator owns and repairs the shared
+foundation, not each parallel slice's own workaround" principle this
+retrospective is itself recording for next time.
+
+**This is this codebase's first real background Job.** See the intro
+paragraph above for the full "constructor takes only primitives,
+dependencies method-inject into `handle()`" convention every one of the
+3 new Jobs follows — this is now the reference shape for any future Job
+in this codebase, the same role `SyncWooCommerceProductsAction` played
+for "bulk upsert, collect per-row errors, keep going" before any Job
+existed to run it in the background. `QUEUE_CONNECTION=sync` in
+`phpunit.xml` (already configured, unused until this stage) means every
+test in this suite exercises real Job logic synchronously, in-process —
+there is no `Queue::fake()` anywhere in this stage's own tests, since
+faking would skip the very logic being tested.
+
+**`BulkOperation` does not hold its own `BulkOperationItem[]`
+collection** — a deliberate, documented departure from the
+"Repository owns and re-saves the whole frozen child collection" shape
+`Invoice`/`WarehouseTransfer` both established (§7.8/§7.22). A
+BulkOperation's own items can number in the thousands and are appended
+one at a time by a long-running Job, not fixed at construction like an
+Invoice's line items or a Transfer's own item list —
+`BulkOperationRepositoryInterface::saveItem()` appends a single row
+directly against an already-persisted BulkOperation instead. See that
+entity's own docblock for the full reasoning.
+
+**Batch Processing (rule §د.2) is identical across every Job in this
+stage**: chunks of up to 100 rows, each chunk inside its own
+`DB::transaction()`, with the per-row `try`/`catch` living *inside* that
+transaction's closure — an ordinary, caught row failure is simply
+recorded via `BulkOperationItem::failed()` and never rolls back the
+other rows already written in the same chunk; only a genuinely
+uncaught/fatal error escaping the closure rolls back the whole chunk, as
+a real `DB::transaction()` should. A separate, outer `try`/`catch`
+around each Job's entire `handle()` body is a different failure class
+entirely — an unrecoverable, whole-operation problem (a vanished file, a
+malformed payload) — and maps to `BulkOperation::fail()`, never to a
+per-row failure count.
+
+**`ImportProductsAction`/`ImportCustomersAction` upsert by SKU/email**,
+mirroring `SyncWooCommerceProductsAction::upsert()`'s own shape exactly
+(§7.6) rather than reusing the throwing `Create*Action`/`Update*Action`
+pair — the same "wrong control flow for a bulk upsert" reasoning that
+stage's own docblock already gives. `ExportOrdersAction`/
+`ProcessBulkExportJob` have no per-row failure concept at all — a query
+either returns an Order or it doesn't — every exported row counts as a
+success once the CSV file exists.
+
+**`BulkInventoryUpdate` wasn't in the request's own 5-case
+`BulkOperationType` enum list** — added unprompted, same reasoning every
+prior "add unprompted what the request's own other sections already
+imply" precedent in this codebase gives (§3 pattern #12): the request's
+own Action/capability lists elsewhere both named `BulkInventoryUpdateAction`/
+`commerce.bulk.update_inventory` explicitly, and a BulkOperation tracking
+that Action's own progress needs a real enum case to report.
+
+New tests: `tests/Unit/Commerce/{BulkOperationTest,ValidationResultTest,
+CsvParserTest,CsvValidatorTest}.php`,
+`tests/Feature/Commerce/{ImportProductsActionTest,ImportCustomersActionTest,
+ExportOrdersActionTest,BulkPriceUpdateActionTest,BulkStatusUpdateActionTest,
+BulkInventoryUpdateActionTest,BulkOperationCapabilityTest}.php` — see the
+intro paragraph above for the full breakdown of what each covers,
+including the literal 10-step MCP-level end-to-end scenario. 762 tests
+total (720 + 42), zero regressions.
 
 ---
 

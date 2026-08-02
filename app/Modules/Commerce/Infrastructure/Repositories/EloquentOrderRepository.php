@@ -44,12 +44,25 @@ class EloquentOrderRepository implements OrderRepositoryInterface
             ->exists();
     }
 
-    public function listByTenant(int $tenantId, ?OrderStatus $status, int $limit): array
-    {
+    public function listByTenant(
+        int $tenantId,
+        ?OrderStatus $status,
+        int $limit,
+        ?DateTimeImmutable $from = null,
+        ?DateTimeImmutable $to = null,
+    ): array {
         $builder = OrderModel::query()->with('items')->where('tenant_id', $tenantId);
 
         if ($status !== null) {
             $builder->where('status', $status->value);
+        }
+
+        if ($from !== null) {
+            $builder->where('created_at', '>=', $from);
+        }
+
+        if ($to !== null) {
+            $builder->where('created_at', '<=', $to);
         }
 
         return $builder->orderBy('id', 'desc')
