@@ -7,28 +7,37 @@ use App\Core\Application\Services\CapabilityHandlerRegistry;
 use App\Core\Domain\ValueObjects\MemberType;
 use App\Modules\Commerce\Application\Actions\AddToCartAction;
 use App\Modules\Commerce\Application\Actions\ApplyCouponAction;
+use App\Modules\Commerce\Application\Actions\ApproveWarehouseTransferAction;
 use App\Modules\Commerce\Application\Actions\CalculatePricingAction;
+use App\Modules\Commerce\Application\Actions\CompleteWarehouseTransferAction;
 use App\Modules\Commerce\Application\Actions\CreateCouponAction;
 use App\Modules\Commerce\Application\Actions\CreateCustomerAction;
 use App\Modules\Commerce\Application\Actions\CreateProductVariantAction;
 use App\Modules\Commerce\Application\Actions\CreateVariantAttributeAction;
+use App\Modules\Commerce\Application\Actions\CreateWarehouseAction;
 use App\Modules\Commerce\Application\Actions\DeleteProductVariantAction;
+use App\Modules\Commerce\Application\Actions\FindNearestWarehouseAction;
 use App\Modules\Commerce\Application\Actions\GenerateVariantCombinationsAction;
 use App\Modules\Commerce\Application\Actions\GetCartAction;
 use App\Modules\Commerce\Application\Actions\GetCustomerAction;
 use App\Modules\Commerce\Application\Actions\GetOrderAction;
 use App\Modules\Commerce\Application\Actions\GetProductVariantAction;
+use App\Modules\Commerce\Application\Actions\GetWarehouseAction;
+use App\Modules\Commerce\Application\Actions\GetWarehouseStockAction;
 use App\Modules\Commerce\Application\Actions\GetWooCommerceProductAction;
 use App\Modules\Commerce\Application\Actions\ListCustomersAction;
 use App\Modules\Commerce\Application\Actions\ListOrdersAction;
 use App\Modules\Commerce\Application\Actions\ListProductsAction;
 use App\Modules\Commerce\Application\Actions\ListProductVariantsAction;
 use App\Modules\Commerce\Application\Actions\ListVariantAttributesAction;
+use App\Modules\Commerce\Application\Actions\ListWarehousesAction;
 use App\Modules\Commerce\Application\Actions\PlaceOrderAction;
 use App\Modules\Commerce\Application\Actions\ProcessPaymentAction;
 use App\Modules\Commerce\Application\Actions\RefundPaymentAction;
+use App\Modules\Commerce\Application\Actions\RequestWarehouseTransferAction;
 use App\Modules\Commerce\Application\Actions\SyncWooCommerceProductsAction;
 use App\Modules\Commerce\Application\Actions\UpdateProductVariantAction;
+use App\Modules\Commerce\Application\Actions\UpdateWarehouseAction;
 use App\Modules\Commerce\Application\DTOs\CartData;
 use App\Modules\Commerce\Application\DTOs\CouponData;
 use App\Modules\Commerce\Application\DTOs\CustomerData;
@@ -37,6 +46,8 @@ use App\Modules\Commerce\Application\DTOs\PaymentData;
 use App\Modules\Commerce\Application\DTOs\PricingData;
 use App\Modules\Commerce\Application\DTOs\ProductVariantData;
 use App\Modules\Commerce\Application\DTOs\VariantAttributeData;
+use App\Modules\Commerce\Application\DTOs\WarehouseData;
+use App\Modules\Commerce\Application\DTOs\WarehouseTransferData;
 use App\Modules\Commerce\Application\Services\ConnectorRegistry;
 use App\Modules\Commerce\Application\Services\MockPaymentGateway;
 use App\Modules\Commerce\Application\Services\NullTaxRateProvider;
@@ -56,6 +67,8 @@ use App\Modules\Commerce\Domain\Repositories\PaymentRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\ProductRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\ProductVariantRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\VariantAttributeRepositoryInterface;
+use App\Modules\Commerce\Domain\Repositories\WarehouseRepositoryInterface;
+use App\Modules\Commerce\Domain\Repositories\WarehouseTransferRepositoryInterface;
 use App\Modules\Commerce\Domain\Services\WooCommerceProductMapper;
 use App\Modules\Commerce\Infrastructure\Connectors\MockProductConnector;
 use App\Modules\Commerce\Infrastructure\Connectors\WooCommerceProductConnector;
@@ -70,6 +83,8 @@ use App\Modules\Commerce\Infrastructure\Repositories\EloquentPaymentRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentProductRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentProductVariantRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentVariantAttributeRepository;
+use App\Modules\Commerce\Infrastructure\Repositories\EloquentWarehouseRepository;
+use App\Modules\Commerce\Infrastructure\Repositories\EloquentWarehouseTransferRepository;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -108,6 +123,8 @@ class CommerceServiceProvider extends ServiceProvider
         $this->app->bind(DiscountRepositoryInterface::class, EloquentDiscountRepository::class);
         $this->app->bind(ProductVariantRepositoryInterface::class, EloquentProductVariantRepository::class);
         $this->app->bind(VariantAttributeRepositoryInterface::class, EloquentVariantAttributeRepository::class);
+        $this->app->bind(WarehouseRepositoryInterface::class, EloquentWarehouseRepository::class);
+        $this->app->bind(WarehouseTransferRepositoryInterface::class, EloquentWarehouseTransferRepository::class);
         $this->app->bind(PaymentGatewayInterface::class, MockPaymentGateway::class);
 
         $this->app->bind(
@@ -377,6 +394,118 @@ class CommerceServiceProvider extends ServiceProvider
                 'variants' => array_map(fn (ProductVariantData $variant) => $variant->toArray(), $variants),
                 'count' => count($variants),
             ];
+        });
+
+        // Phase 5, Stage 2 (Multi-warehouse Inventory, §7.22). See
+        // CommerceCapabilities' own docblock for the 5 capability renames
+        // this stage needed (the recurring 3-dot-segment gotcha).
+
+        $handlers->register('commerce.warehouse.create', function (array $input, AuthContext $context) {
+            /** @var WarehouseData $warehouse */
+            $warehouse = $this->app->make(CreateWarehouseAction::class)->execute(
+                tenantId: $context->tenantId,
+                code: $input['code'],
+                name: $input['name'],
+                latitude: (float) $input['latitude'],
+                longitude: (float) $input['longitude'],
+                address: $input['address'],
+            );
+
+            return ['warehouse' => $warehouse->toArray()];
+        });
+
+        $handlers->register('commerce.warehouse.update', function (array $input, AuthContext $context) {
+            /** @var WarehouseData $warehouse */
+            $warehouse = $this->app->make(UpdateWarehouseAction::class)->execute(
+                id: (int) $input['warehouse_id'],
+                tenantId: $context->tenantId,
+                name: $input['name'],
+                latitude: (float) $input['latitude'],
+                longitude: (float) $input['longitude'],
+                address: $input['address'],
+                isActive: (bool) ($input['is_active'] ?? true),
+            );
+
+            return ['warehouse' => $warehouse->toArray()];
+        });
+
+        $handlers->register('commerce.warehouse.get', function (array $input, AuthContext $context) {
+            /** @var WarehouseData $warehouse */
+            $warehouse = $this->app->make(GetWarehouseAction::class)->execute((int) $input['warehouse_id'], $context->tenantId);
+
+            return ['warehouse' => $warehouse->toArray()];
+        });
+
+        $handlers->register(
+            'commerce.warehouse.list',
+            fn (array $input, AuthContext $context) => [
+                'warehouses' => array_map(
+                    fn (WarehouseData $warehouse) => $warehouse->toArray(),
+                    $this->app->make(ListWarehousesAction::class)->execute(
+                        $context->tenantId,
+                        isset($input['is_active']) ? (bool) $input['is_active'] : null,
+                    ),
+                ),
+            ],
+        );
+
+        $handlers->register(
+            'commerce.warehouse.stock',
+            fn (array $input, AuthContext $context) => $this->app->make(GetWarehouseStockAction::class)->execute(
+                tenantId: $context->tenantId,
+                warehouseId: (int) $input['warehouse_id'],
+                productId: (int) $input['product_id'],
+                variantId: isset($input['variant_id']) ? (int) $input['variant_id'] : null,
+            ),
+        );
+
+        $handlers->register('commerce.warehouse.nearest', function (array $input, AuthContext $context) {
+            /** @var ?WarehouseData $warehouse */
+            $warehouse = $this->app->make(FindNearestWarehouseAction::class)->execute(
+                tenantId: $context->tenantId,
+                productId: (int) $input['product_id'],
+                customerLatitude: (float) $input['customer_latitude'],
+                customerLongitude: (float) $input['customer_longitude'],
+                requiredQuantity: (int) $input['required_quantity'],
+                variantId: isset($input['variant_id']) ? (int) $input['variant_id'] : null,
+            );
+
+            return ['warehouse' => $warehouse?->toArray()];
+        });
+
+        $handlers->register('commerce.transfer.request', function (array $input, AuthContext $context) {
+            /** @var WarehouseTransferData $transfer */
+            $transfer = $this->app->make(RequestWarehouseTransferAction::class)->execute(
+                tenantId: $context->tenantId,
+                sourceWarehouseId: (int) $input['source_warehouse_id'],
+                destinationWarehouseId: (int) $input['destination_warehouse_id'],
+                requestedBy: $context->agentId,
+                items: $input['items'],
+                notes: $input['notes'] ?? null,
+            );
+
+            return ['transfer' => $transfer->toArray()];
+        });
+
+        $handlers->register('commerce.transfer.approve', function (array $input, AuthContext $context) {
+            /** @var WarehouseTransferData $transfer */
+            $transfer = $this->app->make(ApproveWarehouseTransferAction::class)->execute(
+                id: (int) $input['transfer_id'],
+                tenantId: $context->tenantId,
+                approvedBy: $context->agentId,
+            );
+
+            return ['transfer' => $transfer->toArray()];
+        });
+
+        $handlers->register('commerce.transfer.complete', function (array $input, AuthContext $context) {
+            /** @var WarehouseTransferData $transfer */
+            $transfer = $this->app->make(CompleteWarehouseTransferAction::class)->execute(
+                id: (int) $input['transfer_id'],
+                tenantId: $context->tenantId,
+            );
+
+            return ['transfer' => $transfer->toArray()];
         });
     }
 }

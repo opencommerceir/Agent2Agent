@@ -62,4 +62,39 @@ class InventoryTest extends TestCase
         $this->assertSame(0, $inventory->quantityReserved());
         $this->assertSame(5, $inventory->available());
     }
+
+    public function test_stock_withWarehouseId_carriesIt(): void
+    {
+        $inventory = Inventory::stock(1, 100, 5, null, 7);
+
+        $this->assertSame(7, $inventory->warehouseId());
+    }
+
+    public function test_stock_withoutWarehouseId_defaultsToNull(): void
+    {
+        $inventory = Inventory::stock(1, 100, 5);
+
+        $this->assertNull($inventory->warehouseId());
+    }
+
+    public function test_receiveStock_increasesQuantityOnHandWithoutTouchingReserved(): void
+    {
+        $inventory = Inventory::stock(1, 100, 5, null, 7);
+        $inventory->reserve(new Quantity(2));
+
+        $inventory->receiveStock(10);
+
+        $this->assertSame(15, $inventory->quantityOnHand());
+        $this->assertSame(2, $inventory->quantityReserved());
+        $this->assertSame(13, $inventory->available());
+    }
+
+    public function test_receiveStock_negativeQuantity_clampsAtCurrentOnHand(): void
+    {
+        $inventory = Inventory::stock(1, 100, 5);
+
+        $inventory->receiveStock(-3);
+
+        $this->assertSame(5, $inventory->quantityOnHand());
+    }
 }

@@ -13,8 +13,15 @@ interface InventoryRepositoryInterface
      * up the parent Product's own row (unchanged behavior for every
      * existing caller that doesn't pass it), a real value looks up that
      * specific ProductVariant's own row instead.
+     *
+     * $warehouseId (Phase 5, Stage 2 — Multi-warehouse Inventory, §7.22)
+     * is a second optional trailing param, the identical shape — null
+     * looks up the tenant's own default (non-warehouse-scoped) row,
+     * unchanged for every existing caller (AddToCartAction/
+     * PlaceOrderAction/CheckInventoryAction never pass it); a real value
+     * looks up that specific Warehouse's own row instead.
      */
-    public function findByProduct(int $productId, int $tenantId, ?int $variantId = null): ?Inventory;
+    public function findByProduct(int $productId, int $tenantId, ?int $variantId = null, ?int $warehouseId = null): ?Inventory;
 
     /**
      * Same lookup as findByProduct(), but takes a row-level lock
@@ -25,8 +32,10 @@ interface InventoryRepositoryInterface
      * available() and writing the new reservation, which previously let
      * two concurrent Agents each pass the availability check before
      * either had committed, over-reserving stock beyond quantityOnHand.
+     * ApproveWarehouseTransferAction (§7.22) uses the same lock for the
+     * identical reason when reserving stock at the source Warehouse.
      */
-    public function findByProductForUpdate(int $productId, int $tenantId, ?int $variantId = null): ?Inventory;
+    public function findByProductForUpdate(int $productId, int $tenantId, ?int $variantId = null, ?int $warehouseId = null): ?Inventory;
 
     /**
      * Added for Analytics' own Low Stock Products KPI (Phase 4 Stage 6,
@@ -39,6 +48,18 @@ interface InventoryRepositoryInterface
      * @return list<Inventory>
      */
     public function listLowStock(int $tenantId, int $threshold): array;
+
+    /**
+     * Added for Multi-warehouse Inventory (Phase 5, Stage 2, §7.22) —
+     * every Inventory row for one Product (or one ProductVariant) across
+     * every Warehouse, including the default (warehouse_id null) row if
+     * one exists. GetWarehouseStockAction and FindNearestWarehouseAction
+     * both need "which Warehouses carry this Product and how much,"
+     * which no single-row lookup above can answer.
+     *
+     * @return list<Inventory>
+     */
+    public function listByProduct(int $productId, int $tenantId, ?int $variantId = null): array;
 
     public function save(Inventory $inventory): Inventory;
 }

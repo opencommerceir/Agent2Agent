@@ -43,6 +43,17 @@ use DateTimeImmutable;
  * row — even a variant's own Inventory row keeps it, for the same
  * traceability every other variant-scoped table in this stage keeps its
  * own product_id.
+ *
+ * warehouseId (Phase 5, Stage 2 — Multi-warehouse Inventory, §7.22) is a
+ * second optional trailing field, the identical widening shape: null
+ * means this row tracks the tenant's own default (non-warehouse-scoped)
+ * stock — every row created before this stage, and every row
+ * AddToCartAction/PlaceOrderAction/CheckInventoryAction still create or
+ * read, since none of those call sites were changed to pass a
+ * warehouseId this stage. A non-null value means this row tracks stock
+ * physically held at that one specific Warehouse instead — only
+ * Warehouse Transfer's own Actions (Request/Approve/CompleteWarehouseTransferAction)
+ * and GetWarehouseStockAction ever pass one.
  */
 final class Inventory
 {
@@ -54,11 +65,17 @@ final class Inventory
         private int $quantityReserved,
         private readonly DateTimeImmutable $createdAt,
         private readonly ?int $variantId = null,
+        private readonly ?int $warehouseId = null,
     ) {
     }
 
-    public static function stock(int $tenantId, int $productId, int $quantityOnHand, ?int $variantId = null): self
-    {
+    public static function stock(
+        int $tenantId,
+        int $productId,
+        int $quantityOnHand,
+        ?int $variantId = null,
+        ?int $warehouseId = null,
+    ): self {
         return new self(
             id: null,
             tenantId: $tenantId,
@@ -67,6 +84,7 @@ final class Inventory
             quantityReserved: 0,
             createdAt: new DateTimeImmutable(),
             variantId: $variantId,
+            warehouseId: $warehouseId,
         );
     }
 
@@ -141,6 +159,24 @@ final class Inventory
         $this->quantityOnHand += $quantity->value();
     }
 
+    /**
+     * A relative *increase* to quantityOnHand for genuinely new incoming
+     * stock (Phase 5, Stage 2 — Multi-warehouse Inventory, §7.22:
+     * CompleteWarehouseTransferAction calls this on the *destination*
+     * Warehouse's Inventory row). Deliberately not the same call as
+     * restore(), even though both simply add to quantityOnHand — restore()
+     * is semantically "reverse a specific prior commit()" (a cancelled
+     * Order's stock returning to where it always was); this is "stock that
+     * was never here before has just arrived" (a transfer, or a future
+     * purchase-order receipt). Conflating the two would make restore()'s
+     * own docblock ("commit()'s exact inverse") no longer true. Never
+     * touches quantityReserved, same as restore().
+     */
+    public function receiveStock(int $quantity): void
+    {
+        $this->quantityOnHand += max(0, $quantity);
+    }
+
     public function id(): ?int
     {
         return $this->id;
@@ -159,6 +195,11 @@ final class Inventory
     public function variantId(): ?int
     {
         return $this->variantId;
+    }
+
+    public function warehouseId(): ?int
+    {
+        return $this->warehouseId;
     }
 
     public function quantityOnHand(): int

@@ -16,6 +16,7 @@ class ShippingMethod extends Model
         'base_rate_currency',
         'rate_per_kg_amount',
         'rate_per_kg_currency',
+        'rate_per_km',
         'estimated_days_min',
         'estimated_days_max',
         'is_active',

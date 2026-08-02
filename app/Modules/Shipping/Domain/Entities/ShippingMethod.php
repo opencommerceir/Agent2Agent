@@ -24,6 +24,7 @@ final class ShippingMethod
         private readonly int $estimatedDaysMax,
         private readonly bool $isActive,
         private readonly DateTimeImmutable $createdAt,
+        private readonly ?Money $ratePerKm = null,
     ) {
     }
 
@@ -78,6 +79,17 @@ final class ShippingMethod
     public function ratePerKg(): Money
     {
         return $this->ratePerKg;
+    }
+
+    /**
+     * Falls back to a $0 Money in the base rate's own currency when no
+     * per-km rate was ever set (every ShippingMethod created before Phase
+     * 5, Stage 2 — Multi-warehouse Inventory, §7.22) — callers never have
+     * to null-check this themselves.
+     */
+    public function ratePerKm(): Money
+    {
+        return $this->ratePerKm ?? Money::fromAmount(0, $this->baseRate->currency());
     }
 
     public function estimatedDaysMin(): int

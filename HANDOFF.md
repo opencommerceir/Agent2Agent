@@ -10,7 +10,8 @@ Infrastructure, §7.16), Stage 5 (Admin Dashboard + Human Authentication,
 §7.17), Stage 6 (Advanced Analytics & KPIs, §7.18), Stage 7 (API
 Versioning System, §7.19), and Stage 8 (Performance Optimization, §7.20 —
 the last Stage of Phase 4). Phase 5 (Advanced Commerce) is under way:
-Stage 1 (Product Variants, §7.21) is complete.
+Stage 1 (Product Variants, §7.21) and Stage 2 (Multi-warehouse Inventory,
+§7.22) are both complete.
 
 The paragraphs below are in build order — read top to bottom for the
 actual chronological story. Finance supplies Commerce's own checkout
@@ -350,13 +351,114 @@ attribute value only ever creates the genuinely new combinations.
 convenience flag, not a source of truth — see its own migration's
 docblock. See §7.21 for the full detail.**
 
-666 tests passing (648 + 18 new), zero known regressions. Next up:
-whatever Phase 5's own Stage 2 turns out to be (not yet scoped), or
-extending Product Variants itself — Bundle products, per-variant
-weight/shipping (Shipping's own `weight_grams` convention currently only
-reads `Product.attributes`, never a variant's own), a Dashboard UI for
-managing attributes/variants (every other Phase 4 Stage 5/6 resource got
-one, variants didn't this stage), or any remaining deferred item in §8/§9.
+666 tests passing (648 + 18 new), zero known regressions.
+
+**Phase 5, Stage 2 (Multi-warehouse Inventory, §7.22) — the first stage
+this session ran as a deliberately parallelized build, not because the
+request asked for that, but because the orchestrating session judged the
+work genuinely decomposable once a shared foundation existed.** The
+request's own schema was, unlike Stage 1's, already aligned with this
+codebase's established patterns from the start (extend `Inventory` with
+an optional `warehouse_id`, mirroring `variant_id` from §7.21 almost
+exactly) — no architecture-fork confirmation was needed this stage the
+way Stage 1's stock-column question was. The orchestrating session built
+the shared foundation itself first (`Warehouse`/`WarehouseTransfer`/
+`WarehouseTransferItem` Domain layer, all 3 new tables + the
+`inventories.warehouse_id` widening migration, `Inventory` gaining
+`receiveStock()`, basic Warehouse CRUD Actions) and verified it against
+the full pre-existing suite before splitting the remaining, now
+genuinely-independent work across two parallel subagents: one built the
+Transfer workflow Actions (Request/Approve/Complete), the other built
+`WarehouseDistanceCalculator`/`NearestWarehouseFinder`/
+`FindNearestWarehouseAction` plus the Shipping-side distance-surcharge
+integration — disjoint file sets, no coordination needed beyond the
+contracts already fixed by the foundation. Both merged clean on the first
+try; the orchestrating session then did the MCP wiring (5 of the
+request's own 9 capability names hit the recurring 3-dot-segment gotcha,
+same as every module before it) and the literal 10-step end-to-end
+scenario as one MCP-level Feature test.
+
+`receiveStock()` is a new `Inventory` method — a plain relative increase
+to `quantityOnHand` for genuinely new incoming stock — deliberately kept
+separate from `restore()` even though both simply add to the same column:
+`restore()` is specifically "reverse a prior `commit()`" (a cancelled
+Order's stock returning to where it always was), while `receiveStock()`
+is "stock that was never here before has just arrived" (a completed
+Transfer, or a future purchase-order receipt) — conflating the two would
+make `restore()`'s own docblock ("`commit()`'s exact inverse") no longer
+true. `ApproveWarehouseTransferAction` reserves at the source Warehouse
+(a soft hold, `Inventory::reserve()`, row-locked the same way
+`AddToCartAction` already locks against concurrent reservations);
+`CompleteWarehouseTransferAction` commits at the source (`commit()`,
+identical to how `PlaceOrderAction` converts a Cart's hold into a real
+sale) and calls `receiveStock()` at the destination, constructing a fresh
+zero-on-hand row via `Inventory::stock()` if the destination has never
+stocked this Product before. `TransferStatus::InTransit` is modeled (the
+request's own "Request -> Approve -> Reserve -> In Transit -> Complete"
+narrative) but unreached by any Action this stage — only
+Request/Approve/Complete were requested, the same "modeled but not all
+reachable" gap `RewardType::FreeProduct`/`Redemption`'s own
+pending/cancelled states already carry (§7.10). `NearestWarehouseFinder`
+is a pure, framework-free Domain Service — it never touches a Repository,
+only combines an already-fetched `list<array{warehouse: Warehouse,
+availableQuantity: int}>` handed to it by `FindNearestWarehouseAction`
+(the same "Domain Service only combines given data" shape
+`WorkflowEvaluator`/`PricingService`/`ShippingRateCalculator` already
+establish) — `WarehouseDistanceCalculator`'s own Haversine formula is the
+only place great-circle math lives.
+
+The Shipping integration extends pattern #20 (Analytics reusing
+Reporting's Query Builders directly, no Interface) one level further:
+Shipping's own `CalculateShippingRateAction` now constructor-injects
+Commerce's `FindNearestWarehouseAction`/`WarehouseDistanceCalculator`
+directly — both plain, unbound, container-autowired classes, not behind
+an Interface — the first time this pattern has been applied to an
+*Action* rather than a read-only Query Builder, since
+`FindNearestWarehouseAction` has no persistence side effect either. Four
+new trailing optional params on `CalculateShippingRateAction::execute()`
+(customer lat/lng, product id, required quantity) are the only way this
+new lookup is ever triggered; every existing 3-arg caller is provably
+unaffected (see `WarehouseAwareShippingRateTest`'s own explicit
+old-vs-new-signature parity assertion). `ShippingMethod` gained one more
+optional trailing field, `ratePerKm` (nullable cents, defaults to $0 via
+its own getter) — the identical "widen with optional trailing state"
+shape `Shipment::$providerName` already used; the new
+`shipping_methods.rate_per_km` column has no existing writer
+(`CreateShippingMethodAction` wasn't widened this stage — every existing
+row simply reads back as a $0 surcharge).
+
+Two exceptions weren't in the original request's list of 3 — added
+unprompted, same reasoning every prior "add unprompted" precedent in this
+codebase gives (§3 pattern #12): `InvalidWarehouseCodeException` (a real
+400 for `WarehouseCode`'s own `WH-XXXXX` format violation, the same shape
+`InvalidSKUException` has for `SKU`) and `DuplicateWarehouseCodeException`
+(a real 409 for `warehouses`' own DB-level `unique(tenant_id, code)`
+constraint, rather than a raw uniqueness violation surfacing as an
+unhandled 500). Five of the request's own 9 capability names hit the
+recurring 3-dot-segment gotcha (§3 pattern #13, hit again the same way
+Product Variants' own capabilities hit it):
+`commerce.warehouse.transfer.request/.approve/.complete` (4 segments
+each) renamed to `commerce.transfer.request/.approve/.complete` (treating
+"transfer" as its own resource, parallel to "warehouse" — the identical
+move `commerce.variant.attribute.create` made for "attribute" relative to
+"variant" in §7.21); `commerce.warehouse.nearest.find` renamed to
+`commerce.warehouse.nearest` and `commerce.warehouse.stock.get` renamed
+to `commerce.warehouse.stock` (both fold away a generic "find"/"get" verb
+the same way `commerce.variant.generate` already folded away
+"combinations"). There is deliberately no MCP capability (or Action) for
+provisioning a Warehouse's *initial* stock — `Inventory::setQuantityOnHand()`
+(already existed, §7.21) is the mechanism, reachable today only by
+seeding the repository directly, the same "built the mechanism, no
+Action-level entry point requested yet" gap this codebase has carried
+before (§6/§8.2) — see `GetWarehouseStockAction`'s own docblock.
+
+720 tests passing (666 + 54 new), zero known regressions. Next up:
+whatever Phase 5's own Stage 3 turns out to be (not yet scoped — Bundle
+products, a Dashboard UI for Warehouses/Transfers/attributes-and-variants,
+wiring `CreateShippingMethodAction`/`UpdateWarehouseAction`-equivalents
+for `rate_per_km`, a `MarkTransferInTransitAction` to reach
+`TransferStatus::InTransit` for real), or any remaining deferred item in
+§8/§9.
 
 This file is a working-state snapshot for picking up development in a new
 session. It assumes you've already read `CLAUDE.md` and `docs/*.md` (the
@@ -396,13 +498,14 @@ from `App\Modules\*`.
 | **Performance Optimization (Stage 8, §7.20)** | `Application/Services/{CacheService,PerformanceMonitor,LazyLoadingDetector}.php`, `Application/Actions/OptimizeQueriesAction.php`, `Infrastructure/Logging/QueryLogger.php` | `CacheService` is tag-aware (`Cache::tags()`, confirmed working under `CACHE_STORE=array` too, not Redis-only) and wired into exactly one module's read path so far — Commerce's `GetProductAction`/`UpdateProductAction`/`DeleteProductAction` (§7.20's own "extend this" note, §9). `PerformanceMonitor` is a lightweight, documented best-effort operational monitor, not a production APM replacement. `QueryLogger` is registered via `DB::listen()` in `CoreServiceProvider::boot()`, skipped during the test suite — see that provider's own docblock for a real `runningUnitTests()` timing gotcha worth knowing before relying on that flag inside a `ServiceProvider::boot()` elsewhere. |
 | **Human/Dashboard Auth (Stage 5, §7.17)** | `Domain/Entities/User.php`, `Domain/ValueObjects/{Email,HashedPassword,UserRole,UserStatus}.php`, `Domain/Repositories/UserRepositoryInterface.php`, `Application/Actions/{CreateUserAction,UpdateUserAction,GetUserAction,ListUsersAction,AuthenticateUserAction}.php`, `Infrastructure/Models/User.php` (extends `Authenticatable`) | Platform-level (no tenant_id) — the second Core entity above tenancy alongside `Tenant` itself, since the Dashboard's own Tenants Management page does full cross-tenant CRUD. Gates the whole `/dashboard/*` route group via a plain `UserRole::Admin`/`Operator` enum + the `admin` route-middleware alias, **not** the tenant-scoped Role/Permission system above. `HashedPassword` uses PHP's own `password_hash()`/`password_verify()`, never Laravel's `Hash` facade (keeps this Domain class framework-free like every other one). Seeded by default: `admin@opencommerce.test` / `password` (`DatabaseSeeder`). |
 
-### `app/Modules/Commerce/` — **no longer a skeleton. Product, Category, Cart, Inventory, Order, Customer, Payment, Coupon, Discount are all real, tested, and MCP-reachable — Stage 6 added the first real external Connector, and Phase 5 Stage 1 added Product Variants (§7.21), reusing Inventory's own reserve/commit lifecycle rather than a second stock mechanism.**
+### `app/Modules/Commerce/` — **no longer a skeleton. Product, Category, Cart, Inventory, Order, Customer, Payment, Coupon, Discount are all real, tested, and MCP-reachable — Stage 6 added the first real external Connector, Phase 5 Stage 1 added Product Variants (§7.21), and Phase 5 Stage 2 added Multi-warehouse Inventory (§7.22), both reusing Inventory's own reserve/commit lifecycle rather than a second stock mechanism.**
 
 See §7 for the full stage-by-stage breakdown (what was built, in what order,
-and why). At a glance, the module now has 12 Domain Entities (9 + `VariantAttribute`/
-`VariantAttributeValue`/`ProductVariant`), ~30 Value Objects/enums, 3 Domain
-Services, ~40 Application Actions, 11 Eloquent Repositories, and 27 numbered
-migrations, backing 23 MCP capabilities.
+and why). At a glance, the module now has 15 Domain Entities (12 +
+`Warehouse`/`WarehouseTransfer`/`WarehouseTransferItem`), ~33 Value
+Objects/enums, 5 Domain Services (+ `WarehouseDistanceCalculator`/
+`NearestWarehouseFinder`), ~52 Application Actions, 13 Eloquent
+Repositories, and 32 numbered migrations, backing 32 MCP capabilities.
 
 `Domain/UCP/*` (the 6 normalized value objects for *external* connector
 data — never persisted, never touched by any Stage 1–5 work) is unchanged
@@ -771,30 +874,45 @@ app/Modules/Commerce/
 │   ├── Connectors/               ConnectorInterface, ProductConnectorInterface,
 │   │                             OrderConnectorInterface (untouched since Phase 1)
 │   ├── Entities/                 Product, Category, Cart, CartItem, Inventory,
-│   │                             Order, OrderItem, Customer, Payment, Coupon, Discount
+│   │                             Order, OrderItem, Customer, Payment, Coupon, Discount,
+│   │                             + VariantAttribute, VariantAttributeValue, ProductVariant
+│   │                             (§7.21) + Warehouse, WarehouseTransfer,
+│   │                             WarehouseTransferItem (§7.22)
 │   ├── ValueObjects/             Money, SKU, ProductStatus, Quantity, CartStatus,
 │   │                             OrderStatus, OrderNumber, Email, Address, CustomerStatus,
 │   │                             PaymentStatus, PaymentMethod, TaxRate, CouponCode,
 │   │                             DiscountType, PricingBreakdown, WooCommerceProductId,
-│   │                             WooCommerceProductData
+│   │                             WooCommerceProductData, VariantSKU, VariantCombination
+│   │                             (§7.21), WarehouseCode, WarehouseLocation, TransferStatus
+│   │                             (§7.22)
 │   ├── Services/                 PricingService, CouponValidationService,
-│   │                             WooCommerceProductMapper  (all pure, framework-free)
+│   │                             WooCommerceProductMapper, + WarehouseDistanceCalculator,
+│   │                             NearestWarehouseFinder (§7.22) (all pure, framework-free)
 │   ├── Events/                   17 domain events across Stages 1-5, + CartWasAbandoned
-│   │                             (Tech Debt Sprint, §7.13 — carries only identifiers,
-│   │                             same shape InventoryWasCommitted established)
-│   ├── Repositories/              9 Repository interfaces (one per aggregate + Discount's),
-│   │                             + findByProductForUpdate() on InventoryRepositoryInterface
-│   │                             and findStaleActive() on CartRepositoryInterface (§7.13)
-│   └── Exceptions/                18 exception classes; every NotFound/Conflict-shaped one
+│   │                             (Tech Debt Sprint, §7.13), + VariantWasCreated/
+│   │                             VariantWasUpdated/VariantWasDeleted (§7.21), +
+│   │                             WarehouseWasCreated/WarehouseTransferWasRequested/
+│   │                             WarehouseTransferWasCompleted (§7.22)
+│   ├── Repositories/              13 Repository interfaces (9 + ProductVariant/
+│   │                             VariantAttribute, §7.21 + Warehouse/WarehouseTransfer,
+│   │                             §7.22), + findByProductForUpdate()/listByProduct() on
+│   │                             InventoryRepositoryInterface (warehouse_id-aware since
+│   │                             §7.22) and findStaleActive() on CartRepositoryInterface
+│   │                             (§7.13)
+│   └── Exceptions/                25 exception classes; every NotFound/Conflict-shaped one
 │                                  implements a Core marker interface (§1) —
 │                                  WooCommerceApiException deliberately does not (§7.6)
 ├── Application/
-│   ├── Actions/                  ~32 Actions — see §7 for the per-stage list, +
+│   ├── Actions/                  ~52 Actions — see §7 for the per-stage list, +
 │   │                             MarkCartsAbandonedAction (§7.13); CheckInventoryAction
-│   │                             gained executeCommit()/authorizeCommit() (§7.13, §8.22 fix)
+│   │                             gained executeCommit()/authorizeCommit() (§7.13, §8.22 fix),
+│   │                             + 9 Warehouse/Transfer Actions (§7.22)
 │   ├── DTOs/                     ProductData, CategoryData, CartData, CartItemData,
 │   │                             OrderData, OrderItemData, CustomerData, AddressData,
-│   │                             PricingData, PaymentData, CouponData, WooCommerceSyncResult
+│   │                             PricingData, PaymentData, CouponData, WooCommerceSyncResult,
+│   │                             ProductVariantData, VariantAttributeData (§7.21),
+│   │                             WarehouseData, WarehouseLocationData, WarehouseTransferData,
+│   │                             WarehouseTransferItemData (§7.22)
 │   └── Services/                 ConnectorRegistry, PaymentGatewayInterface,
 │                                  MockPaymentGateway, PaymentGatewayResult,
 │                                  WooCommerceClientInterface, WooCommerceClient,
@@ -803,10 +921,12 @@ app/Modules/Commerce/
 │   ├── Connectors/                MockProductConnector (Phase 1),
 │   │                              WooCommerceProductConnector (Stage 6, real)
 │   ├── Http/                      MockWooCommerceHttpClient (Stage 6, tests only)
-│   ├── Models/                    9 Eloquent models, one per aggregate
-│   └── Repositories/               9 Eloquent repository implementations
+│   ├── Models/                    13 Eloquent models (9 + ProductVariant/VariantAttribute/
+│   │                              VariantAttributeValue, §7.21 + Warehouse/
+│   │                              WarehouseTransfer/WarehouseTransferItem, §7.22)
+│   └── Repositories/               13 Eloquent repository implementations
 └── CommerceServiceProvider.php    binds every Repository interface + registers
-                                   15 capability handlers (see §6 for the full list)
+                                   32 capability handlers (see §6 for the full list)
 
 app/Modules/CRM/                  new in Phase 3
 ├── Domain/
@@ -1797,7 +1917,7 @@ end to end.
 
 ---
 
-## 6. The 78 MCP capabilities that exist right now
+## 6. The 87 MCP capabilities that exist right now
 
 | Capability | Phase/Stage | Permission | Notes |
 |---|---|---|---|
@@ -1879,6 +1999,15 @@ end to end.
 | `commerce.variant.get` | P5.1 | `commerce.variants.read` | Includes the variant's own current stock (`quantityOnHand`/`quantityAvailable`). |
 | `commerce.variant.list` | P5.1 | `commerce.variants.read` | Lists one Product's own variants. |
 | `commerce.variant.generate` | P5.1 | `commerce.variants.manage` | Renamed from the requested `commerce.variant.combinations.generate` — 4 segments, see §7.21. Registry-driven (real VariantAttribute/Value rows only); idempotent — a re-run only creates genuinely new combinations. |
+| `commerce.warehouse.create` | P5.2 | `commerce.warehouses.manage` | `code` is caller-supplied (`WH-XXXXX`), not auto-generated. |
+| `commerce.warehouse.update` | P5.2 | `commerce.warehouses.manage` | `code` not updatable. `is_active` optional (defaults true). |
+| `commerce.warehouse.get` | P5.2 | `commerce.warehouses.read` | |
+| `commerce.warehouse.list` | P5.2 | `commerce.warehouses.read` | Optional `is_active`. |
+| `commerce.warehouse.stock` | P5.2 | `commerce.warehouses.read` | Renamed from the requested `commerce.warehouse.stock.get` — 4 segments, see §7.22. "No Inventory row" reads as all-zeros, not 404. |
+| `commerce.warehouse.nearest` | P5.2 | `commerce.warehouses.read` | Renamed from `commerce.warehouse.nearest.find` — same reason. `warehouse: null` if none qualifies (not 404). |
+| `commerce.transfer.request` | P5.2 | `commerce.transfers.manage` | Renamed from `commerce.warehouse.transfer.request` — same reason. No Inventory side effect yet (Pending). |
+| `commerce.transfer.approve` | P5.2 | `commerce.transfers.manage` | Renamed from `commerce.warehouse.transfer.approve` — same reason. Reserves at the source Warehouse; 409 (`InsufficientWarehouseStockException`) if any item can't be covered. |
+| `commerce.transfer.complete` | P5.2 | `commerce.transfers.manage` | Renamed from `commerce.warehouse.transfer.complete` — same reason. Commits at the source, `receiveStock()`s the destination. |
 
 **Deliberately NOT wired to MCP** despite the underlying Action existing and
 being fully tested (see §8.2 for why, and the same reasoning each time):
@@ -4023,6 +4152,220 @@ moved, not the parent's (which was never created at all) -> confirm
 `products.is_parent` flipped -> confirm the exact same combination is
 rejected with `DuplicateVariantException`/409; plus tenant isolation on
 `commerce.variant.get`). 666 tests total (648 + 18), zero regressions.
+
+### 7.22 Phase 5, Stage 2 — Multi-warehouse Inventory
+
+New Commerce Domain: `ValueObjects/{WarehouseCode,WarehouseLocation,TransferStatus}.php`,
+`Entities/{Warehouse,WarehouseTransfer,WarehouseTransferItem}.php`,
+`Events/{WarehouseWasCreated,WarehouseTransferWasRequested,WarehouseTransferWasCompleted}.php`,
+`Exceptions/{WarehouseNotFoundException,InsufficientWarehouseStockException,
+WarehouseTransferNotFoundException,InvalidWarehouseCodeException,
+DuplicateWarehouseCodeException}.php` (the last two added unprompted, see
+below), `Repositories/{WarehouseRepositoryInterface,WarehouseTransferRepositoryInterface}.php`,
+`Services/{WarehouseDistanceCalculator,NearestWarehouseFinder}.php`. New
+Application: `Actions/{CreateWarehouseAction,UpdateWarehouseAction,
+GetWarehouseAction,ListWarehousesAction,GetWarehouseStockAction,
+RequestWarehouseTransferAction,ApproveWarehouseTransferAction,
+CompleteWarehouseTransferAction,FindNearestWarehouseAction}.php`,
+`DTOs/{WarehouseData,WarehouseLocationData,WarehouseTransferData,
+WarehouseTransferItemData}.php`. New Infrastructure: 3 Eloquent Models
+(`Warehouse`, `WarehouseTransfer`, `WarehouseTransferItem`), 2 Eloquent
+Repositories. 4 new migrations (a request-specified 5th, a separate
+"add location to warehouses" migration, was folded directly into
+`create_warehouses_table` instead — see that migration's own docblock)
++ widening `Inventory`/`InventoryRepositoryInterface`/
+`EloquentInventoryRepository` for `warehouse_id` + widening 4 Shipping
+files for a `rate_per_km` distance surcharge. 9 new MCP capabilities (5
+renamed, see below).
+
+**Orchestration note, not an architecture decision — recorded here because
+it changed how this stage was actually built, not just what got built.**
+The user explicitly asked this session to run as an "Orchestrator Agent":
+design first, split into independent parts, parallelize, then integrate.
+The literal request framed the split as 4 fully-parallel parts (Warehouse
+Management / Inventory Extension / Transfer Logic / Shipping Integration)
+with A -> B -> C/D as the only stated dependency. The actual dependency
+graph is tighter than that — Transfer Logic needs both a working Warehouse
+Repository *and* a warehouse-aware Inventory before it can run a single
+real test, and Shipping Integration needs the same plus a working
+`FindNearestWarehouseAction`. Rather than force 4 simultaneous subagents
+against contracts that didn't exist yet (which produces either broken
+code or a lot of stubbing-and-rework), the session built the shared
+foundation itself first — full `Warehouse`/`WarehouseTransfer` Domain +
+Infrastructure layer, all migrations, `Inventory`'s own `warehouse_id`
+widening + new `receiveStock()` method, basic Warehouse CRUD Actions —
+and verified it against the complete pre-existing 703-test suite (666 +
+Stage 2's own 37 foundation-layer tests) before splitting the *remaining*
+work, which by then really was independent, across two parallel
+background subagents (Transfer Actions; Distance calculation + Shipping
+integration). Both returned clean, passing, non-overlapping diffs on the
+first try — the orchestrating session's own review found zero corrections
+needed in either. This is offered as the general shape worth reusing next
+time a request asks for parallel-subagent orchestration on a feature with
+real internal dependencies: build the shared contracts and the
+highest-regression-risk core (here, `Inventory` itself — 720 tests
+downstream of it passing unmodified) as a single-threaded foundation
+step, verify it, *then* parallelize what's left.
+
+**`Inventory` gained a second optional trailing field, the identical
+"widen, don't duplicate" shape `variantId` used in §7.21**:
+`?int $warehouseId = null` threaded through the entity, the `inventories`
+migration (new nullable `warehouse_id` FK to `warehouses`, `nullOnDelete()`,
+the old `unique(tenant_id, product_id, variant_id)` constraint widened to
+`unique(tenant_id, product_id, variant_id, warehouse_id)` — same
+documented NULL-is-distinct gap the `variant_id` migration already
+carries), `InventoryRepositoryInterface::findByProduct()`/
+`findByProductForUpdate()`, and a genuinely new repository method,
+`listByProduct()` (every Inventory row for one Product/variant across
+every Warehouse — needed by `GetWarehouseStockAction` and
+`FindNearestWarehouseAction`, neither of which any single-row lookup
+could answer). Every existing call site — `AddToCartAction`,
+`PlaceOrderAction`, `CheckInventoryAction`'s all four methods — was left
+completely untouched: none of them pass a `warehouseId`, so every one of
+them keeps operating on the tenant's own default (`warehouse_id` null)
+row exactly as before, proven by the full pre-existing 666-test suite
+passing unmodified (module-wide) the moment the foundation landed, and by
+`WarehouseCapabilityTest`'s own explicit step 10 (a fresh Cart/Order flow
+against the default row, run *after* three Warehouses' worth of Transfer
+activity, asserting the default row's own numbers are exactly what a
+plain `20 - 3` predicts).
+
+One genuinely new `Inventory` capability this stage needed:
+`receiveStock(int $quantity)` — a plain relative increase to
+`quantityOnHand` for stock arriving from a completed Transfer.
+Deliberately not `restore()`, even though both simply add to the same
+column — see `receiveStock()`'s own docblock: `restore()` is specifically
+"reverse a prior `commit()`" (a cancelled Order's stock returning to
+where it always was), while `receiveStock()` is "stock that was never
+here before has just arrived," a different origin story that would make
+`restore()`'s own "commit()'s exact inverse" docblock claim false if the
+two were merged.
+
+**The Transfer workflow reuses Inventory's existing reserve/commit
+lifecycle exactly, never a new one.** `WarehouseTransfer` (Domain entity,
+frozen `WarehouseTransferItem[]` at creation — the same Immutable Order
+Items shape Order/Invoice/Workflow already establish) has its own small
+state machine mirroring `Shipment::changeStatus()`'s exact
+`ALLOWED_TRANSITIONS` shape (Pending -> Approved -> Completed, or
+Cancelled from either non-terminal state). `RequestWarehouseTransferAction`
+only opens the record (Pending, no Inventory side effect yet, rule §e.3);
+`ApproveWarehouseTransferAction` row-locks each item's source-Warehouse
+Inventory row (`findByProductForUpdate`, the same concurrency-safety
+mechanism `AddToCartAction` already uses) and calls `reserve()` — a soft
+hold, exactly like a Cart's own reservation, translating a caught
+`InsufficientInventoryException` into this module's own
+`InsufficientWarehouseStockException` (409) rather than letting the
+lower-level exception leak across the abstraction boundary;
+`CompleteWarehouseTransferAction` row-locks and `commit()`s the source
+row (identical to how `PlaceOrderAction` turns a Cart's hold into a real
+sale) and `receiveStock()`s the destination row, constructing a fresh
+zero-on-hand `Inventory::stock()` row first if the destination has never
+stocked this Product before. `TransferStatus::InTransit` is modeled (the
+request's own "Request -> Approve -> Reserve -> In Transit -> Complete"
+narrative) but unreached by any Action this stage — only
+Request/Approve/Complete were requested; the same "modeled but not all
+reachable" gap `Redemption`'s own pending/cancelled states and
+`RewardType::FreeProduct`/`FreeShipping` already carry (§7.10). A future
+`MarkTransferInTransitAction` would insert cleanly between Approved and
+Completed without touching the entity's own transition map.
+
+**`NearestWarehouseFinder` is a pure, framework-free Domain Service — it
+never queries a Repository.** It takes an already-fetched
+`list<array{warehouse: Warehouse, availableQuantity: int}>` and a
+customer `WarehouseLocation`, filters out inactive Warehouses and any
+without enough `availableQuantity`, and returns whichever remaining one
+is closest by `WarehouseDistanceCalculator`'s own Haversine formula (Earth
+radius 6371km — the standard great-circle approximation, accurate enough
+for "which warehouse is nearest" without a full geodesy library). This is
+the same "Domain Service only combines data already handed to it" shape
+`WorkflowEvaluator`/`PricingService`/`ShippingRateCalculator` already
+establish — `FindNearestWarehouseAction` is the Application-layer piece
+that actually calls `WarehouseRepositoryInterface::listByTenant()`/
+`InventoryRepositoryInterface::listByProduct()` and hands the assembled
+candidate list to the pure finder.
+
+**The Shipping integration is this stage's one genuine pattern
+extension, not just a new capability.** `commerce.warehouse.nearest`
+finding the right Warehouse is Commerce's own concern, but "price shipping
+by distance from the nearest Warehouse" is Shipping's — rather than
+duplicating the Haversine math inside Shipping (the wrong call once a
+single source of truth already exists, the same reasoning Stage 6's own
+Analytics/Reporting correction gives, §7.18) or inventing a new
+Interface+binding pair for what's fundamentally a read-only lookup with
+no persistence side effect, Shipping's `CalculateShippingRateAction`
+constructor-injects Commerce's `FindNearestWarehouseAction`/
+`WarehouseDistanceCalculator` directly — both plain, unbound,
+container-autowired classes, the exact "reuse another module's read-only
+building block with no Interface" shape pattern #20 already established
+for Analytics/Reporting Query Builder reuse, just applied to an *Action*
+instead of a Query Builder for the first time (safe here because
+`FindNearestWarehouseAction` has no write side effect either — it's a
+lookup, not a command). Four new trailing optional params on
+`CalculateShippingRateAction::execute()` (`customerLatitude`,
+`customerLongitude`, `productId`, `requiredQuantity`) are the only way
+this path is ever exercised; every pre-existing 3-arg caller is
+byte-for-byte unaffected, proven directly by `WarehouseAwareShippingRateTest`'s
+own old-vs-new-signature parity assertion. `ShippingMethod` gained one
+more optional trailing field, `ratePerKm` (nullable cents, `ratePerKm()`
+getter falls back to `Money::fromAmount(0, ...)` so callers never
+null-check it themselves) — the identical shape `Shipment::$providerName`/
+`$providerTrackingNumber` already used (§7.14). The new
+`shipping_methods.rate_per_km` column has no writer this stage
+(`CreateShippingMethodAction` wasn't widened) — every pre-existing
+ShippingMethod simply reads back a $0 distance surcharge until an
+operator sets one directly.
+
+**Two exceptions weren't in the original request's list of 3** — added
+unprompted, same reasoning every prior "add unprompted" precedent in this
+codebase gives (§3 pattern #12): `InvalidWarehouseCodeException` (a plain
+400 for `WarehouseCode`'s own `WH-XXXXX` format violation, the same shape
+`InvalidSKUException` gives `SKU`) and `DuplicateWarehouseCodeException`
+(a real 409 for `warehouses`' own DB-level `unique(tenant_id, code)`
+constraint — `WarehouseCode` is caller-supplied, not auto-generated like
+`TrackingNumber`, since an operator naming their own Tehran/Isfahan/Shiraz
+warehouses wants recognizable codes, not random ones).
+
+**Five of the request's own 9 capability names hit the recurring
+3-dot-segment gotcha** (§3 pattern #13, hit again the same way Product
+Variants' own capabilities hit it, §7.21): `commerce.warehouse.transfer.request`/
+`.approve`/`.complete` (4 segments each) renamed to
+`commerce.transfer.request`/`.approve`/`.complete` (treating "transfer" as
+its own resource, parallel to "warehouse" — the identical move
+`commerce.variant.attribute.create` made for "attribute" relative to
+"variant"); `commerce.warehouse.nearest.find` renamed to
+`commerce.warehouse.nearest` and `commerce.warehouse.stock.get` renamed to
+`commerce.warehouse.stock` (both fold away a generic "find"/"get" verb,
+the same way `commerce.variant.generate` already folded away
+"combinations").
+
+**There is deliberately no MCP capability (or Action) for provisioning a
+Warehouse's *initial* stock.** `Inventory::setQuantityOnHand()` (already
+existed, §7.21) is the mechanism; this stage's own `GetWarehouseStockAction`
+is read-only by design (see its own docblock) — provisioning happens by
+seeding the repository directly today, the same "built the mechanism, no
+Action-level entry point requested yet" gap this codebase has carried
+before for other capabilities (§6/§8.2).
+
+New tests: `tests/Unit/Commerce/{WarehouseCodeTest,WarehouseLocationTest,
+WarehouseTest,WarehouseTransferTest,WarehouseDistanceCalculatorTest,
+NearestWarehouseFinderTest}.php` (5+5+3+9+~4+~6, framework-free) + 2 new
+`InventoryTest` cases (`warehouseId`/`receiveStock`),
+`tests/Feature/Commerce/{WarehouseActionsTest,WarehouseTransferActionsTest,
+FindNearestWarehouseActionTest}.php` (Action-level, real DB),
+`tests/Feature/Shipping/WarehouseAwareShippingRateTest.php` (the required
+Shipping-integration Feature test, including the explicit
+old-signature-unchanged regression assertion), and
+`tests/Feature/Commerce/WarehouseCapabilityTest.php` (1 test — the literal
+10-step end-to-end scenario from the request, entirely through MCP: 3
+Warehouses with real Tehran/Isfahan/Shiraz coordinates -> per-warehouse
+stock 10/5/0 -> nearest-Warehouse lookup correctly picks Isfahan over
+closer-but-empty Shiraz and farther Tehran -> Transfer request -> approve
+(source reserved) -> complete (source decremented, destination
+incremented) -> both Warehouses' own stock verified -> an over-large
+Transfer against Shiraz's own zero stock rejected 409 at Approve -> tenant
+isolation on `commerce.warehouse.get` -> the pre-existing non-warehouse
+Cart/Order flow proven unaffected). 720 tests total (666 + 54), zero
+regressions.
 
 ---
 

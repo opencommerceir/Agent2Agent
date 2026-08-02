@@ -219,6 +219,90 @@ final class CommerceCapabilities
                 'outputSchema' => ['variants' => 'array', 'count' => 'integer'],
                 'requiredPermissions' => ['commerce.variants.manage'],
             ],
+            // Phase 5, Stage 2 (Multi-warehouse Inventory, §7.22). Five of
+            // the request's own 9 capability names were 4 dot-separated
+            // segments — CapabilityName requires exactly 3 (HANDOFF gotcha
+            // #2/§3 pattern #13, hit again the same way Product Variants'
+            // own capabilities hit it) — renamed below:
+            // commerce.warehouse.transfer.request/.approve/.complete ->
+            // commerce.transfer.request/.approve/.complete (treating
+            // "transfer" as its own resource, parallel to "warehouse", the
+            // same move commerce.variant.attribute.create ->
+            // commerce.attribute.create already made for "attribute"
+            // relative to "variant"); commerce.warehouse.nearest.find ->
+            // commerce.warehouse.nearest and commerce.warehouse.stock.get
+            // -> commerce.warehouse.stock (both fold away a generic
+            // "find"/"get" verb the same way commerce.variant.generate
+            // already folded away "combinations").
+            [
+                'name' => 'commerce.warehouse.create',
+                'description' => 'Create a tenant-owned physical Warehouse',
+                'inputSchema' => ['code' => 'string', 'name' => 'string', 'latitude' => 'number', 'longitude' => 'number', 'address' => 'string'],
+                'outputSchema' => ['warehouse' => 'array'],
+                'requiredPermissions' => ['commerce.warehouses.manage'],
+            ],
+            [
+                'name' => 'commerce.warehouse.update',
+                'description' => "Update a Warehouse's name, location, and active status",
+                // is_active is optional — same reasoning as
+                // commerce.order.place's notes field.
+                'inputSchema' => ['warehouse_id' => 'integer', 'name' => 'string', 'latitude' => 'number', 'longitude' => 'number', 'address' => 'string'],
+                'outputSchema' => ['warehouse' => 'array'],
+                'requiredPermissions' => ['commerce.warehouses.manage'],
+            ],
+            [
+                'name' => 'commerce.warehouse.get',
+                'description' => 'Get a Warehouse by id',
+                'inputSchema' => ['warehouse_id' => 'integer'],
+                'outputSchema' => ['warehouse' => 'array'],
+                'requiredPermissions' => ['commerce.warehouses.read'],
+            ],
+            [
+                'name' => 'commerce.warehouse.list',
+                'description' => "List the tenant's own Warehouses",
+                // is_active is optional.
+                'inputSchema' => [],
+                'outputSchema' => ['warehouses' => 'array'],
+                'requiredPermissions' => ['commerce.warehouses.read'],
+            ],
+            [
+                'name' => 'commerce.warehouse.stock',
+                'description' => 'Get how much of one Product (or ProductVariant) is on hand at one specific Warehouse',
+                // variant_id is optional.
+                'inputSchema' => ['warehouse_id' => 'integer', 'product_id' => 'integer'],
+                'outputSchema' => ['warehouseId' => 'integer', 'productId' => 'integer', 'variantId' => 'integer', 'quantityOnHand' => 'integer', 'quantityReserved' => 'integer', 'quantityAvailable' => 'integer'],
+                'requiredPermissions' => ['commerce.warehouses.read'],
+            ],
+            [
+                'name' => 'commerce.warehouse.nearest',
+                'description' => 'Find the nearest active Warehouse to a customer location that can fulfil a requested quantity of one Product',
+                // variant_id is optional.
+                'inputSchema' => ['product_id' => 'integer', 'customer_latitude' => 'number', 'customer_longitude' => 'number', 'required_quantity' => 'integer'],
+                'outputSchema' => ['warehouse' => 'array'],
+                'requiredPermissions' => ['commerce.warehouses.read'],
+            ],
+            [
+                'name' => 'commerce.transfer.request',
+                'description' => 'Request a stock transfer of one or more Products/ProductVariants from one Warehouse to another',
+                // notes is optional.
+                'inputSchema' => ['source_warehouse_id' => 'integer', 'destination_warehouse_id' => 'integer', 'items' => 'array'],
+                'outputSchema' => ['transfer' => 'array'],
+                'requiredPermissions' => ['commerce.transfers.manage'],
+            ],
+            [
+                'name' => 'commerce.transfer.approve',
+                'description' => 'Approve a pending WarehouseTransfer, reserving the requested stock at the source Warehouse',
+                'inputSchema' => ['transfer_id' => 'integer'],
+                'outputSchema' => ['transfer' => 'array'],
+                'requiredPermissions' => ['commerce.transfers.manage'],
+            ],
+            [
+                'name' => 'commerce.transfer.complete',
+                'description' => 'Complete an approved WarehouseTransfer, moving the reserved stock from the source Warehouse to the destination Warehouse',
+                'inputSchema' => ['transfer_id' => 'integer'],
+                'outputSchema' => ['transfer' => 'array'],
+                'requiredPermissions' => ['commerce.transfers.manage'],
+            ],
         ];
     }
 }

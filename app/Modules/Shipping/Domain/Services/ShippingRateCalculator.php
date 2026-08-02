@@ -13,6 +13,14 @@ use App\Modules\Shipping\Domain\ValueObjects\Weight;
  * PointsCalculationService already establish. Rounds to the nearest
  * whole cent — a fractional cent is meaningless (Money-as-Integer,
  * HANDOFF gotcha #4).
+ *
+ * $distanceKm/$ratePerKm (Phase 5, Stage 2 — Multi-warehouse Inventory,
+ * §7.22) are an optional trailing pair — when both are given, a third
+ * term (distance_km × rate_per_km) is added to the total, the same
+ * warehouse-distance surcharge CalculateShippingRateAction's own
+ * FindNearestWarehouseAction lookup produces. When either is omitted the
+ * total is computed exactly as before this stage — zero behavior change
+ * for every existing caller.
  */
 final class ShippingRateCalculator
 {
@@ -22,9 +30,15 @@ final class ShippingRateCalculator
         Weight $weight,
         int $estimatedDaysMin,
         int $estimatedDaysMax,
+        ?float $distanceKm = null,
+        ?Money $ratePerKm = null,
     ): ShippingRate {
         $variableCost = (int) round($ratePerKg->amount() * $weight->kilograms());
         $totalAmount = $baseRate->amount() + $variableCost;
+
+        if ($distanceKm !== null && $ratePerKm !== null) {
+            $totalAmount += (int) round($ratePerKm->amount() * $distanceKm);
+        }
 
         return new ShippingRate(
             Money::fromAmount($totalAmount, $baseRate->currency()),

@@ -18,6 +18,7 @@ class Inventory extends Model
         'tenant_id',
         'product_id',
         'variant_id',
+        'warehouse_id',
         'quantity_on_hand',
         'quantity_reserved',
     ];

@@ -18,6 +18,7 @@ final class ShippingMethodData
         public readonly int $estimatedDaysMin,
         public readonly int $estimatedDaysMax,
         public readonly bool $isActive,
+        public readonly int $ratePerKmAmount = 0,
     ) {
     }
 
@@ -35,6 +36,7 @@ final class ShippingMethodData
             estimatedDaysMin: $method->estimatedDaysMin(),
             estimatedDaysMax: $method->estimatedDaysMax(),
             isActive: $method->isActive(),
+            ratePerKmAmount: $method->ratePerKm()->amount(),
         );
     }
 
@@ -55,6 +57,7 @@ final class ShippingMethodData
             'estimatedDaysMin' => $this->estimatedDaysMin,
             'estimatedDaysMax' => $this->estimatedDaysMax,
             'isActive' => $this->isActive,
+            'ratePerKmAmount' => $this->ratePerKmAmount,
         ];
     }
 }

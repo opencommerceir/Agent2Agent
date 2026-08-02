@@ -44,6 +44,7 @@ class EloquentShippingMethodRepository implements ShippingMethodRepositoryInterf
         $model->base_rate_currency = $method->baseRate()->currency();
         $model->rate_per_kg_amount = $method->ratePerKg()->amount();
         $model->rate_per_kg_currency = $method->ratePerKg()->currency();
+        $model->rate_per_km = $method->ratePerKm()->amount();
         $model->estimated_days_min = $method->estimatedDaysMin();
         $model->estimated_days_max = $method->estimatedDaysMax();
         $model->is_active = $method->isActive();
@@ -65,6 +66,9 @@ class EloquentShippingMethodRepository implements ShippingMethodRepositoryInterf
             estimatedDaysMax: $model->estimated_days_max,
             isActive: (bool) $model->is_active,
             createdAt: DateTimeImmutable::createFromInterface($model->created_at),
+            ratePerKm: $model->rate_per_km !== null
+                ? Money::fromAmount($model->rate_per_km, $model->base_rate_currency)
+                : null,
         );
     }
 }
