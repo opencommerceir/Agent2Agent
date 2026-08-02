@@ -174,6 +174,19 @@ Negative:
 
 Laravel should be used as an architectural framework, not only as a CRUD generator.
 
+## Future Consideration: Laravel 13
+
+Laravel 13 requires PHP 8.3+; the current runtime environment is on PHP
+8.2. Upgrading to Laravel 13 is a planned future migration, not yet
+started — it depends on the PHP runtime being upgraded to 8.3+ first
+(an environment/infrastructure change, not a `composer.json` change
+alone), followed by a real review of Laravel 12 → 13 breaking changes,
+updating every dependent package (`barryvdh/laravel-dompdf`,
+`predis/predis`, `laravel/tinker`, `laravel/pint`, `laravel/sail`, etc.)
+to a 13-compatible version, and a full test-suite pass. Recorded here so
+this stays a deliberate, tracked decision rather than an assumption —
+see README's own Roadmap section for the checklist entry.
+
 ---
 
 # Decision 004: Domain Driven Design

@@ -259,6 +259,7 @@ The current roadmap focuses on building the platform foundation.
 - [ ] Event System
 - [ ] Multi-tenant Infrastructure
 - [ ] Developer Documentation
+- [ ] Upgrade to Laravel 13 (blocked on the runtime environment moving to PHP 8.3+ first — see `docs/decisions.md`, Decision 003)
 
 ---
 
