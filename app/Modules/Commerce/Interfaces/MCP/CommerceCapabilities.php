@@ -133,7 +133,10 @@ final class CommerceCapabilities
             [
                 'name' => 'commerce.coupon.create',
                 'description' => 'Create a new discount Coupon',
-                // expires_at and max_uses are optional.
+                // expires_at, max_uses, and discount_rule_id (Phase 5
+                // Stage 4, §7.24 — links this Coupon to a DiscountRule,
+                // whose own logic then computes the real discount) are
+                // all optional.
                 'inputSchema' => ['code' => 'string', 'discount_type' => 'string', 'discount_value' => 'integer'],
                 'outputSchema' => ['coupon' => 'array'],
                 'requiredPermissions' => ['commerce.coupons.create'],
@@ -371,6 +374,72 @@ final class CommerceCapabilities
                 'inputSchema' => [],
                 'outputSchema' => ['operations' => 'array'],
                 'requiredPermissions' => ['commerce.bulk.read'],
+            ],
+            // Phase 5, Stage 4 (Advanced Discount Rules, §7.24). 5 of the
+            // request's own 7 capability names were 4 dot-separated
+            // segments (commerce.discount.rule.*) — CapabilityName
+            // requires exactly 3 (HANDOFF gotcha #2/§3 pattern #13) —
+            // renamed to commerce.rule.* (treating "rule" as its own
+            // resource, parallel to "discount"/"warehouse"/"transfer",
+            // the identical move commerce.warehouse.transfer.request ->
+            // commerce.transfer.request already made, §7.22).
+            // commerce.discount.apply's own requested permission
+            // (commerce.cart.update) doesn't exist anywhere else in this
+            // codebase — Cart mutation is always gated by the existing
+            // commerce.cart.manage permission (commerce.cart.add's own),
+            // reused here instead of introducing a second, overlapping one.
+            [
+                'name' => 'commerce.rule.create',
+                'description' => 'Create a tenant-owned DiscountRule',
+                // description, conditions, starts_at, expires_at, and
+                // max_uses are all optional.
+                'inputSchema' => ['name' => 'string', 'discount_type' => 'string', 'discount_value' => 'integer', 'priority' => 'integer', 'stackability' => 'string'],
+                'outputSchema' => ['rule' => 'array'],
+                'requiredPermissions' => ['commerce.discounts.manage'],
+            ],
+            [
+                'name' => 'commerce.rule.update',
+                'description' => "Update a DiscountRule's editable fields (not its conditions, frozen at creation)",
+                // description, starts_at, expires_at, and is_active are optional.
+                'inputSchema' => ['rule_id' => 'integer', 'name' => 'string', 'discount_value' => 'integer', 'priority' => 'integer', 'stackability' => 'string'],
+                'outputSchema' => ['rule' => 'array'],
+                'requiredPermissions' => ['commerce.discounts.manage'],
+            ],
+            [
+                'name' => 'commerce.rule.delete',
+                'description' => 'Delete a DiscountRule',
+                'inputSchema' => ['rule_id' => 'integer'],
+                'outputSchema' => ['success' => 'boolean'],
+                'requiredPermissions' => ['commerce.discounts.manage'],
+            ],
+            [
+                'name' => 'commerce.rule.get',
+                'description' => 'Get a DiscountRule by id',
+                'inputSchema' => ['rule_id' => 'integer'],
+                'outputSchema' => ['rule' => 'array'],
+                'requiredPermissions' => ['commerce.discounts.read'],
+            ],
+            [
+                'name' => 'commerce.rule.list',
+                'description' => "List the tenant's own DiscountRules",
+                // is_active is optional.
+                'inputSchema' => [],
+                'outputSchema' => ['rules' => 'array'],
+                'requiredPermissions' => ['commerce.discounts.read'],
+            ],
+            [
+                'name' => 'commerce.discount.apply',
+                'description' => "Resolve and apply the winning set of automatic DiscountRules against the calling Agent's own Cart (priority + Stackability resolved), replacing whatever was previously applied",
+                'inputSchema' => ['cart_id' => 'integer'],
+                'outputSchema' => ['applied_discounts' => 'array', 'total_discount' => 'array'],
+                'requiredPermissions' => ['commerce.cart.manage'],
+            ],
+            [
+                'name' => 'commerce.discount.available',
+                'description' => "List every active DiscountRule that is individually eligible against the calling Agent's own Cart right now (not yet resolved for Stackability conflicts)",
+                'inputSchema' => ['cart_id' => 'integer'],
+                'outputSchema' => ['available_rules' => 'array'],
+                'requiredPermissions' => ['commerce.discounts.read'],
             ],
         ];
     }

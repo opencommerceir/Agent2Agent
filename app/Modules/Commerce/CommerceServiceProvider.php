@@ -7,6 +7,7 @@ use App\Core\Application\Services\CapabilityHandlerRegistry;
 use App\Core\Domain\ValueObjects\MemberType;
 use App\Modules\Commerce\Application\Actions\AddToCartAction;
 use App\Modules\Commerce\Application\Actions\ApplyCouponAction;
+use App\Modules\Commerce\Application\Actions\ApplyDiscountsToCartAction;
 use App\Modules\Commerce\Application\Actions\ApproveWarehouseTransferAction;
 use App\Modules\Commerce\Application\Actions\BulkInventoryUpdateAction;
 use App\Modules\Commerce\Application\Actions\BulkPriceUpdateAction;
@@ -15,16 +16,20 @@ use App\Modules\Commerce\Application\Actions\CalculatePricingAction;
 use App\Modules\Commerce\Application\Actions\CompleteWarehouseTransferAction;
 use App\Modules\Commerce\Application\Actions\CreateCouponAction;
 use App\Modules\Commerce\Application\Actions\CreateCustomerAction;
+use App\Modules\Commerce\Application\Actions\CreateDiscountRuleAction;
 use App\Modules\Commerce\Application\Actions\CreateProductVariantAction;
 use App\Modules\Commerce\Application\Actions\CreateVariantAttributeAction;
 use App\Modules\Commerce\Application\Actions\CreateWarehouseAction;
+use App\Modules\Commerce\Application\Actions\DeleteDiscountRuleAction;
 use App\Modules\Commerce\Application\Actions\DeleteProductVariantAction;
 use App\Modules\Commerce\Application\Actions\ExportOrdersAction;
 use App\Modules\Commerce\Application\Actions\FindNearestWarehouseAction;
 use App\Modules\Commerce\Application\Actions\GenerateVariantCombinationsAction;
+use App\Modules\Commerce\Application\Actions\GetAvailableDiscountsAction;
 use App\Modules\Commerce\Application\Actions\GetBulkOperationAction;
 use App\Modules\Commerce\Application\Actions\GetCartAction;
 use App\Modules\Commerce\Application\Actions\GetCustomerAction;
+use App\Modules\Commerce\Application\Actions\GetDiscountRuleAction;
 use App\Modules\Commerce\Application\Actions\GetOrderAction;
 use App\Modules\Commerce\Application\Actions\GetProductVariantAction;
 use App\Modules\Commerce\Application\Actions\GetWarehouseAction;
@@ -34,6 +39,7 @@ use App\Modules\Commerce\Application\Actions\ImportCustomersAction;
 use App\Modules\Commerce\Application\Actions\ImportProductsAction;
 use App\Modules\Commerce\Application\Actions\ListBulkOperationsAction;
 use App\Modules\Commerce\Application\Actions\ListCustomersAction;
+use App\Modules\Commerce\Application\Actions\ListDiscountRulesAction;
 use App\Modules\Commerce\Application\Actions\ListOrdersAction;
 use App\Modules\Commerce\Application\Actions\ListProductsAction;
 use App\Modules\Commerce\Application\Actions\ListProductVariantsAction;
@@ -44,12 +50,14 @@ use App\Modules\Commerce\Application\Actions\ProcessPaymentAction;
 use App\Modules\Commerce\Application\Actions\RefundPaymentAction;
 use App\Modules\Commerce\Application\Actions\RequestWarehouseTransferAction;
 use App\Modules\Commerce\Application\Actions\SyncWooCommerceProductsAction;
+use App\Modules\Commerce\Application\Actions\UpdateDiscountRuleAction;
 use App\Modules\Commerce\Application\Actions\UpdateProductVariantAction;
 use App\Modules\Commerce\Application\Actions\UpdateWarehouseAction;
 use App\Modules\Commerce\Application\DTOs\BulkOperationData;
 use App\Modules\Commerce\Application\DTOs\CartData;
 use App\Modules\Commerce\Application\DTOs\CouponData;
 use App\Modules\Commerce\Application\DTOs\CustomerData;
+use App\Modules\Commerce\Application\DTOs\DiscountRuleData;
 use App\Modules\Commerce\Application\DTOs\OrderData;
 use App\Modules\Commerce\Application\DTOs\PaymentData;
 use App\Modules\Commerce\Application\DTOs\PricingData;
@@ -69,11 +77,13 @@ use App\Modules\Commerce\Application\Services\TaxRateProviderInterface;
 use App\Modules\Commerce\Application\Services\WooCommerceClient;
 use App\Modules\Commerce\Application\Services\WooCommerceClientInterface;
 use App\Modules\Commerce\Application\Services\WooCommerceConfig;
+use App\Modules\Commerce\Domain\Repositories\AppliedDiscountRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\CartRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\CategoryRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\CouponRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\CustomerRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\DiscountRepositoryInterface;
+use App\Modules\Commerce\Domain\Repositories\DiscountRuleRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\InventoryRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\OrderRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\PaymentRepositoryInterface;
@@ -86,11 +96,13 @@ use App\Modules\Commerce\Domain\Repositories\WarehouseTransferRepositoryInterfac
 use App\Modules\Commerce\Domain\Services\WooCommerceProductMapper;
 use App\Modules\Commerce\Infrastructure\Connectors\MockProductConnector;
 use App\Modules\Commerce\Infrastructure\Connectors\WooCommerceProductConnector;
+use App\Modules\Commerce\Infrastructure\Repositories\EloquentAppliedDiscountRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentCartRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentCategoryRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentCouponRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentCustomerRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentDiscountRepository;
+use App\Modules\Commerce\Infrastructure\Repositories\EloquentDiscountRuleRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentInventoryRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentOrderRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentPaymentRepository;
@@ -141,6 +153,8 @@ class CommerceServiceProvider extends ServiceProvider
         $this->app->bind(WarehouseRepositoryInterface::class, EloquentWarehouseRepository::class);
         $this->app->bind(WarehouseTransferRepositoryInterface::class, EloquentWarehouseTransferRepository::class);
         $this->app->bind(BulkOperationRepositoryInterface::class, EloquentBulkOperationRepository::class);
+        $this->app->bind(DiscountRuleRepositoryInterface::class, EloquentDiscountRuleRepository::class);
+        $this->app->bind(AppliedDiscountRepositoryInterface::class, EloquentAppliedDiscountRepository::class);
         $this->app->bind(CsvParserInterface::class, CsvParser::class);
         $this->app->bind(CsvValidatorInterface::class, CsvValidator::class);
         $this->app->bind(PaymentGatewayInterface::class, MockPaymentGateway::class);
@@ -295,6 +309,7 @@ class CommerceServiceProvider extends ServiceProvider
                 minOrderAmount: isset($input['min_order_amount']) ? (int) $input['min_order_amount'] : null,
                 maxUses: isset($input['max_uses']) ? (int) $input['max_uses'] : null,
                 expiresAt: $input['expires_at'] ?? null,
+                discountRuleId: isset($input['discount_rule_id']) ? (int) $input['discount_rule_id'] : null,
             );
 
             return ['coupon' => $coupon->toArray()];
@@ -618,6 +633,100 @@ class CommerceServiceProvider extends ServiceProvider
                         $context->tenantId,
                         $input['type'] ?? null,
                         $input['status'] ?? null,
+                    ),
+                ),
+            ],
+        );
+
+        // Phase 5, Stage 4 (Advanced Discount Rules, §7.24). See
+        // CommerceCapabilities' own docblock for the 5-of-7 capability
+        // renames this stage needed (the recurring 3-dot-segment gotcha).
+
+        $handlers->register('commerce.rule.create', function (array $input, AuthContext $context) {
+            /** @var DiscountRuleData $rule */
+            $rule = $this->app->make(CreateDiscountRuleAction::class)->execute(
+                tenantId: $context->tenantId,
+                name: $input['name'],
+                discountType: $input['discount_type'],
+                discountValue: (int) $input['discount_value'],
+                priority: (int) $input['priority'],
+                stackability: $input['stackability'],
+                conditions: $input['conditions'] ?? [],
+                description: $input['description'] ?? null,
+                startsAt: $input['starts_at'] ?? null,
+                expiresAt: $input['expires_at'] ?? null,
+                maxUses: isset($input['max_uses']) ? (int) $input['max_uses'] : null,
+            );
+
+            return ['rule' => $rule->toArray()];
+        });
+
+        $handlers->register('commerce.rule.update', function (array $input, AuthContext $context) {
+            /** @var DiscountRuleData $rule */
+            $rule = $this->app->make(UpdateDiscountRuleAction::class)->execute(
+                id: (int) $input['rule_id'],
+                tenantId: $context->tenantId,
+                name: $input['name'],
+                discountValue: (int) $input['discount_value'],
+                priority: (int) $input['priority'],
+                stackability: $input['stackability'],
+                description: $input['description'] ?? null,
+                startsAt: $input['starts_at'] ?? null,
+                expiresAt: $input['expires_at'] ?? null,
+                isActive: (bool) ($input['is_active'] ?? true),
+            );
+
+            return ['rule' => $rule->toArray()];
+        });
+
+        $handlers->register('commerce.rule.delete', function (array $input, AuthContext $context) {
+            $this->app->make(DeleteDiscountRuleAction::class)->execute((int) $input['rule_id'], $context->tenantId);
+
+            return ['success' => true];
+        });
+
+        $handlers->register('commerce.rule.get', function (array $input, AuthContext $context) {
+            /** @var DiscountRuleData $rule */
+            $rule = $this->app->make(GetDiscountRuleAction::class)->execute((int) $input['rule_id'], $context->tenantId);
+
+            return ['rule' => $rule->toArray()];
+        });
+
+        $handlers->register(
+            'commerce.rule.list',
+            fn (array $input, AuthContext $context) => [
+                'rules' => array_map(
+                    fn (DiscountRuleData $rule) => $rule->toArray(),
+                    $this->app->make(ListDiscountRulesAction::class)->execute(
+                        $context->tenantId,
+                        isset($input['is_active']) ? (bool) $input['is_active'] : null,
+                    ),
+                ),
+            ],
+        );
+
+        $handlers->register('commerce.discount.apply', function (array $input, AuthContext $context) {
+            $result = $this->app->make(ApplyDiscountsToCartAction::class)->execute(
+                tenantId: $context->tenantId,
+                agentId: $context->agentId,
+                cartId: (int) $input['cart_id'],
+            );
+
+            return [
+                'applied_discounts' => array_map(fn ($discount) => $discount->toArray(), $result['appliedDiscounts']),
+                'total_discount' => ['amount' => $result['totalDiscountAmount'], 'currency' => $result['totalDiscountCurrency']],
+            ];
+        });
+
+        $handlers->register(
+            'commerce.discount.available',
+            fn (array $input, AuthContext $context) => [
+                'available_rules' => array_map(
+                    fn (DiscountRuleData $rule) => $rule->toArray(),
+                    $this->app->make(GetAvailableDiscountsAction::class)->execute(
+                        $context->tenantId,
+                        $context->agentId,
+                        (int) $input['cart_id'],
                     ),
                 ),
             ],

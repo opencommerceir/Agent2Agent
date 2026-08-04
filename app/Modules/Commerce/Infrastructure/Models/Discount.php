@@ -23,6 +23,7 @@ class Discount extends Model
         'discount_amount',
         'discount_currency',
         'description',
+        'discount_rule_id',
     ];
 
     public function order(): BelongsTo

@@ -17,6 +17,7 @@ final class CouponData
         public readonly int $usedCount,
         public readonly ?string $expiresAt,
         public readonly bool $isActive,
+        public readonly ?int $discountRuleId = null,
     ) {
     }
 
@@ -33,6 +34,7 @@ final class CouponData
             usedCount: $coupon->usedCount(),
             expiresAt: $coupon->expiresAt()?->format(DATE_ATOM),
             isActive: $coupon->isActive(),
+            discountRuleId: $coupon->discountRuleId(),
         );
     }
 
@@ -52,6 +54,7 @@ final class CouponData
             'usedCount' => $this->usedCount,
             'expiresAt' => $this->expiresAt,
             'isActive' => $this->isActive,
+            'discountRuleId' => $this->discountRuleId,
         ];
     }
 }

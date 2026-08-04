@@ -51,6 +51,7 @@ class EloquentCouponRepository implements CouponRepositoryInterface
         $model->used_count = $coupon->usedCount();
         $model->expires_at = $coupon->expiresAt();
         $model->is_active = $coupon->isActive();
+        $model->discount_rule_id = $coupon->discountRuleId();
         $model->save();
 
         return $this->toEntity($model);
@@ -70,6 +71,7 @@ class EloquentCouponRepository implements CouponRepositoryInterface
             expiresAt: $model->expires_at ? DateTimeImmutable::createFromInterface($model->expires_at) : null,
             isActive: $model->is_active,
             createdAt: DateTimeImmutable::createFromInterface($model->created_at),
+            discountRuleId: $model->discount_rule_id,
         );
     }
 }

@@ -15,6 +15,18 @@ use DateTimeImmutable;
  * (0-100, same range TaxRate validates); for FixedAmount it is the
  * smallest currency unit (cents), never a float — see
  * calculateDiscount().
+ *
+ * discountRuleId (Phase 5, Stage 4 — Advanced Discount Rules, §7.24) is
+ * an optional trailing field (HANDOFF §3 pattern #6): null means this
+ * Coupon works exactly as it always has, computing its own discount via
+ * calculateDiscount() below; non-null means the calling Action
+ * (CalculatePricingAction/ProcessPaymentAction) bypasses
+ * calculateDiscount() entirely and uses DiscountCalculator against the
+ * linked DiscountRule instead — this Coupon's own discountType/discountValue
+ * are then unused (kept only so the `coupons` table's existing NOT NULL
+ * columns stay satisfied; CreateDiscountRuleAction-linked coupons may set
+ * them to anything, e.g. a copy of the rule's own values, purely for
+ * display).
  */
 final class Coupon
 {
@@ -30,6 +42,7 @@ final class Coupon
         private readonly ?DateTimeImmutable $expiresAt,
         private bool $isActive,
         private readonly DateTimeImmutable $createdAt,
+        private readonly ?int $discountRuleId = null,
     ) {
     }
 
@@ -41,6 +54,7 @@ final class Coupon
         ?int $minOrderAmount = null,
         ?int $maxUses = null,
         ?DateTimeImmutable $expiresAt = null,
+        ?int $discountRuleId = null,
     ): self {
         return new self(
             id: null,
@@ -54,6 +68,7 @@ final class Coupon
             expiresAt: $expiresAt,
             isActive: true,
             createdAt: new DateTimeImmutable(),
+            discountRuleId: $discountRuleId,
         );
     }
 
@@ -154,5 +169,10 @@ final class Coupon
     public function createdAt(): DateTimeImmutable
     {
         return $this->createdAt;
+    }
+
+    public function discountRuleId(): ?int
+    {
+        return $this->discountRuleId;
     }
 }

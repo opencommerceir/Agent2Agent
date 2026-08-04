@@ -19,6 +19,7 @@ class EloquentDiscountRepository implements DiscountRepositoryInterface
         $model->discount_amount = $discount->amount()->amount();
         $model->discount_currency = $discount->amount()->currency();
         $model->description = $discount->description();
+        $model->discount_rule_id = $discount->discountRuleId();
         $model->save();
 
         return $this->toEntity($model);
@@ -41,6 +42,7 @@ class EloquentDiscountRepository implements DiscountRepositoryInterface
             type: DiscountType::from($model->discount_type),
             amount: Money::fromAmount($model->discount_amount, $model->discount_currency),
             description: $model->description,
+            discountRuleId: $model->discount_rule_id,
         );
     }
 }

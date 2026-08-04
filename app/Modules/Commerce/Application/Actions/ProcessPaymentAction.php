@@ -7,7 +7,9 @@ use App\Modules\Commerce\Application\DTOs\OrderData;
 use App\Modules\Commerce\Application\DTOs\PaymentData;
 use App\Modules\Commerce\Application\Services\PaymentGatewayInterface;
 use App\Modules\Commerce\Application\Services\TaxRateProviderInterface;
+use App\Modules\Commerce\Domain\Entities\Cart;
 use App\Modules\Commerce\Domain\Entities\CartItem;
+use App\Modules\Commerce\Domain\Entities\Coupon;
 use App\Modules\Commerce\Domain\Entities\Payment;
 use App\Modules\Commerce\Domain\Events\PaymentWasProcessed;
 use App\Modules\Commerce\Domain\Exceptions\CartNotFoundException;
@@ -15,10 +17,14 @@ use App\Modules\Commerce\Domain\Exceptions\InvalidCouponException;
 use App\Modules\Commerce\Domain\Exceptions\PaymentFailedException;
 use App\Modules\Commerce\Domain\Repositories\CartRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\CouponRepositoryInterface;
+use App\Modules\Commerce\Domain\Repositories\DiscountRuleRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\PaymentRepositoryInterface;
+use App\Modules\Commerce\Domain\Repositories\ProductRepositoryInterface;
 use App\Modules\Commerce\Domain\Services\CouponValidationService;
+use App\Modules\Commerce\Domain\Services\DiscountCalculator;
 use App\Modules\Commerce\Domain\Services\PricingService;
 use App\Modules\Commerce\Domain\ValueObjects\CouponCode;
+use App\Modules\Commerce\Domain\ValueObjects\DiscountEvaluationContext;
 use App\Modules\Commerce\Domain\ValueObjects\Money;
 use App\Modules\Commerce\Domain\ValueObjects\PaymentMethod;
 use App\Modules\Commerce\Domain\ValueObjects\PaymentStatus;
@@ -68,6 +74,9 @@ final class ProcessPaymentAction
         private readonly PlaceOrderAction $placeOrder,
         private readonly ApplyCouponAction $applyCoupon,
         private readonly TaxRateProviderInterface $taxRateProvider,
+        private readonly DiscountRuleRepositoryInterface $discountRules,
+        private readonly DiscountCalculator $discountCalculator,
+        private readonly ProductRepositoryInterface $products,
     ) {
     }
 
@@ -114,7 +123,9 @@ final class ProcessPaymentAction
                 }
 
                 $this->couponValidation->validate($coupon, $subtotal);
-                $discount = $coupon->calculateDiscount($subtotal);
+                $discount = $coupon->discountRuleId() !== null
+                    ? $this->resolveRuleDiscount($coupon, $subtotal, $cart, $tenantId)
+                    : $coupon->calculateDiscount($subtotal);
             }
 
             $ratePercent = $this->taxRateProvider->getRatePercent($tenantId, $region) ?? self::DEFAULT_TAX_RATE_PERCENT;
@@ -155,7 +166,7 @@ final class ProcessPaymentAction
             Event::dispatch(new PaymentWasProcessed($payment));
 
             if ($coupon !== null) {
-                $this->applyCoupon->execute($coupon->id(), $tenantId, $order->id, $pricing->discount);
+                $this->applyCoupon->execute($coupon->id(), $tenantId, $order->id, $pricing->discount, $coupon->discountRuleId());
             }
 
             return [
@@ -163,5 +174,43 @@ final class ProcessPaymentAction
                 'payment' => PaymentData::fromEntity($payment),
             ];
         });
+    }
+
+    /**
+     * The DiscountRule bypass (Phase 5, Stage 4, §7.24) — identical to
+     * CalculatePricingAction's own resolveRuleDiscount()/buildEvaluationContext();
+     * duplicated rather than shared because the two Actions have no common
+     * base class and each is already self-contained (PlaceOrderAction's own
+     * precedent: small, Action-local helpers over a shared trait for logic
+     * this narrow).
+     */
+    private function resolveRuleDiscount(Coupon $coupon, Money $subtotal, Cart $cart, int $tenantId): Money
+    {
+        $rule = $this->discountRules->findById($coupon->discountRuleId(), $tenantId);
+
+        if (! $rule) {
+            return $coupon->calculateDiscount($subtotal);
+        }
+
+        return $this->discountCalculator->calculate($rule, $this->buildEvaluationContext($cart, $subtotal, $tenantId));
+    }
+
+    private function buildEvaluationContext(Cart $cart, Money $subtotal, int $tenantId): DiscountEvaluationContext
+    {
+        $items = array_map(
+            fn (CartItem $item) => [
+                'productId' => $item->productId(),
+                'categoryId' => $this->products->findById($item->productId(), $tenantId)?->categoryId(),
+                'quantity' => $item->quantity()->value(),
+                'unitPriceAmount' => $item->unitPrice()->amount(),
+            ],
+            $cart->items(),
+        );
+
+        return new DiscountEvaluationContext(
+            subtotalAmount: $subtotal->amount(),
+            currency: $subtotal->currency(),
+            items: $items,
+        );
     }
 }

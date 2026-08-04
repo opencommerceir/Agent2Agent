@@ -24,6 +24,7 @@ class Coupon extends Model
         'used_count',
         'expires_at',
         'is_active',
+        'discount_rule_id',
     ];
 
     protected $casts = [

@@ -30,6 +30,7 @@ final class CreateCouponAction
         ?int $minOrderAmount = null,
         ?int $maxUses = null,
         ?string $expiresAt = null,
+        ?int $discountRuleId = null,
     ): CouponData {
         $codeValue = new CouponCode($code); // throws InvalidCouponException on bad format
 
@@ -45,6 +46,7 @@ final class CreateCouponAction
             minOrderAmount: $minOrderAmount,
             maxUses: $maxUses,
             expiresAt: $expiresAt !== null ? new DateTimeImmutable($expiresAt) : null,
+            discountRuleId: $discountRuleId,
         );
 
         $coupon = $this->coupons->save($coupon);

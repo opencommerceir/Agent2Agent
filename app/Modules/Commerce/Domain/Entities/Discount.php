@@ -15,6 +15,15 @@ use DateTimeImmutable;
  * id field, same immutability/shape OrderItem already established — a
  * historical fact nothing ever looks up by its own id, only by orderId
  * (DiscountRepositoryInterface::listByOrder()).
+ *
+ * discountRuleId (Phase 5, Stage 4 — Advanced Discount Rules, §7.24) is
+ * exactly the extension this class's own original docblock anticipated —
+ * an optional trailing field (HANDOFF §3 pattern #6), non-null when a
+ * Coupon linked to a DiscountRule (Coupon::$discountRuleId) produced this
+ * Discount via DiscountCalculator instead of Coupon::calculateDiscount().
+ * couponId and discountRuleId may both be non-null at once (the Coupon
+ * that was redeemed, and the Rule that actually computed the amount) —
+ * they answer different questions, not alternatives to pick between.
  */
 final class Discount
 {
@@ -25,6 +34,7 @@ final class Discount
         private readonly Money $amount,
         private readonly ?string $description,
         private readonly DateTimeImmutable $createdAt,
+        private readonly ?int $discountRuleId = null,
     ) {
     }
 
@@ -34,6 +44,7 @@ final class Discount
         DiscountType $type,
         Money $amount,
         ?string $description = null,
+        ?int $discountRuleId = null,
     ): self {
         return new self(
             orderId: $orderId,
@@ -42,6 +53,7 @@ final class Discount
             amount: $amount,
             description: $description,
             createdAt: new DateTimeImmutable(),
+            discountRuleId: $discountRuleId,
         );
     }
 
@@ -53,6 +65,11 @@ final class Discount
     public function couponId(): ?int
     {
         return $this->couponId;
+    }
+
+    public function discountRuleId(): ?int
+    {
+        return $this->discountRuleId;
     }
 
     public function type(): DiscountType

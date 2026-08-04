@@ -11,7 +11,8 @@ Infrastructure, §7.16), Stage 5 (Admin Dashboard + Human Authentication,
 Versioning System, §7.19), and Stage 8 (Performance Optimization, §7.20 —
 the last Stage of Phase 4). Phase 5 (Advanced Commerce) is under way:
 Stage 1 (Product Variants, §7.21), Stage 2 (Multi-warehouse Inventory,
-§7.22), and Stage 3 (Bulk Operations, §7.23) are all complete.
+§7.22), Stage 3 (Bulk Operations, §7.23), and Stage 4 (Advanced Discount
+Rules, §7.24) are all complete.
 
 The paragraphs below are in build order — read top to bottom for the
 actual chronological story. Finance supplies Commerce's own checkout
@@ -573,11 +574,120 @@ literal 1000, the same "prove the proportional behavior, not raw
 throughput" scope this codebase's own test suite always uses for a
 data-volume claim.
 
-762 tests passing (720 + 42 new), zero known regressions. Next up:
-whatever Phase 5's own Stage 4 turns out to be (not yet scoped — Bundle
+762 tests passing (720 + 42 new), zero known regressions.
+
+**Phase 5, Stage 4 (Advanced Discount Rules, §7.24) — the biggest single
+architecture fork since §7.21's own stock-column question, resolved the
+same way, without needing to stop and ask.** The request's own schema
+asked for a new `AppliedDiscount` entity/table that, read literally,
+duplicates a concept this codebase already has: `Discount` (Phase 2 Stage
+5, §7.5) is already "the frozen record of one discount applied to
+[an Order]" — and that entity's own original docblock had *already*
+anticipated this exact extension ("couponId is nullable so a future
+non-coupon discount source... can still produce a Discount row").
+Building `AppliedDiscount` as a second, parallel "applied discount
+record" mechanism would have created the identical two-sources-of-truth
+risk Stage 1 avoided by extending `Inventory` instead of adding a second
+stock column, and Stage 6's own Analytics/Reporting correction avoided by
+reusing Query Builders instead of re-aggregating. The resolution: reuse
+this codebase's own established `Cart`/`Order` duality
+(`CartItem`/`OrderItem` — a mutable, delete-and-reinsert-on-every-save
+preview state vs. a frozen, write-once historical record, §7.2) one
+level up. `AppliedDiscount` genuinely is built this stage, but scoped
+*only* to Carts (no `order_id` column at all) — the Cart-side mirror of
+`Discount`'s own Order-side role, re-computed and replaced wholesale by
+every `commerce.discount.apply` call the same way
+`EloquentCartRepository::save()` already replaces `CartItem` rows.
+`Discount` itself gained the anticipated `discountRuleId` (nullable,
+additive) instead of a second table owning the Order side.
+
+**The other major scope decision, made and documented rather than
+asked about (the same weight Stage 3's "which slice owns which Job"
+correction carried, not a full architecture-fork question):**
+`commerce.checkout.calculate`/`.process` do **not** automatically fold
+Cart-level, coupon-less DiscountRule evaluation into the real order
+total this stage. `commerce.discount.apply`/`.available` are a
+self-contained, standalone Cart preview/browsing surface; the *only*
+checkout-integrated path is a Coupon explicitly linked to a DiscountRule
+(`Coupon::$discountRuleId`, exactly what the request's own §ز asked
+`ApplyCouponAction` to support) — reached through the coupon code a
+caller already has to supply, not automatically. This kept the change to
+`CalculatePricingAction`/`ProcessPaymentAction` — two of the most
+heavily-tested Actions in the whole codebase — to one small, purely
+additive conditional branch (`if ($coupon->discountRuleId() !== null)`)
+rather than a rewrite of their own core formula, and is recorded here as
+a deliberate, narrower-than-the-request scope boundary (§8), the same
+honest-gap style `§8.36`'s "no shipping-cost inclusion in checkout
+pricing" already established, not a silently missing feature.
+
+`DiscountRuleEvaluator::selectApplicableRules()` resolves priority +
+Stackability (rule §д.3) with a combination rule read literally from the
+request's own text ("`exclusive`: only combinable with other `exclusive`
+rules") rather than the more common "exclusive means alone" intuition:
+once the highest-priority eligible rule anchors a selection, only rules
+sharing that *same* Stackability value can join it — `Stackable` combines
+with `Stackable`, `Exclusive` combines with `Exclusive`, but the two never
+mix, and `CouponOnly` rules are filtered out before selection even starts
+(they only ever apply through an explicit, linked Coupon — Stackability
+governs *automatic* rule-vs-rule interaction, never an explicit customer
+action). This exact resolution is what the stage's own literal 3-rule
+worked example (A stackable/priority 10, B exclusive/priority 5, C
+stackable/priority 1 → A+C apply, B doesn't) requires, and is
+unit-tested directly against that scenario before any Action was ever
+wired to it.
+
+`DiscountCondition` gained two case that weren't in the request's own
+5-case list — `TieredThresholds` (a Tiered rule needs more than one
+`discount_value` column can carry: multiple subtotal-threshold/percentage
+pairs, encoded as this condition's own free-form JSON) and `MinSubtotal`
+(the request's own worked example, "$5 off min $50," needs a
+minimum-subtotal gate no existing condition type could express —
+`MinQuantity` counts units, not cents; the DiscountRule-side equivalent
+of `Coupon::$minOrderAmount`) — both added unprompted, same reasoning
+every prior "add unprompted" precedent in this codebase gives (§3
+pattern #12).
+
+`DiscountType` (the existing enum `Coupon`/`Discount` already used, not
+a new parallel one) gained `BuyXGetY`/`Tiered` — a DiscountRule and the
+Coupon it may optionally link to need a shared vocabulary for the link to
+mean anything; `Coupon::calculateDiscount()`'s own `match` is untouched
+and still only ever handles `Percentage`/`FixedAmount`, since a plain
+Coupon is never directly constructed with the other two.
+
+Five of the request's own 7 capability names were 4 dot-separated
+segments (`commerce.discount.rule.*`) — renamed to `commerce.rule.*`
+(treating "rule" as its own resource, the identical move
+`commerce.warehouse.transfer.request` → `commerce.transfer.request`
+already made for "transfer" relative to "warehouse," §7.22).
+`commerce.discount.apply`'s own requested permission
+(`commerce.cart.update`) doesn't exist anywhere in this codebase's
+permission vocabulary — reused the existing `commerce.cart.manage`
+instead of introducing a second, overlapping Cart-mutation permission.
+
+New tests: `tests/Unit/Commerce/{DiscountRuleTest,DiscountPriorityTest,
+DiscountRuleEvaluatorTest,DiscountCalculatorTest}.php` (8+2+16+7,
+framework-free — including the literal 3-rule stacking scenario, unit-
+tested at the Domain Service level before any Action wired to it),
+`tests/Feature/Commerce/{DiscountRuleActionsTest,
+DiscountRuleCapabilityIntegrationTest,CouponDiscountRuleIntegrationTest}.php`
+(Action-level, real DB), and `tests/Feature/Commerce/DiscountRuleCapabilityTest.php`
+(1 test, 31 assertions — the end-to-end MCP scenario: 3 DiscountRules
+with different priority/Stackability → a real Cart → `commerce.discount.apply`
+resolves exactly Rule A + Rule C, excluding Rule B → `commerce.discount.available`
+shows all 3 as individually eligible → neither rule's `usedCount` moves
+from a mere Cart apply → a Coupon linked to Rule B, redeemed through the
+*existing*, separate `commerce.checkout.process` → the real Order's
+`Discount` row carries Rule B's own `DiscountCalculator` amount and Rule
+B's own `usedCount` increments → tenant isolation → an expired rule
+excluded from both `.apply` and `.available`).
+
+810 tests passing (762 + 48 new), zero known regressions. Next up:
+whatever Phase 5's own Stage 5 turns out to be (not yet scoped — Bundle
 products, a Dashboard UI across every Phase 5 resource so far
-(Warehouses/Transfers/attributes-and-variants/BulkOperations, none of
-which got one this Phase), a real file-upload endpoint for
+(Warehouses/Transfers/attributes-and-variants/BulkOperations/DiscountRules,
+none of which got one this Phase), folding Cart-level automatic
+DiscountRules into the real checkout total (§8, this stage's own
+deliberate scope boundary), a real file-upload endpoint for
 `commerce.bulk.import_products`/`.import_customers` so an Agent doesn't
 need to place a CSV on the server's own `local` disk out of band, or any
 remaining deferred item in §8/§9.
@@ -620,14 +730,15 @@ from `App\Modules\*`.
 | **Performance Optimization (Stage 8, §7.20)** | `Application/Services/{CacheService,PerformanceMonitor,LazyLoadingDetector}.php`, `Application/Actions/OptimizeQueriesAction.php`, `Infrastructure/Logging/QueryLogger.php` | `CacheService` is tag-aware (`Cache::tags()`, confirmed working under `CACHE_STORE=array` too, not Redis-only) and wired into exactly one module's read path so far — Commerce's `GetProductAction`/`UpdateProductAction`/`DeleteProductAction` (§7.20's own "extend this" note, §9). `PerformanceMonitor` is a lightweight, documented best-effort operational monitor, not a production APM replacement. `QueryLogger` is registered via `DB::listen()` in `CoreServiceProvider::boot()`, skipped during the test suite — see that provider's own docblock for a real `runningUnitTests()` timing gotcha worth knowing before relying on that flag inside a `ServiceProvider::boot()` elsewhere. |
 | **Human/Dashboard Auth (Stage 5, §7.17)** | `Domain/Entities/User.php`, `Domain/ValueObjects/{Email,HashedPassword,UserRole,UserStatus}.php`, `Domain/Repositories/UserRepositoryInterface.php`, `Application/Actions/{CreateUserAction,UpdateUserAction,GetUserAction,ListUsersAction,AuthenticateUserAction}.php`, `Infrastructure/Models/User.php` (extends `Authenticatable`) | Platform-level (no tenant_id) — the second Core entity above tenancy alongside `Tenant` itself, since the Dashboard's own Tenants Management page does full cross-tenant CRUD. Gates the whole `/dashboard/*` route group via a plain `UserRole::Admin`/`Operator` enum + the `admin` route-middleware alias, **not** the tenant-scoped Role/Permission system above. `HashedPassword` uses PHP's own `password_hash()`/`password_verify()`, never Laravel's `Hash` facade (keeps this Domain class framework-free like every other one). Seeded by default: `admin@opencommerce.test` / `password` (`DatabaseSeeder`). |
 
-### `app/Modules/Commerce/` — **no longer a skeleton. Product, Category, Cart, Inventory, Order, Customer, Payment, Coupon, Discount are all real, tested, and MCP-reachable — Stage 6 added the first real external Connector, Phase 5 Stage 1 added Product Variants (§7.21), Phase 5 Stage 2 added Multi-warehouse Inventory (§7.22), and Phase 5 Stage 3 added Bulk Operations (§7.23) — this codebase's first background Jobs.**
+### `app/Modules/Commerce/` — **no longer a skeleton. Product, Category, Cart, Inventory, Order, Customer, Payment, Coupon, Discount are all real, tested, and MCP-reachable — Stage 6 added the first real external Connector, Phase 5 Stage 1 added Product Variants (§7.21), Phase 5 Stage 2 added Multi-warehouse Inventory (§7.22), Phase 5 Stage 3 added Bulk Operations (§7.23, this codebase's first background Jobs), and Phase 5 Stage 4 added Advanced Discount Rules (§7.24), reusing the existing Discount/Coupon entities rather than a second, parallel discount-recording mechanism.**
 
 See §7 for the full stage-by-stage breakdown (what was built, in what order,
-and why). At a glance, the module now has 17 Domain Entities (15 +
-`BulkOperation`/`BulkOperationItem`), ~36 Value Objects/enums, 5 Domain
-Services, ~60 Application Actions, 14 Eloquent Repositories, 3 Jobs
-(`app/Modules/Commerce/Application/Jobs/`, new this stage), and 34
-numbered migrations, backing 40 MCP capabilities.
+and why). At a glance, the module now has 20 Domain Entities (17 +
+`DiscountRule`/`DiscountRuleCondition`/`AppliedDiscount`), ~44 Value
+Objects/enums, 7 Domain Services (+ `DiscountRuleEvaluator`/`DiscountCalculator`),
+~68 Application Actions, 16 Eloquent Repositories, 3 Jobs
+(`app/Modules/Commerce/Application/Jobs/`), and 39 numbered migrations,
+backing 47 MCP capabilities.
 
 `Domain/UCP/*` (the 6 normalized value objects for *external* connector
 data — never persisted, never touched by any Stage 1–5 work) is unchanged
@@ -996,59 +1107,93 @@ app/Modules/Commerce/
 │   ├── Connectors/               ConnectorInterface, ProductConnectorInterface,
 │   │                             OrderConnectorInterface (untouched since Phase 1)
 │   ├── Entities/                 Product, Category, Cart, CartItem, Inventory,
-│   │                             Order, OrderItem, Customer, Payment, Coupon, Discount,
+│   │                             Order, OrderItem, Customer, Payment, Coupon, Discount
+│   │                             (Coupon/Discount both widened with discountRuleId, §7.24),
 │   │                             + VariantAttribute, VariantAttributeValue, ProductVariant
 │   │                             (§7.21) + Warehouse, WarehouseTransfer,
-│   │                             WarehouseTransferItem (§7.22)
+│   │                             WarehouseTransferItem (§7.22) + BulkOperation,
+│   │                             BulkOperationItem (§7.23) + DiscountRule,
+│   │                             DiscountRuleCondition, AppliedDiscount (§7.24)
 │   ├── ValueObjects/             Money, SKU, ProductStatus, Quantity, CartStatus,
 │   │                             OrderStatus, OrderNumber, Email, Address, CustomerStatus,
 │   │                             PaymentStatus, PaymentMethod, TaxRate, CouponCode,
-│   │                             DiscountType, PricingBreakdown, WooCommerceProductId,
+│   │                             DiscountType (widened with BuyXGetY/Tiered, §7.24),
+│   │                             PricingBreakdown, WooCommerceProductId,
 │   │                             WooCommerceProductData, VariantSKU, VariantCombination
 │   │                             (§7.21), WarehouseCode, WarehouseLocation, TransferStatus
-│   │                             (§7.22)
+│   │                             (§7.22), BulkOperationType, BulkOperationStatus,
+│   │                             ValidationResult (§7.23), DiscountPriority, Stackability,
+│   │                             DiscountCondition, DiscountEvaluationContext (§7.24)
 │   ├── Services/                 PricingService, CouponValidationService,
 │   │                             WooCommerceProductMapper, + WarehouseDistanceCalculator,
-│   │                             NearestWarehouseFinder (§7.22) (all pure, framework-free)
+│   │                             NearestWarehouseFinder (§7.22), + CsvParserInterface/
+│   │                             CsvValidatorInterface (§7.23, contracts only — real
+│   │                             implementations live in Application/Services), +
+│   │                             DiscountRuleEvaluator, DiscountCalculator (§7.24)
+│   │                             (all pure, framework-free)
 │   ├── Events/                   17 domain events across Stages 1-5, + CartWasAbandoned
 │   │                             (Tech Debt Sprint, §7.13), + VariantWasCreated/
 │   │                             VariantWasUpdated/VariantWasDeleted (§7.21), +
 │   │                             WarehouseWasCreated/WarehouseTransferWasRequested/
-│   │                             WarehouseTransferWasCompleted (§7.22)
-│   ├── Repositories/              13 Repository interfaces (9 + ProductVariant/
-│   │                             VariantAttribute, §7.21 + Warehouse/WarehouseTransfer,
-│   │                             §7.22), + findByProductForUpdate()/listByProduct() on
+│   │                             WarehouseTransferWasCompleted (§7.22), +
+│   │                             BulkOperationStarted/BulkOperationCompleted/
+│   │                             BulkOperationFailed (§7.23), + DiscountRuleWasCreated/
+│   │                             DiscountRuleWasApplied/DiscountRuleWasExpired (§7.24 —
+│   │                             the last one modeled but never dispatched, §8.60)
+│   ├── Repositories/              16 Repository interfaces (13 + BulkOperation, §7.23 +
+│   │                             DiscountRule/AppliedDiscount, §7.24), +
+│   │                             findByProductForUpdate()/listByProduct() on
 │   │                             InventoryRepositoryInterface (warehouse_id-aware since
-│   │                             §7.22) and findStaleActive() on CartRepositoryInterface
-│   │                             (§7.13)
-│   └── Exceptions/                25 exception classes; every NotFound/Conflict-shaped one
-│                                  implements a Core marker interface (§1) —
-│                                  WooCommerceApiException deliberately does not (§7.6)
+│   │                             §7.22), findStaleActive() on CartRepositoryInterface
+│   │                             (§7.13), a date-range pair on
+│   │                             OrderRepositoryInterface::listByTenant() and
+│   │                             CategoryRepositoryInterface::findByName() (both §7.23)
+│   └── Exceptions/                31 exception classes (25 + BulkOperationNotFoundException/
+│                                  InvalidCsvFormatException/BulkOperationException, §7.23 +
+│                                  DiscountRuleNotFoundException/InvalidDiscountRuleException/
+│                                  ConflictingDiscountException, §7.24); every
+│                                  NotFound/Conflict-shaped one implements a Core marker
+│                                  interface (§1) — WooCommerceApiException/
+│                                  BulkOperationException deliberately do not (§7.6/§7.23)
 ├── Application/
-│   ├── Actions/                  ~52 Actions — see §7 for the per-stage list, +
+│   ├── Actions/                  ~68 Actions — see §7 for the per-stage list, +
 │   │                             MarkCartsAbandonedAction (§7.13); CheckInventoryAction
 │   │                             gained executeCommit()/authorizeCommit() (§7.13, §8.22 fix),
-│   │                             + 9 Warehouse/Transfer Actions (§7.22)
+│   │                             + 9 Warehouse/Transfer Actions (§7.22), + 8 Bulk
+│   │                             Operation Actions (§7.23), + 7 DiscountRule Actions
+│   │                             (§7.24); CalculatePricingAction/ProcessPaymentAction/
+│   │                             ApplyCouponAction/CreateCouponAction all widened for
+│   │                             the Coupon->DiscountRule bypass (§7.24)
 │   ├── DTOs/                     ProductData, CategoryData, CartData, CartItemData,
 │   │                             OrderData, OrderItemData, CustomerData, AddressData,
-│   │                             PricingData, PaymentData, CouponData, WooCommerceSyncResult,
+│   │                             PricingData, PaymentData, CouponData (widened with
+│   │                             discountRuleId, §7.24), WooCommerceSyncResult,
 │   │                             ProductVariantData, VariantAttributeData (§7.21),
 │   │                             WarehouseData, WarehouseLocationData, WarehouseTransferData,
-│   │                             WarehouseTransferItemData (§7.22)
+│   │                             WarehouseTransferItemData (§7.22), BulkOperationData,
+│   │                             BulkOperationItemData, ValidationResultData (§7.23),
+│   │                             DiscountRuleData, DiscountConditionData,
+│   │                             AppliedDiscountData (§7.24)
+│   ├── Jobs/                     ProcessBulkImportJob, ProcessBulkExportJob,
+│   │                             ProcessBulkUpdateJob (§7.23 — this codebase's first
+│   │                             ever queued Jobs; directory didn't exist before)
 │   └── Services/                 ConnectorRegistry, PaymentGatewayInterface,
 │                                  MockPaymentGateway, PaymentGatewayResult,
 │                                  WooCommerceClientInterface, WooCommerceClient,
-│                                  WooCommerceConfig
+│                                  WooCommerceConfig, + CsvParser, CsvValidator (§7.23 —
+│                                  the one real implementation each of the Domain
+│                                  contracts above)
 ├── Infrastructure/
 │   ├── Connectors/                MockProductConnector (Phase 1),
 │   │                              WooCommerceProductConnector (Stage 6, real)
 │   ├── Http/                      MockWooCommerceHttpClient (Stage 6, tests only)
-│   ├── Models/                    13 Eloquent models (9 + ProductVariant/VariantAttribute/
-│   │                              VariantAttributeValue, §7.21 + Warehouse/
-│   │                              WarehouseTransfer/WarehouseTransferItem, §7.22)
-│   └── Repositories/               13 Eloquent repository implementations
+│   ├── Models/                    16 Eloquent models (13 + BulkOperation/
+│   │                              BulkOperationItem, §7.23 + DiscountRule/
+│   │                              DiscountRuleCondition/AppliedDiscount, §7.24)
+│   └── Repositories/               16 Eloquent repository implementations (+
+│                                    EloquentDiscount/CouponRepository both widened, §7.24)
 └── CommerceServiceProvider.php    binds every Repository interface + registers
-                                   32 capability handlers (see §6 for the full list)
+                                   47 capability handlers (see §6 for the full list)
 
 app/Modules/CRM/                  new in Phase 3
 ├── Domain/
@@ -1463,8 +1608,27 @@ database/
 │   │                                               default `users` table; `sessions`/
 │   │                                               `password_reset_tokens` already
 │   │                                               existed since Phase 1, unused until now)
-│   └── 2026_08_04_000051-000053                  (Phase 4.6 — kpis, kpi_values,
-│                                                   analytics_snapshots, §7.18)
+│   ├── 2026_08_04_000051-000053                  (Phase 4.6 — kpis, kpi_values,
+│   │                                               analytics_snapshots, §7.18)
+│   ├── 2026_08_05_000054                          (Phase 4.7 — add_performance_indexes, §7.20)
+│   ├── 2026_08_06_000055-000061                  (Phase 5.1 — variant_attributes,
+│   │                                               variant_attribute_values, product_variants,
+│   │                                               +inventories.variant_id,
+│   │                                               +cart_items.variant_id,
+│   │                                               +order_items.variant_id,
+│   │                                               +products.is_parent, §7.21)
+│   ├── 2026_08_07_000062-000066                  (Phase 5.2 — warehouses,
+│   │                                               warehouse_transfers,
+│   │                                               warehouse_transfer_items,
+│   │                                               +inventories.warehouse_id,
+│   │                                               +shipping_methods.rate_per_km, §7.22)
+│   ├── 2026_08_08_000067-000068                  (Phase 5.3 — bulk_operations,
+│   │                                               bulk_operation_items, §7.23)
+│   └── 2026_08_09_000069-000073                  (Phase 5.4 — discount_rules,
+│                                                   discount_rule_conditions,
+│                                                   applied_discounts,
+│                                                   +discounts.discount_rule_id,
+│                                                   +coupons.discount_rule_id, §7.24)
 └── seeders/{DemoCapabilitiesSeeder,CommerceCapabilitiesSeeder,CRMCapabilitiesSeeder,FinanceCapabilitiesSeeder,WorkflowsCapabilitiesSeeder,LoyaltyCapabilitiesSeeder,ReportingCapabilitiesSeeder,ShippingCapabilitiesSeeder,NotificationsCapabilitiesSeeder,AnalyticsCapabilitiesSeeder}.php
 
 tests/
@@ -1633,6 +1797,29 @@ packages/opencommerce-sdk/tests/   + MCPConfigTest (4, new file) + 1 new
 
 608 tests total (577 + 31), 1441 assertions, ~16s runtime (`php artisan test`)
 ```
+
+**The block above is a snapshot frozen at Phase 4 Stage 7 (§7.19) — it was
+never kept current through Stage 8 or any of Phase 5, and fully
+reconstructing it retroactively wasn't judged worth the effort relative
+to just running `php artisan test`/browsing `tests/`. From Phase 4 Stage 8
+onward, each stage's own §7.x section (§7.20 through §7.24) lists its own
+new test files and what each one covers — treat those, not this block, as
+the authoritative "what tests exist for X" reference.** The current total,
+confirmed by actually running the suite at the end of Phase 5 Stage 4, is
+**810 tests passing, 2094 assertions, ~21s runtime** — every stage from
+Phase 4 Stage 8 through Phase 5 Stage 4 added tests on top of the 608
+above; none were removed. New test files since this block's own last
+update, by stage:
+- **Phase 4 Stage 8** (§7.20): `OrderRepositoryEagerLoadingTest` + the N+1 fixes' own regression coverage.
+- **Phase 5 Stage 1 — Product Variants** (§7.21): `VariantSKUTest`, `VariantCombinationTest`, `ProductVariantTest`, `VariantAttributeTest`, `ProductVariantCapabilityTest`.
+- **Phase 5 Stage 2 — Multi-warehouse Inventory** (§7.22): `WarehouseCodeTest`, `WarehouseLocationTest`, `WarehouseTest`, `WarehouseTransferTest`, `WarehouseDistanceCalculatorTest`, `NearestWarehouseFinderTest`, `WarehouseActionsTest`, `WarehouseTransferActionsTest`, `FindNearestWarehouseActionTest`, `WarehouseAwareShippingRateTest`, `WarehouseCapabilityTest` (+ 2 new `InventoryTest` cases).
+- **Phase 5 Stage 3 — Bulk Operations** (§7.23): `BulkOperationTest`, `ValidationResultTest`, `CsvParserTest`, `CsvValidatorTest`, `ImportProductsActionTest`, `ImportCustomersActionTest`, `ExportOrdersActionTest`, `BulkPriceUpdateActionTest`, `BulkStatusUpdateActionTest`, `BulkInventoryUpdateActionTest`, `BulkOperationCapabilityTest`.
+- **Phase 5 Stage 4 — Advanced Discount Rules** (§7.24): `DiscountRuleTest`, `DiscountPriorityTest`, `DiscountRuleEvaluatorTest`, `DiscountCalculatorTest`, `DiscountRuleActionsTest`, `DiscountRuleCapabilityIntegrationTest`, `CouponDiscountRuleIntegrationTest`, `DiscountRuleCapabilityTest`.
+
+All of the above live under `tests/Unit/Commerce/` or `tests/Feature/Commerce/`
+(one exception: `WarehouseAwareShippingRateTest` is under
+`tests/Feature/Shipping/`) — no other module's own test directories
+changed across these 4 stages.
 
 ---
 
@@ -1988,7 +2175,7 @@ php artisan storage:link   # Stage 6, §7.18 — required for analytics.report.e
                             # buttons stream directly and don't need this
 
 # Tests
-php artisan test                                                  # full app suite — 666 tests, ~20s
+php artisan test                                                  # full app suite — 810 tests, ~21s
 cd packages/opencommerce-sdk; vendor/bin/phpunit tests; cd ../..   # SDK's own suite (unaffected by Phase 2)
 
 # Manual/live verification
@@ -2039,7 +2226,7 @@ end to end.
 
 ---
 
-## 6. The 95 MCP capabilities that exist right now
+## 6. The 102 MCP capabilities that exist right now
 
 | Capability | Phase/Stage | Permission | Notes |
 |---|---|---|---|
@@ -2138,6 +2325,13 @@ end to end.
 | `commerce.bulk.update_inventory` | P5.3 | `commerce.inventory.update` | Renamed from `commerce.bulk.inventory.update` — same reason. Direct `setQuantityOnHand()`, not reserve/commit. |
 | `commerce.bulk.get` | P5.3 | `commerce.bulk.read` | Renamed from `commerce.bulk.operation.get` — same reason. |
 | `commerce.bulk.list` | P5.3 | `commerce.bulk.read` | Renamed from `commerce.bulk.operation.list` — same reason. Optional `type`/`status`. |
+| `commerce.rule.create` | P5.4 | `commerce.discounts.manage` | Renamed from `commerce.discount.rule.create` — 4 segments, see §7.24. `conditions` frozen at creation. |
+| `commerce.rule.update` | P5.4 | `commerce.discounts.manage` | Renamed from `commerce.discount.rule.update` — same reason. `conditions` not updatable. |
+| `commerce.rule.delete` | P5.4 | `commerce.discounts.manage` | Renamed from `commerce.discount.rule.delete` — same reason. |
+| `commerce.rule.get` | P5.4 | `commerce.discounts.read` | Renamed from `commerce.discount.rule.get` — same reason. |
+| `commerce.rule.list` | P5.4 | `commerce.discounts.read` | Renamed from `commerce.discount.rule.list` — same reason. Optional `is_active`. |
+| `commerce.discount.apply` | P5.4 | `commerce.cart.manage` | Requested permission `commerce.cart.update` doesn't exist in this codebase; reused `commerce.cart.manage`. Resolves priority + Stackability, replaces the Cart's whole AppliedDiscount set. Never increments a DiscountRule's `usedCount` (a Cart is not real usage). |
+| `commerce.discount.available` | P5.4 | `commerce.discounts.read` | Every *individually* eligible rule, not yet resolved for Stackability — deliberately different from `.apply`'s own resolved winner set. |
 
 **Deliberately NOT wired to MCP** despite the underlying Action existing and
 being fully tested (see §8.2 for why, and the same reasoning each time):
@@ -4614,6 +4808,89 @@ intro paragraph above for the full breakdown of what each covers,
 including the literal 10-step MCP-level end-to-end scenario. 762 tests
 total (720 + 42), zero regressions.
 
+### 7.24 Phase 5, Stage 4 — Advanced Discount Rules
+
+New Commerce Domain: `ValueObjects/{DiscountPriority,Stackability,
+DiscountCondition,DiscountEvaluationContext}.php` (+ `DiscountType`
+widened with `BuyXGetY`/`Tiered`), `Entities/{DiscountRule,
+DiscountRuleCondition,AppliedDiscount}.php`, `Events/{DiscountRuleWasCreated,
+DiscountRuleWasApplied,DiscountRuleWasExpired}.php`,
+`Exceptions/{DiscountRuleNotFoundException,InvalidDiscountRuleException,
+ConflictingDiscountException}.php`, `Repositories/{DiscountRuleRepositoryInterface,
+AppliedDiscountRepositoryInterface}.php`, `Services/{DiscountRuleEvaluator,
+DiscountCalculator}.php` (+ `Discount`/`Coupon` both widened with
+`discountRuleId`). New Application: `Actions/{CreateDiscountRuleAction,
+UpdateDiscountRuleAction,DeleteDiscountRuleAction,GetDiscountRuleAction,
+ListDiscountRulesAction,ApplyDiscountsToCartAction,GetAvailableDiscountsAction}.php`
+(+ `CalculatePricingAction`/`ProcessPaymentAction`/`ApplyCouponAction`/
+`CreateCouponAction` all widened), `DTOs/{DiscountRuleData,
+DiscountConditionData,AppliedDiscountData}.php` (+ `CouponData` widened).
+New Infrastructure: 3 Eloquent Models (`DiscountRule`,
+`DiscountRuleCondition`, `AppliedDiscount`), 2 Eloquent Repositories (+
+`EloquentDiscount`/`CouponRepository` both widened). 5 new migrations
+(`discount_rules`, `discount_rule_conditions`, `applied_discounts`, +
+`discount_rule_id` on both `discounts` and `coupons`). 7 new MCP
+capabilities (5 renamed, see the intro paragraph above and §6 for the
+full mapping).
+
+**Orchestration note, continuing §7.22/§7.23's own retrospective.** This
+stage ran the identical foundation-first, then-parallelize shape a third
+time: the orchestrating session built the entire calculation engine
+itself first — `DiscountRule`/`DiscountRuleCondition`/`AppliedDiscount`
+entities, all 5 migrations, `DiscountRuleEvaluator`/`DiscountCalculator`
+(unit-tested directly against the request's own literal 3-rule stacking
+scenario before any Action existed to call them), the `Discount`/`Coupon`
+widenings, and the basic DiscountRule CRUD Actions — then split the
+*remaining* work into two genuinely independent slices: Cart-level
+automatic evaluation (`ApplyDiscountsToCartAction`/`GetAvailableDiscountsAction`,
+entirely Coupon-free) and the Coupon→DiscountRule checkout bypass
+(`CalculatePricingAction`/`ProcessPaymentAction`/`ApplyCouponAction`
+widened, entirely Cart-preview-free). Both returned clean, non-overlapping
+diffs on the first try, with the orchestrating session's own review
+finding zero corrections needed in either — the calculation engine being
+fully built and unit-verified *before* parallelizing meant neither agent
+had to guess at semantics the orchestrator hadn't yet nailed down (the
+exact Stackability combination rule, the BuyXGetY/Tiered encoding), the
+biggest source of potential rework in a stage this algorithmically dense.
+
+**The core architecture fork and the checkout-integration scope
+boundary are both covered in full in the intro paragraph above** — not
+repeated here. In short: `AppliedDiscount` is deliberately Cart-only (no
+`order_id`), mirroring `CartItem`/`OrderItem`'s existing mutable-preview-
+vs-frozen-record duality rather than duplicating `Discount`'s own
+Order-side role; and `commerce.discount.apply`'s own automatic,
+coupon-less rule resolution is a standalone Cart surface this stage,
+deliberately not folded into `commerce.checkout.calculate`/`.process`'s
+own real total (only a Coupon explicitly linked to a rule reaches
+checkout, exactly per the request's own §ز ask).
+
+**`DiscountRuleEvaluator::selectApplicableRules()`'s own combination
+rule** (Stackable-with-Stackable, Exclusive-with-Exclusive, never mixed,
+CouponOnly excluded before selection starts) is read literally from the
+request's own §д.3 text, not the more common "exclusive means alone"
+intuition — verified directly against the request's own worked example
+via `test_selectApplicableRules_stackableRulesCombine_exclusiveRuleExcluded()`
+and `test_selectApplicableRules_twoExclusiveRules_combineWithEachOther()`
+(the latter proving two Exclusive rules *do* combine with each other,
+the detail most likely to be gotten wrong from intuition alone).
+
+**Two `DiscountCondition` cases weren't in the request's own 5-case
+list** — added unprompted (§3 pattern #12): `TieredThresholds` (a Tiered
+rule's own multiple subtotal-threshold/percentage pairs, encoded as this
+condition's free-form JSON — `DiscountCalculator` falls back to treating
+`discountValue` as one flat percentage if absent, never throwing) and
+`MinSubtotal` (needed to literally build the request's own "$5 off min
+$50" worked example — no existing condition type could express a cents
+threshold, only `MinQuantity`/`MaxQuantity` count units).
+
+New tests: `tests/Unit/Commerce/{DiscountRuleTest,DiscountPriorityTest,
+DiscountRuleEvaluatorTest,DiscountCalculatorTest}.php`,
+`tests/Feature/Commerce/{DiscountRuleActionsTest,
+DiscountRuleCapabilityIntegrationTest,CouponDiscountRuleIntegrationTest,
+DiscountRuleCapabilityTest}.php` — see the intro paragraph above for the
+full breakdown of what each covers, including the literal end-to-end MCP
+scenario. 810 tests total (762 + 48), zero regressions.
+
 ---
 
 ## 8. Known technical debt (ranked, carried over + Phase 2 additions)
@@ -4944,24 +5221,73 @@ total (720 + 42), zero regressions.
     hardcoded constants on `CalculateKPIAction`** (§7.18) — not
     per-tenant configurable; a real "alert me below N units" feature
     would need this to become a Tenant- or KPI-level setting.
+57. **Cart-level automatic DiscountRules never reach the real checkout
+    total** (§7.24) — `commerce.discount.apply`/`.available` are a
+    self-contained Cart preview/browsing surface; `commerce.checkout.calculate`/
+    `.process` only ever apply a DiscountRule when it's reached through an
+    explicit, linked Coupon code, never automatically. A deliberate,
+    documented scope boundary to keep this stage's change to
+    `CalculatePricingAction`/`ProcessPaymentAction` small and additive,
+    not a hidden gap — folding the two together (an Agent shouldn't have
+    to separately call `.apply` and then somehow carry its result into
+    checkout) is real, scoped future work.
+58. **`DiscountRuleEvaluator`'s `CustomerGroup` condition has no real
+    segmentation system behind it** (§7.24) — `DiscountEvaluationContext::$customerGroup`
+    is never populated by any existing caller (`ApplyDiscountsToCartAction`/
+    `CalculatePricingAction`/`ProcessPaymentAction` all leave it null), so
+    a `customer_group` condition can currently never pass. The same
+    "modeled but no real backing system yet" gap `RewardType::FreeProduct`/
+    `FreeShipping` and CRM's own lack of a Customer segmentation concept
+    already carry elsewhere in this codebase.
+59. **`ApplyDiscountsToCartAction`'s `appliedToProductIds` records every
+    Product considered, not per-unit attribution** (§7.24) — a `BuyXGetY`
+    rule's own discount is computed from the cheapest matching units in
+    the Cart, but nothing tracks *which* specific unit(s) were actually
+    free; a future itemized receipt/line-level display would need this
+    level of detail added to `DiscountCalculator`'s own return shape.
+60. **No `DiscountRuleWasExpired` dispatch, no scheduled deactivation
+    command** (§7.24) — `DiscountRule::isCurrentlyActive()` checks
+    expiration live at evaluation time (the same on-demand shape
+    `Coupon::isExpired()` already has, no cron needed to satisfy the
+    stage's own functional requirement), but nothing ever dispatches the
+    modeled `DiscountRuleWasExpired` event — a real future use is a
+    Notification hook ("this promotion just ended").
 
 ---
 
 ## 9. What's next
 
-Phase 2 (Commerce, all 6 Stages) and Phase 3 (CRM, Finance, Workflows,
-Loyalty, Reporting — all 5 Stages) are fully complete. Phase 4
-(Shipping & Logistics) is now also fully complete — all 8 Stages:
-Shipping Foundation, the Shipping Provider Connector (§7.14), the
-Notifications Module (§7.15), the i18n Infrastructure (§7.16), the Admin
-Dashboard + Human Authentication (§7.17), Advanced Analytics & KPIs
-(§7.18), API Versioning (§7.19), and Performance Optimization (§7.20).
-The Tech Debt Sprint (§7.13) ran between Stages 1 and 2, closing the
-scheduler gap and the `CheckInventoryAction` re-check bug that used to
-top this list. There is no Phase 5 scoped yet — whoever drives scope next
-is choosing where the platform goes after Shipping & Logistics, not just
-picking the next item off this list. Candidates worth raising, roughly in
-order of how much they'd reuse what already exists:
+Phase 2 (Commerce, all 6 Stages), Phase 3 (CRM, Finance, Workflows,
+Loyalty, Reporting — all 5 Stages), and Phase 4 (Shipping & Logistics,
+all 8 Stages) are all fully complete. **Phase 5 (Advanced Commerce) is
+under way and has 4 completed Stages**: Product Variants (§7.21),
+Multi-warehouse Inventory (§7.22), Bulk Operations (§7.23 — this
+codebase's first background Jobs), and Advanced Discount Rules (§7.24).
+No Stage 5 is scoped yet — whoever drives scope next is choosing where
+Phase 5 goes after Discount Rules, not just picking the next item off
+this list (the same framing that applied after Phase 4 finished, one
+Phase earlier). Candidates specific to what Phase 5 has already built,
+roughly in order of how much they'd reuse what already exists:
+
+- **A Dashboard UI across every Phase 5 resource** (§7.21-§7.24) —
+  Warehouses/Transfers, ProductVariants/Attributes, BulkOperations, and
+  DiscountRules all have full Action/MCP layers but none got a
+  `/dashboard/*` page the way every Phase 4 Stage 5/6 resource did.
+- **Fold Cart-level automatic DiscountRules into the real checkout
+  total** (§8.57) — `commerce.discount.apply`'s own resolved winning set
+  currently never reaches `commerce.checkout.calculate`/`.process`; only
+  a Coupon explicitly linked to a rule does.
+- **A real file-upload endpoint for Bulk Operations imports** (§7.23) —
+  `commerce.bulk.import_products`/`.import_customers` still require an
+  Agent to place a CSV on the server's own `local` disk out of band; no
+  file-upload capability exists anywhere in this codebase.
+- **A `MarkTransferInTransitAction`** (§7.22) — `TransferStatus::InTransit`
+  is modeled but unreached by any Action; would insert cleanly between
+  Approved and Completed.
+- **A real carrier implementation of `ShippingProviderInterface`, per-tenant
+  connector credentials, or the other longer-standing Phase 3/4 items
+  below** — all still open, listed in the order they were originally
+  raised after Phase 4 completed:
 
 - **Extend `CacheService`'s reference integration beyond Commerce
   Product** (§7.20) — the mechanism (tag-aware, `PerformanceMonitor`-backed

@@ -4,15 +4,21 @@ namespace App\Modules\Commerce\Application\Actions;
 
 use App\Core\Domain\ValueObjects\MemberType;
 use App\Modules\Commerce\Application\DTOs\PricingData;
+use App\Modules\Commerce\Domain\Entities\Cart;
 use App\Modules\Commerce\Domain\Entities\CartItem;
+use App\Modules\Commerce\Domain\Entities\Coupon;
 use App\Modules\Commerce\Domain\Exceptions\CartNotFoundException;
 use App\Modules\Commerce\Domain\Exceptions\InvalidCouponException;
 use App\Modules\Commerce\Application\Services\TaxRateProviderInterface;
 use App\Modules\Commerce\Domain\Repositories\CartRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\CouponRepositoryInterface;
+use App\Modules\Commerce\Domain\Repositories\DiscountRuleRepositoryInterface;
+use App\Modules\Commerce\Domain\Repositories\ProductRepositoryInterface;
 use App\Modules\Commerce\Domain\Services\CouponValidationService;
+use App\Modules\Commerce\Domain\Services\DiscountCalculator;
 use App\Modules\Commerce\Domain\Services\PricingService;
 use App\Modules\Commerce\Domain\ValueObjects\CouponCode;
+use App\Modules\Commerce\Domain\ValueObjects\DiscountEvaluationContext;
 use App\Modules\Commerce\Domain\ValueObjects\Money;
 use App\Modules\Commerce\Domain\ValueObjects\TaxRate;
 use InvalidArgumentException;
@@ -45,6 +51,9 @@ final class CalculatePricingAction
         private readonly CouponValidationService $couponValidation,
         private readonly PricingService $pricingService,
         private readonly TaxRateProviderInterface $taxRateProvider,
+        private readonly DiscountRuleRepositoryInterface $discountRules,
+        private readonly DiscountCalculator $discountCalculator,
+        private readonly ProductRepositoryInterface $products,
     ) {
     }
 
@@ -74,7 +83,9 @@ final class CalculatePricingAction
             }
 
             $this->couponValidation->validate($coupon, $subtotal);
-            $discount = $coupon->calculateDiscount($subtotal);
+            $discount = $coupon->discountRuleId() !== null
+                ? $this->resolveRuleDiscount($coupon, $subtotal, $cart, $tenantId)
+                : $coupon->calculateDiscount($subtotal);
         }
 
         $ratePercent = $this->taxRateProvider->getRatePercent($tenantId, $region) ?? self::DEFAULT_TAX_RATE_PERCENT;
@@ -82,5 +93,50 @@ final class CalculatePricingAction
         $breakdown = $this->pricingService->calculate($subtotal, new TaxRate($ratePercent), $discount);
 
         return PricingData::fromBreakdown($breakdown);
+    }
+
+    /**
+     * The DiscountRule bypass (Phase 5, Stage 4, §7.24): a Coupon linked
+     * to a rule defers to DiscountCalculator instead of its own
+     * calculateDiscount(). An orphaned link (rule deleted after the
+     * Coupon was created) falls back to the Coupon's own calculation
+     * rather than failing a mere preview — see Coupon's own docblock for
+     * why discountType/discountValue stay populated even on a
+     * rule-linked Coupon.
+     */
+    private function resolveRuleDiscount(Coupon $coupon, Money $subtotal, Cart $cart, int $tenantId): Money
+    {
+        $rule = $this->discountRules->findById($coupon->discountRuleId(), $tenantId);
+
+        if (! $rule) {
+            return $coupon->calculateDiscount($subtotal);
+        }
+
+        return $this->discountCalculator->calculate($rule, $this->buildEvaluationContext($cart, $subtotal, $tenantId));
+    }
+
+    /**
+     * Builds the Domain Service's own input from a real Cart — per
+     * DiscountEvaluationContext's own docblock, neither Domain Service may
+     * query a Repository, so the bounded per-item Product lookup for
+     * categoryId happens here, in the Action.
+     */
+    private function buildEvaluationContext(Cart $cart, Money $subtotal, int $tenantId): DiscountEvaluationContext
+    {
+        $items = array_map(
+            fn (CartItem $item) => [
+                'productId' => $item->productId(),
+                'categoryId' => $this->products->findById($item->productId(), $tenantId)?->categoryId(),
+                'quantity' => $item->quantity()->value(),
+                'unitPriceAmount' => $item->unitPrice()->amount(),
+            ],
+            $cart->items(),
+        );
+
+        return new DiscountEvaluationContext(
+            subtotalAmount: $subtotal->amount(),
+            currency: $subtotal->currency(),
+            items: $items,
+        );
     }
 }
