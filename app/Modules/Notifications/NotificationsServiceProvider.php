@@ -5,6 +5,7 @@ namespace App\Modules\Notifications;
 use App\Core\Application\DTOs\AuthContext;
 use App\Core\Application\Services\CapabilityHandlerRegistry;
 use App\Modules\Commerce\Domain\Events\OrderWasPlaced;
+use App\Modules\Commerce\Domain\Events\SubscriptionPaymentFailed;
 use App\Modules\Loyalty\Domain\Events\PointsWereEarned;
 use App\Modules\Notifications\Application\Actions\ConfigureChannelAction;
 use App\Modules\Notifications\Application\Actions\CreateTemplateAction;
@@ -18,6 +19,7 @@ use App\Modules\Notifications\Application\DTOs\NotificationTemplateData;
 use App\Modules\Notifications\Application\Listeners\OrderPlacedNotificationListener;
 use App\Modules\Notifications\Application\Listeners\PointsEarnedListener;
 use App\Modules\Notifications\Application\Listeners\ShipmentStatusChangedListener;
+use App\Modules\Notifications\Application\Listeners\SubscriptionPaymentFailedListener;
 use App\Modules\Notifications\Application\Services\ChannelSenderRegistry;
 use App\Modules\Notifications\Application\Services\EmailSender;
 use App\Modules\Notifications\Application\Services\InAppSender;
@@ -81,6 +83,7 @@ class NotificationsServiceProvider extends ServiceProvider
         Event::listen(ShipmentStatusChanged::class, ShipmentStatusChangedListener::class);
         Event::listen(OrderWasPlaced::class, OrderPlacedNotificationListener::class);
         Event::listen(PointsWereEarned::class, PointsEarnedListener::class);
+        Event::listen(SubscriptionPaymentFailed::class, SubscriptionPaymentFailedListener::class);
 
         $handlers = $this->app->make(CapabilityHandlerRegistry::class);
 

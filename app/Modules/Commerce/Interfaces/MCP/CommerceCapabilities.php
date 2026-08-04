@@ -441,6 +441,104 @@ final class CommerceCapabilities
                 'outputSchema' => ['available_rules' => 'array'],
                 'requiredPermissions' => ['commerce.discounts.read'],
             ],
+
+            // Phase 5, Stage 5 (Subscription & Recurring Orders, §7.25).
+            // Two of the request's own 11 capability names were 4
+            // dot-separated segments — renamed the same way every prior
+            // stage's own 3-dot-segment gotcha was (HANDOFF §3 pattern
+            // #13): commerce.subscription.plan.create/.get/.list ->
+            // commerce.plan.create/.get/.list (promote "plan" to its own
+            // resource, parallel to how "attribute"/"transfer"/"rule"
+            // already became their own resources relative to
+            // "variant"/"warehouse"/"discount"), and
+            // commerce.subscription.invoice.list -> commerce.invoice.list
+            // (same fold). commerce.invoice.list's own name coincidentally
+            // echoes Finance's unrelated finance.invoice.* capabilities —
+            // same "shared name is coincidental, never interchangeable"
+            // note TaxRate's own cross-module duplicate already carries
+            // (§7.8).
+            [
+                'name' => 'commerce.plan.create',
+                'description' => 'Create a tenant-owned SubscriptionPlan',
+                // description, trial_days, features, and is_active are all optional.
+                'inputSchema' => ['name' => 'string', 'billing_cycle' => 'string', 'price_amount' => 'integer', 'price_currency' => 'string'],
+                'outputSchema' => ['plan' => 'array'],
+                'requiredPermissions' => ['commerce.plans.manage'],
+            ],
+            [
+                'name' => 'commerce.plan.get',
+                'description' => 'Get a SubscriptionPlan by id',
+                'inputSchema' => ['plan_id' => 'integer'],
+                'outputSchema' => ['plan' => 'array'],
+                'requiredPermissions' => ['commerce.plans.read'],
+            ],
+            [
+                'name' => 'commerce.plan.list',
+                'description' => "List the tenant's own SubscriptionPlans",
+                // is_active is optional.
+                'inputSchema' => [],
+                'outputSchema' => ['plans' => 'array'],
+                'requiredPermissions' => ['commerce.plans.read'],
+            ],
+            [
+                'name' => 'commerce.subscription.create',
+                'description' => 'Subscribe a Customer to a SubscriptionPlan — starts in Trial with no charge if the plan has a trial, otherwise charges immediately',
+                // payment_method_id is optional.
+                'inputSchema' => ['customer_id' => 'integer', 'subscription_plan_id' => 'integer'],
+                'outputSchema' => ['subscription' => 'array'],
+                'requiredPermissions' => ['commerce.subscriptions.create'],
+            ],
+            [
+                'name' => 'commerce.subscription.get',
+                'description' => 'Get a Subscription by id',
+                'inputSchema' => ['subscription_id' => 'integer'],
+                'outputSchema' => ['subscription' => 'array'],
+                'requiredPermissions' => ['commerce.subscriptions.read'],
+            ],
+            [
+                'name' => 'commerce.subscription.list',
+                'description' => "List the tenant's own Subscriptions",
+                // status and customer_id are both optional.
+                'inputSchema' => [],
+                'outputSchema' => ['subscriptions' => 'array'],
+                'requiredPermissions' => ['commerce.subscriptions.read'],
+            ],
+            [
+                'name' => 'commerce.subscription.pause',
+                'description' => 'Pause an active Subscription — no billing occurs while paused',
+                'inputSchema' => ['subscription_id' => 'integer'],
+                'outputSchema' => ['subscription' => 'array'],
+                'requiredPermissions' => ['commerce.subscriptions.manage'],
+            ],
+            [
+                'name' => 'commerce.subscription.resume',
+                'description' => 'Resume a paused Subscription — extends the current period by however long it sat paused',
+                'inputSchema' => ['subscription_id' => 'integer'],
+                'outputSchema' => ['subscription' => 'array'],
+                'requiredPermissions' => ['commerce.subscriptions.manage'],
+            ],
+            [
+                'name' => 'commerce.subscription.cancel',
+                'description' => 'Cancel a Subscription — immediately, or scheduled for the end of the current period',
+                // immediate is optional, defaults to false (schedule for period end).
+                'inputSchema' => ['subscription_id' => 'integer'],
+                'outputSchema' => ['subscription' => 'array'],
+                'requiredPermissions' => ['commerce.subscriptions.manage'],
+            ],
+            [
+                'name' => 'commerce.subscription.upgrade',
+                'description' => 'Change a Subscription to a different SubscriptionPlan, charging a prorated difference for the remainder of the current period if one is owed',
+                'inputSchema' => ['subscription_id' => 'integer', 'new_subscription_plan_id' => 'integer'],
+                'outputSchema' => ['subscription' => 'array', 'invoice' => 'array'],
+                'requiredPermissions' => ['commerce.subscriptions.manage'],
+            ],
+            [
+                'name' => 'commerce.invoice.list',
+                'description' => "List one Subscription's own SubscriptionInvoices",
+                'inputSchema' => ['subscription_id' => 'integer'],
+                'outputSchema' => ['invoices' => 'array'],
+                'requiredPermissions' => ['commerce.subscriptions.read'],
+            ],
         ];
     }
 }

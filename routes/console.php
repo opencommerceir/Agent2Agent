@@ -3,6 +3,7 @@
 use App\Console\Commands\ExpireLoyaltyPointsCommand;
 use App\Console\Commands\GenerateAnalyticsSnapshotCommand;
 use App\Console\Commands\MarkAbandonedCartsCommand;
+use App\Console\Commands\ProcessDueSubscriptionsCommand;
 use App\Console\Commands\WarmCacheCommand;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -40,3 +41,8 @@ Schedule::command(GenerateAnalyticsSnapshotCommand::class)->daily()->at('01:00')
 // flush means the very next real request of the day always hits a warm
 // cache instead of racing a cold one.
 Schedule::command(WarmCacheCommand::class)->daily()->at('00:00')->withoutOverlapping()->before(fn () => Cache::flush());
+
+// Phase 5 Stage 5 (Subscriptions & Recurring Orders, §7.25) — the recurring
+// billing engine's scheduled entry point: queues a Job per Subscription due
+// for renewal and per SubscriptionInvoice due for a retry attempt.
+Schedule::command(ProcessDueSubscriptionsCommand::class)->daily()->at('00:00')->withoutOverlapping();

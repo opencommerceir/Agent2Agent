@@ -9,10 +9,11 @@ Foundation), Stage 2 (Shipping Provider Connector, §7.14), Stage 3
 Infrastructure, §7.16), Stage 5 (Admin Dashboard + Human Authentication,
 §7.17), Stage 6 (Advanced Analytics & KPIs, §7.18), Stage 7 (API
 Versioning System, §7.19), and Stage 8 (Performance Optimization, §7.20 —
-the last Stage of Phase 4). Phase 5 (Advanced Commerce) is under way:
-Stage 1 (Product Variants, §7.21), Stage 2 (Multi-warehouse Inventory,
-§7.22), Stage 3 (Bulk Operations, §7.23), and Stage 4 (Advanced Discount
-Rules, §7.24) are all complete.
+the last Stage of Phase 4). Phase 5 (Advanced Commerce) is now fully
+complete, all 5 Stages: Stage 1 (Product Variants, §7.21), Stage 2
+(Multi-warehouse Inventory, §7.22), Stage 3 (Bulk Operations, §7.23),
+Stage 4 (Advanced Discount Rules, §7.24), and Stage 5 (Subscription &
+Recurring Orders, §7.25 — the last Stage of Phase 5).
 
 The paragraphs below are in build order — read top to bottom for the
 actual chronological story. Finance supplies Commerce's own checkout
@@ -681,16 +682,177 @@ from a mere Cart apply → a Coupon linked to Rule B, redeemed through the
 B's own `usedCount` increments → tenant isolation → an expired rule
 excluded from both `.apply` and `.available`).
 
-810 tests passing (762 + 48 new), zero known regressions. Next up:
-whatever Phase 5's own Stage 5 turns out to be (not yet scoped — Bundle
-products, a Dashboard UI across every Phase 5 resource so far
-(Warehouses/Transfers/attributes-and-variants/BulkOperations/DiscountRules,
-none of which got one this Phase), folding Cart-level automatic
-DiscountRules into the real checkout total (§8, this stage's own
-deliberate scope boundary), a real file-upload endpoint for
-`commerce.bulk.import_products`/`.import_customers` so an Agent doesn't
-need to place a CSV on the server's own `local` disk out of band, or any
-remaining deferred item in §8/§9.
+810 tests passing (762 + 48 new), zero known regressions.
+
+**Phase 5, Stage 5 (Subscription & Recurring Orders, §7.25 — the last
+Stage of Phase 5) ran as this session's fourth Orchestrator-driven build,
+the same foundation-first-then-parallelize shape §7.22–§7.24 each
+established.** The orchestrating session built the entire Domain layer,
+all 3 migrations, the Infrastructure layer, and the shared Application
+core itself first — `Subscription`/`SubscriptionPlan`/`SubscriptionInvoice`
+entities, `SubscriptionBillingCalculator`/`SubscriptionRenewalService`/
+`SubscriptionProrationCalculator` (the last two added unprompted, §3
+pattern #12), `CreateSubscriptionAction` and `ProcessSubscriptionRenewalAction`
+(the core billing path every later piece calls into) — verified it against
+the complete pre-existing 857-test suite, then split the *remaining* work
+into two genuinely independent slices: Subscription lifecycle
+(Pause/Resume/Cancel/Upgrade Actions) and the recurring billing engine
+(retry Action, the 2 Jobs, the scheduler Command, Notifications
+integration). Both returned clean on their own first pass; the
+orchestrating session's own integration review caught and fixed one real
+concurrency-shaped bug neither slice's own tests happened to exercise
+before final wiring — see below.
+
+`Subscription`'s state machine (Trial/Active/Paused/PastDue/Cancelled,
++ `Expired` modeled but unreached this stage, same "not all reachable yet"
+gap `TransferStatus::InTransit` already carries, §7.22) mirrors
+`Shipment`'s/`WarehouseTransfer`'s own `ALLOWED_TRANSITIONS` shape exactly.
+`SubscriptionInvoice.orderId` is nullable and always null this stage —
+billing charges directly through the existing `PaymentGatewayInterface`
+(the same port `ProcessPaymentAction` already uses) rather than a full
+Cart -> Order -> Payment pipeline, since a SubscriptionPlan is not a
+Product with Inventory; forcing it through that pipeline would have meant
+either inventing a fake catalog Product per plan or bypassing Inventory
+checks awkwardly — a documented, deliberate gap the same shape
+`shipping_methods.rate_per_km`'s own "no writer yet" gap already
+established (§7.22), not a silently missing feature.
+
+**A real bug the orchestrating session's own integration pass caught,
+not either parallel slice's fault — both built and tested their own
+pieces correctly in isolation; the bug only existed at the seam between
+them.** `CreateSubscriptionAction`'s own first-charge failure policy
+(rule §ه.1: a single declined charge on a *brand-new* Subscription goes
+straight to PastDue, no retry grace at all — deliberately stricter than a
+*renewal* failure's 3-retry grace, rule §ه.2) meant a Subscription could
+already be sitting in PastDue the very first time
+`SubscriptionInvoiceRepositoryInterface::findDueForRetry()` ever picks up
+its own still-Failed invoice for an ordinary retry. `Subscription::markPastDue()`
+had no self-transition tolerance (unlike `renew()`'s own deliberate
+Active -> Active tolerance) — the 3rd/exhausting retry attempt against an
+already-PastDue Subscription threw `InvalidSubscriptionStateException`
+*inside* `RetrySubscriptionInvoicePaymentAction`'s own `DB::transaction()`,
+silently rolling back that retry's own `markFailed()`/`retryCount`
+increment too, then getting swallowed by `RetryFailedSubscriptionPaymentJob`'s
+own catch-and-log wrapper — a retry that looked like it simply never
+happened, no error surfaced anywhere an operator would see it. Only the
+final end-to-end test (a real 3-failures-in-a-row scenario against an
+already-PastDue Subscription) caught it, since neither slice's own
+in-isolation tests happened to retry a Subscription that was *already*
+PastDue from its own first-charge failure. Fixed with the identical
+self-transition tolerance `renew()` already has: `markPastDue()` is now a
+no-op when the Subscription is already PastDue, documented directly on
+that method — a real declined card can keep auto-retrying even after the
+Subscription is already flagged PastDue, and the exhausting retry attempt
+must not throw just because of where it started.
+
+**`UpgradeSubscriptionAction` is a documented simplification of the
+request's own "create a new subscription" lifecycle prose** — the actual
+implementation does an in-place plan swap on the *same* Subscription row
+(`Subscription::changePlan()`) rather than creating a second Subscription
+entity, since the given DB schema has no `previous_subscription_id`-style
+linking column and every table referencing a Subscription (starting with
+`SubscriptionInvoice` itself) already assumes exactly one `subscription_id`.
+Proration (`SubscriptionProrationCalculator`, added unprompted, §3 pattern
+#12) is `newPlanProratedCost - oldPlanProratedCredit`, both computed as
+`price * remainingDays / totalPeriodDays` and floored at 0 cents — a
+downgrade whose credit exceeds the new plan's own prorated cost simply
+charges $0, no refund/credit-carry-forward mechanism exists yet, the same
+"real, working, honestly-scoped-down" precedent `CustomerLifetimeValue`'s
+own formula already set (§7.18/§8.52). A $0 proration never creates an
+invoice or touches the gateway at all; a declined non-zero proration
+throws Commerce's existing `PaymentFailedException` (reused, not a new
+type) and rolls back the whole transaction, so the plan never changes
+without the charge actually succeeding.
+
+**Retry semantics are a documented interpretation of an ambiguous
+request detail.** Rule §د.5 says "۳ بار retry با فاصله ۳ روز" ("retry 3
+times, 3-day spacing"); `SubscriptionInvoice.retryCount` increments on
+*every* failed charge attempt, including the very first one created by
+`ProcessSubscriptionRenewalAction`/`CreateSubscriptionAction` — so
+`hasExhaustedRetries()` (>= 3) is reached after 3 total failed attempts
+(1 initial + 2 real retries), not 1 initial + 3 further retries (4
+total). This is a clean, internally consistent reading that fits the
+given schema's single `retry_count` column exactly (no separate
+"attempt_count" was requested), chosen and documented rather than left
+ambiguous — flagged here in case a future stage wants the more literal
+4-attempt reading instead.
+
+**Notifications gained a real, wired Listener, not just a modeled enum
+case** — `NotificationType::SubscriptionPaymentFailed` (new case) +
+`SubscriptionPaymentFailedListener` (`App\Modules\Notifications`, mirrors
+`ShipmentStatusChangedListener`'s exact shape: depends on Commerce's
+`CustomerRepositoryInterface`, an Interface never a Model, the same
+Dependency Inversion direction every cross-module Listener in this
+codebase already establishes), registered in
+`NotificationsServiceProvider::boot()`. Fires on *every* failed charge
+attempt (first failure and every retry, not just the final one) — the
+request's own "ارسال notification در مواقع مهم (payment failed,
+subscription expiring)" ask is only half-built: payment-failed
+notifications are real and wired; a "subscription expiring soon" reminder
+has no corresponding event among the 4 requested
+(`SubscriptionWasCreated`/`Renewed`/`Cancelled`/`SubscriptionPaymentFailed`)
+and was not added unprompted — flagged in §8/§9 as a real, cheap next
+increment rather than silently skipped.
+
+**Two of the request's own 11 capability names hit the recurring
+3-dot-segment gotcha** (§3 pattern #13, hit the same way Product
+Variants'/Warehouses'/Discount Rules' capabilities hit it):
+`commerce.subscription.plan.create`/`.get`/`.list` (4 segments each)
+renamed to `commerce.plan.create`/`.get`/`.list` (promoting "plan" to its
+own resource, the identical move `commerce.variant.attribute.create` made
+for "attribute" relative to "variant"), and
+`commerce.subscription.invoice.list` renamed to `commerce.invoice.list`
+(same fold) — this name coincidentally echoes Finance's unrelated
+`finance.invoice.*` capabilities; same "shared name is coincidental, never
+interchangeable" note `TaxRate`'s own cross-module duplicate already
+carries (§7.8), not a collision (different top-level domain prefix).
+`ListSubscriptionInvoicesAction` (backing `commerce.invoice.list`) is one
+more "missing piece implied by the request" addition (§3 pattern #12) —
+requested as a capability with no Action named for it in the request's own
+list.
+
+`ProcessDueSubscriptionsCommand` (`subscription:process-due`, daily at
+00:00, `withoutOverlapping()`) mirrors `MarkAbandonedCartsCommand`'s own
+"iterate every Tenant, call a tenant-scoped repository method per tenant"
+shape, doubled — once for Subscriptions due for renewal
+(`SubscriptionRepositoryInterface::findDueForRenewal()`), once for
+SubscriptionInvoices due for a retry
+(`SubscriptionInvoiceRepositoryInterface::findDueForRetry()`) — dispatching
+one Job per due row (`ProcessDueSubscriptionsJob`/`RetryFailedSubscriptionPaymentJob`,
+this codebase's 2nd/3rd real background Jobs after Bulk Operations' own
+first three, §7.23) rather than processing inline, so one
+Subscription/invoice's failure can never abort the whole scan — each Job
+wraps its own Action call in a swallow-and-log `try`/`catch`, the same
+"a queued Job failing shouldn't be a fatal, unhandled exception in a batch
+scheduler context" reasoning.
+
+New tests: `tests/Unit/Commerce/{TrialPeriodTest,SubscriptionPlanTest,
+SubscriptionTest,SubscriptionInvoiceTest,SubscriptionBillingCalculatorTest,
+SubscriptionRenewalServiceTest,SubscriptionProrationCalculatorTest}.php`
+(framework-free, incl. the full Subscription state-machine coverage),
+`tests/Feature/Commerce/{SubscriptionLifecycleActionsTest,
+SubscriptionRenewalActionTest,SubscriptionBillingJobsTest,
+ProcessDueSubscriptionsCommandTest}.php` (Action/Job/Command-level, real
+DB), `tests/Feature/Notifications/SubscriptionPaymentFailedListenerTest.php`,
+and `tests/Feature/Commerce/SubscriptionCapabilityTest.php` (2 tests, 36
+assertions — the literal end-to-end MCP scenario: a monthly plan with a
+7-day trial -> real Customer -> Subscription starts in Trial with no
+charge -> the real `subscription:process-due` scheduler command, run
+after moving `current_period_end` into the past the same way
+`ExpirePointsAction`'s own tests simulate elapsed time, converts Trial to
+a real 30-day Active period -> Pause -> Resume (period extended by the
+pause duration) -> Upgrade to a pricier plan mid-period (a real prorated
+invoice, plan changed) -> Cancel at period end (`cancelAtPeriodEnd` flag
+only, status unchanged) -> the scheduler reaching the real period end
+turns the flag into a real Cancelled transition with no new invoice ->
+tenant isolation on both Subscriptions and Plans; a second test exercises
+3 declined charges in a row — the initial no-retry-grace failure plus 2
+real retries — transitioning to PastDue, proving the `markPastDue()`
+self-transition fix above end to end). 885 tests total (810 + 75 new),
+2295 assertions, zero known regressions.
+
+Phase 5 (Advanced Commerce) is now fully complete — all 5 Stages. See §9
+for what's next across the whole platform.
 
 This file is a working-state snapshot for picking up development in a new
 session. It assumes you've already read `CLAUDE.md` and `docs/*.md` (the
@@ -730,15 +892,16 @@ from `App\Modules\*`.
 | **Performance Optimization (Stage 8, §7.20)** | `Application/Services/{CacheService,PerformanceMonitor,LazyLoadingDetector}.php`, `Application/Actions/OptimizeQueriesAction.php`, `Infrastructure/Logging/QueryLogger.php` | `CacheService` is tag-aware (`Cache::tags()`, confirmed working under `CACHE_STORE=array` too, not Redis-only) and wired into exactly one module's read path so far — Commerce's `GetProductAction`/`UpdateProductAction`/`DeleteProductAction` (§7.20's own "extend this" note, §9). `PerformanceMonitor` is a lightweight, documented best-effort operational monitor, not a production APM replacement. `QueryLogger` is registered via `DB::listen()` in `CoreServiceProvider::boot()`, skipped during the test suite — see that provider's own docblock for a real `runningUnitTests()` timing gotcha worth knowing before relying on that flag inside a `ServiceProvider::boot()` elsewhere. |
 | **Human/Dashboard Auth (Stage 5, §7.17)** | `Domain/Entities/User.php`, `Domain/ValueObjects/{Email,HashedPassword,UserRole,UserStatus}.php`, `Domain/Repositories/UserRepositoryInterface.php`, `Application/Actions/{CreateUserAction,UpdateUserAction,GetUserAction,ListUsersAction,AuthenticateUserAction}.php`, `Infrastructure/Models/User.php` (extends `Authenticatable`) | Platform-level (no tenant_id) — the second Core entity above tenancy alongside `Tenant` itself, since the Dashboard's own Tenants Management page does full cross-tenant CRUD. Gates the whole `/dashboard/*` route group via a plain `UserRole::Admin`/`Operator` enum + the `admin` route-middleware alias, **not** the tenant-scoped Role/Permission system above. `HashedPassword` uses PHP's own `password_hash()`/`password_verify()`, never Laravel's `Hash` facade (keeps this Domain class framework-free like every other one). Seeded by default: `admin@opencommerce.test` / `password` (`DatabaseSeeder`). |
 
-### `app/Modules/Commerce/` — **no longer a skeleton. Product, Category, Cart, Inventory, Order, Customer, Payment, Coupon, Discount are all real, tested, and MCP-reachable — Stage 6 added the first real external Connector, Phase 5 Stage 1 added Product Variants (§7.21), Phase 5 Stage 2 added Multi-warehouse Inventory (§7.22), Phase 5 Stage 3 added Bulk Operations (§7.23, this codebase's first background Jobs), and Phase 5 Stage 4 added Advanced Discount Rules (§7.24), reusing the existing Discount/Coupon entities rather than a second, parallel discount-recording mechanism.**
+### `app/Modules/Commerce/` — **no longer a skeleton. Product, Category, Cart, Inventory, Order, Customer, Payment, Coupon, Discount are all real, tested, and MCP-reachable — Stage 6 added the first real external Connector, Phase 5 Stage 1 added Product Variants (§7.21), Phase 5 Stage 2 added Multi-warehouse Inventory (§7.22), Phase 5 Stage 3 added Bulk Operations (§7.23, this codebase's first background Jobs), Phase 5 Stage 4 added Advanced Discount Rules (§7.24, reusing the existing Discount/Coupon entities rather than a second, parallel discount-recording mechanism), and Phase 5 Stage 5 added Subscription & Recurring Orders (§7.25, the last Stage of Phase 5), charging directly through the existing PaymentGatewayInterface rather than a second Order-shaped pipeline.**
 
 See §7 for the full stage-by-stage breakdown (what was built, in what order,
-and why). At a glance, the module now has 20 Domain Entities (17 +
-`DiscountRule`/`DiscountRuleCondition`/`AppliedDiscount`), ~44 Value
-Objects/enums, 7 Domain Services (+ `DiscountRuleEvaluator`/`DiscountCalculator`),
-~68 Application Actions, 16 Eloquent Repositories, 3 Jobs
-(`app/Modules/Commerce/Application/Jobs/`), and 39 numbered migrations,
-backing 47 MCP capabilities.
+and why). At a glance, the module now has 23 Domain Entities (20 +
+`SubscriptionPlan`/`Subscription`/`SubscriptionInvoice`), ~52 Value
+Objects/enums, 10 Domain Services (+ `SubscriptionBillingCalculator`/
+`SubscriptionRenewalService`/`SubscriptionProrationCalculator`), ~81
+Application Actions, 19 Eloquent Repositories, 5 Jobs
+(`app/Modules/Commerce/Application/Jobs/`), and 42 numbered migrations,
+backing 58 MCP capabilities.
 
 `Domain/UCP/*` (the 6 normalized value objects for *external* connector
 data — never persisted, never touched by any Stage 1–5 work) is unchanged
@@ -1096,7 +1259,8 @@ routes/web.php                previously just the Laravel default welcome
 app/Console/Commands/       new in Tech Debt Sprint (§7.13) — this directory
                              didn't exist before: ExpireLoyaltyPointsCommand,
                              MarkAbandonedCartsCommand, +
-                             GenerateAnalyticsSnapshotCommand (§7.18), all three
+                             GenerateAnalyticsSnapshotCommand (§7.18), +
+                             ProcessDueSubscriptionsCommand (§7.25), all four
                              scheduled via routes/console.php
                              (Schedule::command(), also new — no
                              app/Console/Kernel.php in this Laravel version)
@@ -1113,7 +1277,8 @@ app/Modules/Commerce/
 │   │                             (§7.21) + Warehouse, WarehouseTransfer,
 │   │                             WarehouseTransferItem (§7.22) + BulkOperation,
 │   │                             BulkOperationItem (§7.23) + DiscountRule,
-│   │                             DiscountRuleCondition, AppliedDiscount (§7.24)
+│   │                             DiscountRuleCondition, AppliedDiscount (§7.24) +
+│   │                             SubscriptionPlan, Subscription, SubscriptionInvoice (§7.25)
 │   ├── ValueObjects/             Money, SKU, ProductStatus, Quantity, CartStatus,
 │   │                             OrderStatus, OrderNumber, Email, Address, CustomerStatus,
 │   │                             PaymentStatus, PaymentMethod, TaxRate, CouponCode,
@@ -1123,13 +1288,18 @@ app/Modules/Commerce/
 │   │                             (§7.21), WarehouseCode, WarehouseLocation, TransferStatus
 │   │                             (§7.22), BulkOperationType, BulkOperationStatus,
 │   │                             ValidationResult (§7.23), DiscountPriority, Stackability,
-│   │                             DiscountCondition, DiscountEvaluationContext (§7.24)
+│   │                             DiscountCondition, DiscountEvaluationContext (§7.24), +
+│   │                             BillingCycle, SubscriptionStatus, SubscriptionInvoiceStatus
+│   │                             (added unprompted, §3 pattern #12), TrialPeriod (§7.25)
 │   ├── Services/                 PricingService, CouponValidationService,
 │   │                             WooCommerceProductMapper, + WarehouseDistanceCalculator,
 │   │                             NearestWarehouseFinder (§7.22), + CsvParserInterface/
 │   │                             CsvValidatorInterface (§7.23, contracts only — real
 │   │                             implementations live in Application/Services), +
-│   │                             DiscountRuleEvaluator, DiscountCalculator (§7.24)
+│   │                             DiscountRuleEvaluator, DiscountCalculator (§7.24), +
+│   │                             SubscriptionBillingCalculator, SubscriptionRenewalService,
+│   │                             SubscriptionProrationCalculator (last one added
+│   │                             unprompted, §3 pattern #12) (§7.25)
 │   │                             (all pure, framework-free)
 │   ├── Events/                   17 domain events across Stages 1-5, + CartWasAbandoned
 │   │                             (Tech Debt Sprint, §7.13), + VariantWasCreated/
@@ -1139,29 +1309,34 @@ app/Modules/Commerce/
 │   │                             BulkOperationStarted/BulkOperationCompleted/
 │   │                             BulkOperationFailed (§7.23), + DiscountRuleWasCreated/
 │   │                             DiscountRuleWasApplied/DiscountRuleWasExpired (§7.24 —
-│   │                             the last one modeled but never dispatched, §8.60)
-│   ├── Repositories/              16 Repository interfaces (13 + BulkOperation, §7.23 +
-│   │                             DiscountRule/AppliedDiscount, §7.24), +
+│   │                             the last one modeled but never dispatched, §8.60), +
+│   │                             SubscriptionWasCreated/SubscriptionWasRenewed/
+│   │                             SubscriptionWasCancelled/SubscriptionPaymentFailed (§7.25)
+│   ├── Repositories/              19 Repository interfaces (16 + SubscriptionPlan/
+│   │                             Subscription/SubscriptionInvoice, §7.25), +
 │   │                             findByProductForUpdate()/listByProduct() on
 │   │                             InventoryRepositoryInterface (warehouse_id-aware since
 │   │                             §7.22), findStaleActive() on CartRepositoryInterface
 │   │                             (§7.13), a date-range pair on
 │   │                             OrderRepositoryInterface::listByTenant() and
-│   │                             CategoryRepositoryInterface::findByName() (both §7.23)
-│   └── Exceptions/                31 exception classes (25 + BulkOperationNotFoundException/
-│                                  InvalidCsvFormatException/BulkOperationException, §7.23 +
-│                                  DiscountRuleNotFoundException/InvalidDiscountRuleException/
-│                                  ConflictingDiscountException, §7.24); every
+│   │                             CategoryRepositoryInterface::findByName() (both §7.23),
+│   │                             findDueForRenewal()/findDueForRetry() (both tenant-scoped,
+│   │                             §7.25) on Subscription/SubscriptionInvoiceRepositoryInterface
+│   └── Exceptions/                34 exception classes (31 + SubscriptionNotFoundException/
+│                                  SubscriptionPlanNotFoundException/
+│                                  InvalidSubscriptionStateException, §7.25); every
 │                                  NotFound/Conflict-shaped one implements a Core marker
 │                                  interface (§1) — WooCommerceApiException/
-│                                  BulkOperationException deliberately do not (§7.6/§7.23)
+│                                  BulkOperationException/InvalidSubscriptionStateException
+│                                  deliberately do not (§7.6/§7.23/§7.25)
 ├── Application/
-│   ├── Actions/                  ~68 Actions — see §7 for the per-stage list, +
+│   ├── Actions/                  ~81 Actions — see §7 for the per-stage list, +
 │   │                             MarkCartsAbandonedAction (§7.13); CheckInventoryAction
 │   │                             gained executeCommit()/authorizeCommit() (§7.13, §8.22 fix),
 │   │                             + 9 Warehouse/Transfer Actions (§7.22), + 8 Bulk
 │   │                             Operation Actions (§7.23), + 7 DiscountRule Actions
-│   │                             (§7.24); CalculatePricingAction/ProcessPaymentAction/
+│   │                             (§7.24), + 13 Subscription/Plan/Invoice Actions (§7.25);
+│   │                             CalculatePricingAction/ProcessPaymentAction/
 │   │                             ApplyCouponAction/CreateCouponAction all widened for
 │   │                             the Coupon->DiscountRule bypass (§7.24)
 │   ├── DTOs/                     ProductData, CategoryData, CartData, CartItemData,
@@ -1173,27 +1348,33 @@ app/Modules/Commerce/
 │   │                             WarehouseTransferItemData (§7.22), BulkOperationData,
 │   │                             BulkOperationItemData, ValidationResultData (§7.23),
 │   │                             DiscountRuleData, DiscountConditionData,
-│   │                             AppliedDiscountData (§7.24)
+│   │                             AppliedDiscountData (§7.24), SubscriptionPlanData,
+│   │                             SubscriptionData, SubscriptionInvoiceData (§7.25)
 │   ├── Jobs/                     ProcessBulkImportJob, ProcessBulkExportJob,
 │   │                             ProcessBulkUpdateJob (§7.23 — this codebase's first
-│   │                             ever queued Jobs; directory didn't exist before)
+│   │                             ever queued Jobs; directory didn't exist before), +
+│   │                             ProcessDueSubscriptionsJob, RetryFailedSubscriptionPaymentJob
+│   │                             (§7.25, same primitive-constructor/method-injected-handle()
+│   │                             convention §7.23 already established)
 │   └── Services/                 ConnectorRegistry, PaymentGatewayInterface,
 │                                  MockPaymentGateway, PaymentGatewayResult,
 │                                  WooCommerceClientInterface, WooCommerceClient,
 │                                  WooCommerceConfig, + CsvParser, CsvValidator (§7.23 —
 │                                  the one real implementation each of the Domain
-│                                  contracts above)
+│                                  contracts above); PaymentGatewayInterface reused as-is
+│                                  by SubscriptionInvoice billing, no new port added (§7.25)
 ├── Infrastructure/
 │   ├── Connectors/                MockProductConnector (Phase 1),
 │   │                              WooCommerceProductConnector (Stage 6, real)
 │   ├── Http/                      MockWooCommerceHttpClient (Stage 6, tests only)
-│   ├── Models/                    16 Eloquent models (13 + BulkOperation/
+│   ├── Models/                    19 Eloquent models (16 + BulkOperation/
 │   │                              BulkOperationItem, §7.23 + DiscountRule/
-│   │                              DiscountRuleCondition/AppliedDiscount, §7.24)
-│   └── Repositories/               16 Eloquent repository implementations (+
+│   │                              DiscountRuleCondition/AppliedDiscount, §7.24 +
+│   │                              SubscriptionPlan/Subscription/SubscriptionInvoice, §7.25)
+│   └── Repositories/               19 Eloquent repository implementations (+
 │                                    EloquentDiscount/CouponRepository both widened, §7.24)
 └── CommerceServiceProvider.php    binds every Repository interface + registers
-                                   47 capability handlers (see §6 for the full list)
+                                   58 capability handlers (see §6 for the full list)
 
 app/Modules/CRM/                  new in Phase 3
 ├── Domain/
@@ -1442,7 +1623,8 @@ app/Modules/Notifications/         new in Phase 4, Stage 3 (§7.15) — the
 │   │                             (+ `language` field, Phase 4 Stage 4, §7.16 —
 │   │                             one row per Language per type+channel),
 │   │                             NotificationChannel, NotificationPreference
-│   ├── ValueObjects/             NotificationType, ChannelType,
+│   ├── ValueObjects/             NotificationType (+ SubscriptionPaymentFailed
+│   │                             case, §7.25), ChannelType,
 │   │                             DeliveryStatus, Recipient, RecipientType
 │   ├── Events/                   NotificationWasSent, NotificationFailed
 │   │                             (both real) + NotificationWasDelivered
@@ -1494,13 +1676,16 @@ app/Modules/Notifications/         new in Phase 4, Stage 3 (§7.15) — the
 │                                  Stage 4 (§7.16) — Core's
 │                                  detectForTenant() tier only, since a
 │                                  Listener has no HTTP Request to read a
-│                                  query/header from.
+│                                  query/header from. + SubscriptionPaymentFailedListener
+│                                  (Phase 5, Stage 5, §7.25 — reacts to
+│                                  Commerce's SubscriptionPaymentFailed,
+│                                  identical shape/registered)
 ├── Infrastructure/
 │   ├── Models/                    4 Eloquent models
 │   └── Repositories/               4 Eloquent repository implementations
 └── NotificationsServiceProvider.php   binds 4 Repository interfaces +
                                    ChannelSenderRegistry + all 4 Senders,
-                                   Event::listen()s all 3 Listeners,
+                                   Event::listen()s all 4 Listeners,
                                    registers 8 capability handlers (§6)
 
 app/Modules/Analytics/             new in Phase 4, Stage 6 (§7.18) —
@@ -1624,11 +1809,13 @@ database/
 │   │                                               +shipping_methods.rate_per_km, §7.22)
 │   ├── 2026_08_08_000067-000068                  (Phase 5.3 — bulk_operations,
 │   │                                               bulk_operation_items, §7.23)
-│   └── 2026_08_09_000069-000073                  (Phase 5.4 — discount_rules,
-│                                                   discount_rule_conditions,
-│                                                   applied_discounts,
-│                                                   +discounts.discount_rule_id,
-│                                                   +coupons.discount_rule_id, §7.24)
+│   ├── 2026_08_09_000069-000073                  (Phase 5.4 — discount_rules,
+│   │                                               discount_rule_conditions,
+│   │                                               applied_discounts,
+│   │                                               +discounts.discount_rule_id,
+│   │                                               +coupons.discount_rule_id, §7.24)
+│   └── 2026_08_10_000074-000076                  (Phase 5.5 — subscription_plans,
+│                                                   subscriptions, subscription_invoices, §7.25)
 └── seeders/{DemoCapabilitiesSeeder,CommerceCapabilitiesSeeder,CRMCapabilitiesSeeder,FinanceCapabilitiesSeeder,WorkflowsCapabilitiesSeeder,LoyaltyCapabilitiesSeeder,ReportingCapabilitiesSeeder,ShippingCapabilitiesSeeder,NotificationsCapabilitiesSeeder,AnalyticsCapabilitiesSeeder}.php
 
 tests/
@@ -1806,8 +1993,8 @@ onward, each stage's own §7.x section (§7.20 through §7.24) lists its own
 new test files and what each one covers — treat those, not this block, as
 the authoritative "what tests exist for X" reference.** The current total,
 confirmed by actually running the suite at the end of Phase 5 Stage 4, is
-**810 tests passing, 2094 assertions, ~21s runtime** — every stage from
-Phase 4 Stage 8 through Phase 5 Stage 4 added tests on top of the 608
+**885 tests passing, 2295 assertions, ~23s runtime** — every stage from
+Phase 4 Stage 8 through Phase 5 Stage 5 added tests on top of the 608
 above; none were removed. New test files since this block's own last
 update, by stage:
 - **Phase 4 Stage 8** (§7.20): `OrderRepositoryEagerLoadingTest` + the N+1 fixes' own regression coverage.
@@ -1815,11 +2002,13 @@ update, by stage:
 - **Phase 5 Stage 2 — Multi-warehouse Inventory** (§7.22): `WarehouseCodeTest`, `WarehouseLocationTest`, `WarehouseTest`, `WarehouseTransferTest`, `WarehouseDistanceCalculatorTest`, `NearestWarehouseFinderTest`, `WarehouseActionsTest`, `WarehouseTransferActionsTest`, `FindNearestWarehouseActionTest`, `WarehouseAwareShippingRateTest`, `WarehouseCapabilityTest` (+ 2 new `InventoryTest` cases).
 - **Phase 5 Stage 3 — Bulk Operations** (§7.23): `BulkOperationTest`, `ValidationResultTest`, `CsvParserTest`, `CsvValidatorTest`, `ImportProductsActionTest`, `ImportCustomersActionTest`, `ExportOrdersActionTest`, `BulkPriceUpdateActionTest`, `BulkStatusUpdateActionTest`, `BulkInventoryUpdateActionTest`, `BulkOperationCapabilityTest`.
 - **Phase 5 Stage 4 — Advanced Discount Rules** (§7.24): `DiscountRuleTest`, `DiscountPriorityTest`, `DiscountRuleEvaluatorTest`, `DiscountCalculatorTest`, `DiscountRuleActionsTest`, `DiscountRuleCapabilityIntegrationTest`, `CouponDiscountRuleIntegrationTest`, `DiscountRuleCapabilityTest`.
+- **Phase 5 Stage 5 — Subscription & Recurring Orders** (§7.25): `TrialPeriodTest`, `SubscriptionPlanTest`, `SubscriptionTest`, `SubscriptionInvoiceTest`, `SubscriptionBillingCalculatorTest`, `SubscriptionRenewalServiceTest`, `SubscriptionProrationCalculatorTest`, `SubscriptionLifecycleActionsTest`, `SubscriptionRenewalActionTest`, `SubscriptionBillingJobsTest`, `ProcessDueSubscriptionsCommandTest`, `SubscriptionCapabilityTest` (+ `tests/Feature/Notifications/SubscriptionPaymentFailedListenerTest`, the one exception to the "all under Commerce" note below).
 
 All of the above live under `tests/Unit/Commerce/` or `tests/Feature/Commerce/`
-(one exception: `WarehouseAwareShippingRateTest` is under
-`tests/Feature/Shipping/`) — no other module's own test directories
-changed across these 4 stages.
+(two exceptions: `WarehouseAwareShippingRateTest` is under
+`tests/Feature/Shipping/`, `SubscriptionPaymentFailedListenerTest` is under
+`tests/Feature/Notifications/`) — no other module's own test directories
+changed across these 5 stages.
 
 ---
 
@@ -2208,7 +2397,9 @@ php artisan loyalty:expire-points          # daily @ 02:00
 php artisan commerce:check-abandoned-carts # hourly
 php artisan analytics:generate-snapshot    # daily @ 01:00
 php artisan cache:warm                     # daily @ 00:00 — flushes the whole cache first, then rewarms it (§7.20)
-php artisan schedule:list                  # confirm all four are registered
+php artisan subscription:process-due       # daily @ 00:00 — queues a Job per due Subscription
+                                            # renewal and per due SubscriptionInvoice retry (§7.25)
+php artisan schedule:list                  # confirm all five are registered
 
 # Performance (Phase 4 Stage 8, §7.20) — run manually any time, not scheduled
 php artisan performance:benchmark              # read-only timing: product search + KPI calculation
@@ -2226,7 +2417,7 @@ end to end.
 
 ---
 
-## 6. The 102 MCP capabilities that exist right now
+## 6. The 113 MCP capabilities that exist right now
 
 | Capability | Phase/Stage | Permission | Notes |
 |---|---|---|---|
@@ -2332,6 +2523,17 @@ end to end.
 | `commerce.rule.list` | P5.4 | `commerce.discounts.read` | Renamed from `commerce.discount.rule.list` — same reason. Optional `is_active`. |
 | `commerce.discount.apply` | P5.4 | `commerce.cart.manage` | Requested permission `commerce.cart.update` doesn't exist in this codebase; reused `commerce.cart.manage`. Resolves priority + Stackability, replaces the Cart's whole AppliedDiscount set. Never increments a DiscountRule's `usedCount` (a Cart is not real usage). |
 | `commerce.discount.available` | P5.4 | `commerce.discounts.read` | Every *individually* eligible rule, not yet resolved for Stackability — deliberately different from `.apply`'s own resolved winner set. |
+| `commerce.plan.create` | P5.5 | `commerce.plans.manage` | Renamed from `commerce.subscription.plan.create` — 4 segments, see §7.25. `description`/`trial_days`/`features`/`is_active` all optional. |
+| `commerce.plan.get` | P5.5 | `commerce.plans.read` | Renamed from `commerce.subscription.plan.get` — same reason. |
+| `commerce.plan.list` | P5.5 | `commerce.plans.read` | Renamed from `commerce.subscription.plan.list` — same reason. Optional `is_active`. |
+| `commerce.subscription.create` | P5.5 | `commerce.subscriptions.create` | Trial-days > 0 starts in Trial with no charge; otherwise charges immediately (single-failure -> `past_due`, no retry grace — contrast with a *renewal* failure's own 3-retry grace). |
+| `commerce.subscription.get` | P5.5 | `commerce.subscriptions.read` | |
+| `commerce.subscription.list` | P5.5 | `commerce.subscriptions.read` | Optional `status`/`customer_id`. |
+| `commerce.subscription.pause` | P5.5 | `commerce.subscriptions.manage` | Active only. No billing while paused. |
+| `commerce.subscription.resume` | P5.5 | `commerce.subscriptions.manage` | Paused only. Extends `currentPeriodEnd` by the pause duration. |
+| `commerce.subscription.cancel` | P5.5 | `commerce.subscriptions.manage` | `immediate` optional, defaults to false (schedules `cancel_at_period_end` instead of transitioning now). |
+| `commerce.subscription.upgrade` | P5.5 | `commerce.subscriptions.manage` | In-place plan swap (`changePlan()`), not a new Subscription row — a documented scope simplification, §7.25. Prorated charge only if > 0 cents; a decline rolls back the whole plan change. |
+| `commerce.invoice.list` | P5.5 | `commerce.subscriptions.read` | Renamed from `commerce.subscription.invoice.list` — 4 segments, see §7.25. Name coincidentally echoes Finance's unrelated `finance.invoice.*` — never interchangeable, same as `TaxRate`'s own cross-module name coincidence (§7.8). |
 
 **Deliberately NOT wired to MCP** despite the underlying Action existing and
 being fully tested (see §8.2 for why, and the same reasoning each time):
@@ -2344,9 +2546,15 @@ CRM's `UpdateTicketAction`, `GetCustomerNotesAction`, `CreateTagAction`,
 Workflows' `UpdateWorkflowAction` (§7.9), Loyalty's `ExpirePointsAction`
 (§7.10 — not MCP-reachable by design, not blocked: it now runs
 automatically via the `loyalty:expire-points` scheduled command,
-§7.13/§8.27), and Reporting's `GetReportAction`/
+§7.13/§8.27), Reporting's `GetReportAction`/
 `ListReportsAction` (§7.11 — no `report.definition.get/list` capability
-was requested this stage).
+was requested this stage), and Commerce's own
+`ProcessSubscriptionRenewalAction`/`RetrySubscriptionInvoicePaymentAction`
+(§7.25 — the recurring billing engine's own internal steps, reachable only
+via `ProcessDueSubscriptionsJob`/`RetryFailedSubscriptionPaymentJob` and
+the `subscription:process-due` scheduled command, the same "not
+MCP-reachable by design" shape `ExpirePointsAction` already has — a
+billing cycle isn't something an Agent explicitly triggers per-Subscription).
 Every one of these is a one-capability-definition-plus-one-handler-closure
 addition if a future stage actually needs it through MCP — nothing about
 them is unfinished, they were just never asked for at the MCP layer.
@@ -4891,6 +5099,199 @@ DiscountRuleCapabilityTest}.php` — see the intro paragraph above for the
 full breakdown of what each covers, including the literal end-to-end MCP
 scenario. 810 tests total (762 + 48), zero regressions.
 
+### 7.25 Phase 5, Stage 5 — Subscription & Recurring Orders (last Stage of Phase 5)
+
+New Commerce Domain: `ValueObjects/{BillingCycle,SubscriptionStatus,
+SubscriptionInvoiceStatus,TrialPeriod}.php` (the 3rd added unprompted, §3
+pattern #12), `Entities/{SubscriptionPlan,Subscription,SubscriptionInvoice}.php`,
+`Events/{SubscriptionWasCreated,SubscriptionWasRenewed,SubscriptionWasCancelled,
+SubscriptionPaymentFailed}.php`, `Exceptions/{SubscriptionNotFoundException,
+SubscriptionPlanNotFoundException,InvalidSubscriptionStateException}.php`,
+`Repositories/{SubscriptionRepositoryInterface,SubscriptionPlanRepositoryInterface,
+SubscriptionInvoiceRepositoryInterface}.php`,
+`Services/{SubscriptionBillingCalculator,SubscriptionRenewalService,
+SubscriptionProrationCalculator}.php` (the last one added unprompted, §3
+pattern #12). New Application: `Actions/{CreateSubscriptionPlanAction,
+GetSubscriptionPlanAction,ListSubscriptionPlansAction,CreateSubscriptionAction,
+GetSubscriptionAction,ListSubscriptionsAction,PauseSubscriptionAction,
+ResumeSubscriptionAction,CancelSubscriptionAction,UpgradeSubscriptionAction,
+ProcessSubscriptionRenewalAction,RetrySubscriptionInvoicePaymentAction,
+ListSubscriptionInvoicesAction}.php` (the last one added unprompted, §3
+pattern #12), `DTOs/{SubscriptionPlanData,SubscriptionData,
+SubscriptionInvoiceData}.php`, `Jobs/{ProcessDueSubscriptionsJob,
+RetryFailedSubscriptionPaymentJob}.php`. New Infrastructure: 3 Eloquent
+Models, 3 Eloquent Repositories. 3 new migrations. New top-level:
+`app/Console/Commands/ProcessDueSubscriptionsCommand.php`. New in
+Notifications: `NotificationType::SubscriptionPaymentFailed` case,
+`Application/Listeners/SubscriptionPaymentFailedListener.php`. 11 new MCP
+capabilities (2 renamed).
+
+**Orchestration note, continuing §7.22–§7.24's own retrospective — this
+stage's 4th run of the same shape.** The orchestrating session built the
+entire Domain layer, all 3 migrations, the Infrastructure layer, and the
+Application-layer core shared by everything downstream —
+`CreateSubscriptionAction` and `ProcessSubscriptionRenewalAction` (the
+actual charge-and-record path both the "no trial, charge now" creation
+flow and every scheduled renewal reuse) — verified against the complete
+pre-existing 857-test suite, then split the *remaining* work into two
+genuinely independent slices: Subscription lifecycle
+(`Pause`/`Resume`/`Cancel`/`UpgradeSubscriptionAction`, all only ever
+touching an already-persisted Subscription/Plan pair) and the recurring
+billing engine (`RetrySubscriptionInvoicePaymentAction`, both Jobs, the
+scheduler Command, the Notifications integration — all touching Failed
+invoices and cross-module wiring the lifecycle slice never needed). Both
+slices returned clean, non-overlapping diffs against their own targeted
+tests and the full suite on the first pass.
+
+**A real bug survived both slices' own tests and was only caught by the
+orchestrating session's own final integration pass — worth recording in
+full, since it's a genuine example of a bug that can only exist at the
+seam between two correctly-tested pieces, not inside either one.**
+`CreateSubscriptionAction`'s own no-trial path deliberately marks a
+Subscription PastDue on a *single* declined first charge (rule §ه.1 — no
+retry grace at all, unlike a *renewal* failure's 3-retry grace, rule
+§ه.2). `SubscriptionInvoiceRepositoryInterface::findDueForRetry()` has no
+concept of "how did this invoice's own Subscription get here" — it will
+happily keep offering that same still-Failed invoice up for further
+automatic retries even though its Subscription is already PastDue. The
+3rd (exhausting) retry attempt against such a Subscription called
+`Subscription::markPastDue()` a *second* time — and `markPastDue()`, as
+originally written, had no self-transition tolerance (`ALLOWED_TRANSITIONS['past_due']`
+only ever listed `Active`/`Cancelled` as legal targets, never `PastDue`
+itself) — so it threw `InvalidSubscriptionStateException` from *inside*
+`RetrySubscriptionInvoicePaymentAction`'s own `DB::transaction()`, rolling
+back that entire retry attempt (including the `markFailed()`/`retryCount`
+increment that had already run in the same transaction), and
+`RetryFailedSubscriptionPaymentJob`'s own swallow-and-log wrapper (correct
+behavior for a genuinely unexpected failure) hid it completely — the
+retry looked like it simply never happened, with nothing anywhere an
+operator would see flagging it as wrong. Neither slice's own tests
+happened to retry a Subscription that was already PastDue *from its own
+first-charge failure specifically* (as opposed to reaching PastDue via
+retry-exhaustion, the path both slices' own tests did cover) — only this
+stage's own final end-to-end test (§ below) exercised that exact
+sequence. Fixed with the identical self-transition tolerance
+`Subscription::renew()` already has for Active -> Active:
+`markPastDue()` is now a documented no-op when already PastDue. This is
+recorded here at the same level of detail §7.22's own orchestration
+retrospective gave its own "the orchestrator owns and repairs the shared
+foundation" lesson — the lesson this time being: a bug at the seam
+between two correctly-built, correctly-tested parallel slices is a real
+category of risk parallelization introduces, and the final integration
+pass — including a real end-to-end test that exercises the full sequence
+neither slice's own narrower tests would think to construct — is not
+optional, it's where exactly this kind of bug gets caught.
+
+**Billing charges directly through the existing `PaymentGatewayInterface`
+— the same port `ProcessPaymentAction` already uses — never through a
+Cart -> Order -> Payment pipeline.** A SubscriptionPlan is not a Product
+with Inventory; forcing subscription billing through
+`AddToCartAction`/`PlaceOrderAction` would have meant either inventing a
+fake catalog Product per Plan or bypassing Inventory checks awkwardly for
+something that was never meant to have stock. `SubscriptionInvoice.orderId`
+is nullable and stays null this stage — no writer sets it — a documented,
+deliberate gap the same shape `shipping_methods.rate_per_km`'s own
+"column with no writer yet" gap already established (§7.22), not a
+silently missing feature; a future stage wanting subscription revenue to
+flow into Reporting's/Analytics' own Order-based revenue queries would
+need to either populate it or give those Query Builders a second,
+Subscription-aware data source.
+
+**`UpgradeSubscriptionAction` is a documented simplification of the
+request's own "create a new subscription" lifecycle prose.** The given DB
+schema has no `previous_subscription_id`-style linking column, and every
+table referencing a Subscription — starting with `SubscriptionInvoice`
+itself — already assumes exactly one `subscription_id`. The actual
+implementation does an in-place plan swap on the *same* Subscription row
+(`Subscription::changePlan()`) instead. `SubscriptionProrationCalculator`
+(added unprompted, §3 pattern #12) computes
+`newPlanProratedCost - oldPlanProratedCredit`, both
+`price * remainingDays / totalPeriodDays` floored at 0 cents — a downgrade
+whose credit exceeds the new plan's own prorated cost simply charges $0,
+the same "real, working, honestly-scoped-down" precedent
+`CustomerLifetimeValue`'s own formula already set (§7.18/§8.52). A $0
+proration never creates an invoice or touches the gateway; a declined
+non-zero proration reuses Commerce's existing `PaymentFailedException`
+(not a new type) and rolls back the whole `DB::transaction()`, so the plan
+never changes without the charge actually succeeding — mirrors
+`ProcessPaymentAction`'s own "a declined charge never reaches the point an
+Order exists" precedent, one level over.
+
+**Retry semantics are a documented interpretation of an ambiguous request
+detail, not left ambiguous in the code.** Rule §د.5's "۳ بار retry با
+فاصله ۳ روز" is read as: `SubscriptionInvoice.retryCount` increments on
+every failed charge attempt including the very first one (created by
+`ProcessSubscriptionRenewalAction`/`CreateSubscriptionAction`), and
+`hasExhaustedRetries()` trips at `retryCount >= 3` — 3 total failed
+attempts (1 initial + 2 real retries), not 1 initial + 3 further retries
+(4 total). This reading fits the given schema's single `retry_count`
+column exactly (no separate "attempt_count" was requested or added) and
+is internally consistent throughout `SubscriptionInvoice`/
+`ProcessSubscriptionRenewalAction`/`RetrySubscriptionInvoicePaymentAction`
+— flagged here explicitly in case a future stage wants the more literal
+4-total-attempt reading instead; changing `MAX_RETRIES` alone would not be
+enough, `CreateSubscriptionAction`'s own no-retry-grace-on-first-failure
+policy would need reconsidering too.
+
+**Notifications' own request ("ارسال notification در مواقع مهم: payment
+failed, subscription expiring") is only half-built, on purpose.**
+`NotificationType::SubscriptionPaymentFailed` + a real, registered
+`SubscriptionPaymentFailedListener` (mirrors `ShipmentStatusChangedListener`'s
+exact shape — depends on Commerce's `CustomerRepositoryInterface`, an
+Interface never a Model) fire on every failed charge attempt, first
+failure and every retry alike. A "subscription expiring soon" reminder has
+no corresponding event among the 4 requested
+(`SubscriptionWasCreated`/`Renewed`/`Cancelled`/`SubscriptionPaymentFailed`)
+and wasn't added unprompted — inventing a 5th event not in the request's
+own list, for a notification concept the request only mentioned in prose
+and never gave its own trigger condition (expiring *when*? — N days before
+`currentPeriodEnd`? Only for Trial ending? Neither was specified), was
+judged real future scope rather than a safe unprompted addition the way
+`SubscriptionProrationCalculator`/`TrialPeriod` were. Flagged honestly in
+§8/§9, not silently skipped.
+
+**Two of the request's own 11 capability names hit the recurring
+3-dot-segment gotcha** (§3 pattern #13, the same shape Product
+Variants'/Warehouses'/Discount Rules' capabilities already hit):
+`commerce.subscription.plan.create`/`.get`/`.list` (4 segments each)
+renamed to `commerce.plan.create`/`.get`/`.list` (promoting "plan" to its
+own resource, the identical move `commerce.variant.attribute.create` made
+for "attribute" relative to "variant"), and
+`commerce.subscription.invoice.list` renamed to `commerce.invoice.list`
+(same fold — this name coincidentally echoes Finance's unrelated
+`finance.invoice.*` capabilities, the same "shared name is coincidental,
+never interchangeable" note `TaxRate`'s own cross-module duplicate already
+carries, §7.8, not a real collision since the two live under different
+top-level domain prefixes).
+
+New tests: `tests/Unit/Commerce/{TrialPeriodTest,SubscriptionPlanTest,
+SubscriptionTest,SubscriptionInvoiceTest,SubscriptionBillingCalculatorTest,
+SubscriptionRenewalServiceTest,SubscriptionProrationCalculatorTest}.php`
+(framework-free, incl. the full Subscription state-machine transition
+matrix), `tests/Feature/Commerce/{SubscriptionLifecycleActionsTest,
+SubscriptionRenewalActionTest,SubscriptionBillingJobsTest,
+ProcessDueSubscriptionsCommandTest}.php` (Action/Job/Command-level, real
+DB), `tests/Feature/Notifications/SubscriptionPaymentFailedListenerTest.php`,
+and `tests/Feature/Commerce/SubscriptionCapabilityTest.php` (2 tests, 36
+assertions — the literal end-to-end MCP scenario: a monthly plan, 7-day
+trial -> real Customer -> Subscription starts Trial, no charge -> the real
+`subscription:process-due` scheduler command, run after moving
+`current_period_end` into the past the same way `ExpirePointsAction`'s own
+tests simulate elapsed time, converts Trial to a real ~30-day Active
+period -> Pause -> Resume (period extended by the pause duration) ->
+Upgrade to a pricier plan mid-period (a real prorated invoice, plan
+changed) -> Cancel at period end (`cancelAtPeriodEnd` flag only, status
+unchanged) -> the scheduler reaching the real period end turns the flag
+into a real Cancelled transition with no new invoice -> tenant isolation
+on both Subscriptions and Plans; a second test exercises 3 declined
+charges in a row — the initial no-retry-grace failure plus 2 real retries
+against an already-PastDue Subscription — transitioning through to a
+confirmed `retryCount: 3`/`past_due`, proving the `markPastDue()`
+self-transition fix above end to end).
+
+885 tests total (810 + 75), 2295 assertions, zero known regressions.
+**Phase 5 (Advanced Commerce) is now fully complete — all 5 Stages.**
+
 ---
 
 ## 8. Known technical debt (ranked, carried over + Phase 2 additions)
@@ -5252,27 +5653,80 @@ scenario. 810 tests total (762 + 48), zero regressions.
     stage's own functional requirement), but nothing ever dispatches the
     modeled `DiscountRuleWasExpired` event — a real future use is a
     Notification hook ("this promotion just ended").
+61. **No "subscription expiring soon" notification** (§7.25) — only
+    `SubscriptionPaymentFailed` has a real, wired Listener; the request's
+    own "subscription_expiring" mention has no corresponding Domain Event
+    among the 4 requested and no trigger condition was specified (N days
+    before `currentPeriodEnd`? Trial ending only?) — deliberately not
+    invented unprompted, unlike `TrialPeriod`/`SubscriptionProrationCalculator`.
+62. **Subscription revenue never reaches Reporting's/Analytics' own
+    revenue queries** (§7.25) — `SubscriptionInvoice.orderId` is nullable
+    and always null (billing goes straight through `PaymentGatewayInterface`,
+    never through a real Order/Payment row); `SalesQueryBuilder`/
+    `RevenueQueryBuilder` only ever see `orders`/`payments`. A future stage
+    wanting subscription revenue to show up in existing reports/KPIs needs
+    either a real `orderId` writer or a second, Subscription-aware data
+    source in those Query Builders.
+63. **`SubscriptionPlan` has no update/deactivate Action** (§7.25) — only
+    Create/Get/List were requested; a Plan, once created, can only be read
+    or listed, never edited or retired, the same "structure frozen, not
+    requested" gap `ShippingMethod`/`Reward` already carry.
+64. **`Expired` is modeled on `SubscriptionStatus` but unreached by any
+    Action this stage** (§7.25) — a PastDue Subscription that never
+    recovers stays PastDue indefinitely; the same "modeled but not all
+    reachable" gap `TransferStatus::InTransit`/`RewardType::FreeProduct`
+    already carry. A future "close out abandoned past_due subscriptions
+    after N days" job is the natural place this would first become
+    reachable.
+65. **Retry counts 3 total failed attempts (1 initial + 2 retries), not
+    the more literal "3 retries" reading (1 initial + 3 retries = 4
+    total)** (§7.25) — a documented interpretation of an ambiguous request
+    detail, not an oversight; see §7.25's own full reasoning before
+    changing `SubscriptionInvoice::MAX_RETRIES` in isolation, since
+    `CreateSubscriptionAction`'s own no-retry-grace-on-first-failure policy
+    is a related, separate decision that would need reconsidering too.
+66. **No file-upload/self-service payment-method-on-file flow for
+    Subscriptions** (§7.25) — `payment_method_id` is a caller-supplied,
+    unvalidated string (a stored token reference); there is no
+    `commerce.subscription.payment_method.update`-style capability, no
+    real card-on-file management at all. `MockPaymentGateway` never reads
+    it meaningfully today (every charge just succeeds/declines based on
+    `simulate_failure`), so this gap has no test-visible symptom yet, only
+    a real one once a real gateway integration exists.
 
 ---
 
 ## 9. What's next
 
 Phase 2 (Commerce, all 6 Stages), Phase 3 (CRM, Finance, Workflows,
-Loyalty, Reporting — all 5 Stages), and Phase 4 (Shipping & Logistics,
-all 8 Stages) are all fully complete. **Phase 5 (Advanced Commerce) is
-under way and has 4 completed Stages**: Product Variants (§7.21),
-Multi-warehouse Inventory (§7.22), Bulk Operations (§7.23 — this
-codebase's first background Jobs), and Advanced Discount Rules (§7.24).
-No Stage 5 is scoped yet — whoever drives scope next is choosing where
-Phase 5 goes after Discount Rules, not just picking the next item off
-this list (the same framing that applied after Phase 4 finished, one
-Phase earlier). Candidates specific to what Phase 5 has already built,
-roughly in order of how much they'd reuse what already exists:
+Loyalty, Reporting — all 5 Stages), Phase 4 (Shipping & Logistics, all 8
+Stages), and now **Phase 5 (Advanced Commerce, all 5 Stages)** are all
+fully complete: Product Variants (§7.21), Multi-warehouse Inventory
+(§7.22), Bulk Operations (§7.23 — this codebase's first background Jobs),
+Advanced Discount Rules (§7.24), and Subscription & Recurring Orders
+(§7.25 — this codebase's 2nd/3rd background Jobs, its first recurring
+billing engine). No Phase 6 is scoped yet — whoever drives scope next is
+choosing where the platform goes after Phase 5, not just picking the next
+item off this list (the same framing that applied after Phase 4 finished,
+one Phase earlier). Candidates specific to what Phase 5 has already
+built, roughly in order of how much they'd reuse what already exists:
 
-- **A Dashboard UI across every Phase 5 resource** (§7.21-§7.24) —
-  Warehouses/Transfers, ProductVariants/Attributes, BulkOperations, and
-  DiscountRules all have full Action/MCP layers but none got a
-  `/dashboard/*` page the way every Phase 4 Stage 5/6 resource did.
+- **A Dashboard UI across every Phase 5 resource** (§7.21-§7.25) —
+  Warehouses/Transfers, ProductVariants/Attributes, BulkOperations,
+  DiscountRules, and now SubscriptionPlans/Subscriptions/SubscriptionInvoices
+  all have full Action/MCP layers but none got a `/dashboard/*` page the
+  way every Phase 4 Stage 5/6 resource did.
+- **A "subscription expiring soon" notification** (§7.25/§8.61) — the
+  request's own ask, only half-built: `SubscriptionPaymentFailed` is real
+  and wired, but no event/trigger condition exists for an upcoming
+  trial-end or period-end reminder; would need a new Domain Event (dispatched
+  from `ProcessDueSubscriptionsCommand`'s own daily scan, checking
+  `currentPeriodEnd`/`trialEnd` within N days) plus a Listener mirroring
+  `SubscriptionPaymentFailedListener`'s exact shape.
+- **Fold subscription revenue into Reporting's/Analytics' own revenue
+  queries** (§7.25/§8.62) — `SubscriptionInvoice.orderId` is nullable and
+  always null; `SalesQueryBuilder`/`RevenueQueryBuilder` only ever see
+  `orders`/`payments` today.
 - **Fold Cart-level automatic DiscountRules into the real checkout
   total** (§8.57) — `commerce.discount.apply`'s own resolved winning set
   currently never reaches `commerce.checkout.calculate`/`.process`; only
@@ -5369,8 +5823,10 @@ roughly in order of how much they'd reuse what already exists:
 - **A second real product Connector** (Shopify) — `ProductConnectorInterface`
   and the WooCommerce implementation (§7.6) are now a template to follow;
   `ConnectorRegistry` already supports registering more than one by name.
-- **Wire the 16 un-wired capabilities from §6** (7 from Commerce Stages
-  1–5, 4 from CRM, 1 from Finance, 1 from Workflows, 1 from Loyalty, 2
+- **Wire the 18 un-wired capabilities from §6** (9 from Commerce Stages
+  1–5, incl. the recurring billing engine's own internal
+  `ProcessSubscriptionRenewalAction`/`RetrySubscriptionInvoicePaymentAction`,
+  §7.25 — 4 from CRM, 1 from Finance, 1 from Workflows, 1 from Loyalty, 2
   from Reporting — Shipping and Notifications wired all of their own,
   11 and 8 respectively) if any Agent workflow actually needs
   cart-removal, order-cancellation, payment lookup, ticket-updating, tag

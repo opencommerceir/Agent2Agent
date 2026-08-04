@@ -13,11 +13,14 @@ use App\Modules\Commerce\Application\Actions\BulkInventoryUpdateAction;
 use App\Modules\Commerce\Application\Actions\BulkPriceUpdateAction;
 use App\Modules\Commerce\Application\Actions\BulkStatusUpdateAction;
 use App\Modules\Commerce\Application\Actions\CalculatePricingAction;
+use App\Modules\Commerce\Application\Actions\CancelSubscriptionAction;
 use App\Modules\Commerce\Application\Actions\CompleteWarehouseTransferAction;
 use App\Modules\Commerce\Application\Actions\CreateCouponAction;
 use App\Modules\Commerce\Application\Actions\CreateCustomerAction;
 use App\Modules\Commerce\Application\Actions\CreateDiscountRuleAction;
 use App\Modules\Commerce\Application\Actions\CreateProductVariantAction;
+use App\Modules\Commerce\Application\Actions\CreateSubscriptionAction;
+use App\Modules\Commerce\Application\Actions\CreateSubscriptionPlanAction;
 use App\Modules\Commerce\Application\Actions\CreateVariantAttributeAction;
 use App\Modules\Commerce\Application\Actions\CreateWarehouseAction;
 use App\Modules\Commerce\Application\Actions\DeleteDiscountRuleAction;
@@ -32,6 +35,8 @@ use App\Modules\Commerce\Application\Actions\GetCustomerAction;
 use App\Modules\Commerce\Application\Actions\GetDiscountRuleAction;
 use App\Modules\Commerce\Application\Actions\GetOrderAction;
 use App\Modules\Commerce\Application\Actions\GetProductVariantAction;
+use App\Modules\Commerce\Application\Actions\GetSubscriptionAction;
+use App\Modules\Commerce\Application\Actions\GetSubscriptionPlanAction;
 use App\Modules\Commerce\Application\Actions\GetWarehouseAction;
 use App\Modules\Commerce\Application\Actions\GetWarehouseStockAction;
 use App\Modules\Commerce\Application\Actions\GetWooCommerceProductAction;
@@ -43,16 +48,22 @@ use App\Modules\Commerce\Application\Actions\ListDiscountRulesAction;
 use App\Modules\Commerce\Application\Actions\ListOrdersAction;
 use App\Modules\Commerce\Application\Actions\ListProductsAction;
 use App\Modules\Commerce\Application\Actions\ListProductVariantsAction;
+use App\Modules\Commerce\Application\Actions\ListSubscriptionInvoicesAction;
+use App\Modules\Commerce\Application\Actions\ListSubscriptionPlansAction;
+use App\Modules\Commerce\Application\Actions\ListSubscriptionsAction;
 use App\Modules\Commerce\Application\Actions\ListVariantAttributesAction;
 use App\Modules\Commerce\Application\Actions\ListWarehousesAction;
+use App\Modules\Commerce\Application\Actions\PauseSubscriptionAction;
 use App\Modules\Commerce\Application\Actions\PlaceOrderAction;
 use App\Modules\Commerce\Application\Actions\ProcessPaymentAction;
 use App\Modules\Commerce\Application\Actions\RefundPaymentAction;
 use App\Modules\Commerce\Application\Actions\RequestWarehouseTransferAction;
+use App\Modules\Commerce\Application\Actions\ResumeSubscriptionAction;
 use App\Modules\Commerce\Application\Actions\SyncWooCommerceProductsAction;
 use App\Modules\Commerce\Application\Actions\UpdateDiscountRuleAction;
 use App\Modules\Commerce\Application\Actions\UpdateProductVariantAction;
 use App\Modules\Commerce\Application\Actions\UpdateWarehouseAction;
+use App\Modules\Commerce\Application\Actions\UpgradeSubscriptionAction;
 use App\Modules\Commerce\Application\DTOs\BulkOperationData;
 use App\Modules\Commerce\Application\DTOs\CartData;
 use App\Modules\Commerce\Application\DTOs\CouponData;
@@ -62,6 +73,9 @@ use App\Modules\Commerce\Application\DTOs\OrderData;
 use App\Modules\Commerce\Application\DTOs\PaymentData;
 use App\Modules\Commerce\Application\DTOs\PricingData;
 use App\Modules\Commerce\Application\DTOs\ProductVariantData;
+use App\Modules\Commerce\Application\DTOs\SubscriptionData;
+use App\Modules\Commerce\Application\DTOs\SubscriptionInvoiceData;
+use App\Modules\Commerce\Application\DTOs\SubscriptionPlanData;
 use App\Modules\Commerce\Application\DTOs\VariantAttributeData;
 use App\Modules\Commerce\Application\DTOs\WarehouseData;
 use App\Modules\Commerce\Application\DTOs\WarehouseTransferData;
@@ -90,10 +104,16 @@ use App\Modules\Commerce\Domain\Repositories\PaymentRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\ProductRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\ProductVariantRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\BulkOperationRepositoryInterface;
+use App\Modules\Commerce\Domain\Repositories\SubscriptionInvoiceRepositoryInterface;
+use App\Modules\Commerce\Domain\Repositories\SubscriptionPlanRepositoryInterface;
+use App\Modules\Commerce\Domain\Repositories\SubscriptionRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\VariantAttributeRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\WarehouseRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\WarehouseTransferRepositoryInterface;
 use App\Modules\Commerce\Domain\Services\WooCommerceProductMapper;
+use App\Modules\Commerce\Infrastructure\Repositories\EloquentSubscriptionInvoiceRepository;
+use App\Modules\Commerce\Infrastructure\Repositories\EloquentSubscriptionPlanRepository;
+use App\Modules\Commerce\Infrastructure\Repositories\EloquentSubscriptionRepository;
 use App\Modules\Commerce\Infrastructure\Connectors\MockProductConnector;
 use App\Modules\Commerce\Infrastructure\Connectors\WooCommerceProductConnector;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentAppliedDiscountRepository;
@@ -155,6 +175,9 @@ class CommerceServiceProvider extends ServiceProvider
         $this->app->bind(BulkOperationRepositoryInterface::class, EloquentBulkOperationRepository::class);
         $this->app->bind(DiscountRuleRepositoryInterface::class, EloquentDiscountRuleRepository::class);
         $this->app->bind(AppliedDiscountRepositoryInterface::class, EloquentAppliedDiscountRepository::class);
+        $this->app->bind(SubscriptionPlanRepositoryInterface::class, EloquentSubscriptionPlanRepository::class);
+        $this->app->bind(SubscriptionRepositoryInterface::class, EloquentSubscriptionRepository::class);
+        $this->app->bind(SubscriptionInvoiceRepositoryInterface::class, EloquentSubscriptionInvoiceRepository::class);
         $this->app->bind(CsvParserInterface::class, CsvParser::class);
         $this->app->bind(CsvValidatorInterface::class, CsvValidator::class);
         $this->app->bind(PaymentGatewayInterface::class, MockPaymentGateway::class);
@@ -728,6 +751,125 @@ class CommerceServiceProvider extends ServiceProvider
                         $context->agentId,
                         (int) $input['cart_id'],
                     ),
+                ),
+            ],
+        );
+
+        // Phase 5, Stage 5 (Subscription & Recurring Orders, §7.25). See
+        // CommerceCapabilities' own docblock for the 2 capability renames
+        // this stage needed (the recurring 3-dot-segment gotcha).
+
+        $handlers->register('commerce.plan.create', function (array $input, AuthContext $context) {
+            /** @var SubscriptionPlanData $plan */
+            $plan = $this->app->make(CreateSubscriptionPlanAction::class)->execute(
+                tenantId: $context->tenantId,
+                name: $input['name'],
+                description: $input['description'] ?? null,
+                billingCycle: $input['billing_cycle'],
+                priceAmount: (int) $input['price_amount'],
+                priceCurrency: $input['price_currency'],
+                trialDays: isset($input['trial_days']) ? (int) $input['trial_days'] : 0,
+                features: $input['features'] ?? [],
+                isActive: (bool) ($input['is_active'] ?? true),
+            );
+
+            return ['plan' => $plan->toArray()];
+        });
+
+        $handlers->register('commerce.plan.get', function (array $input, AuthContext $context) {
+            /** @var SubscriptionPlanData $plan */
+            $plan = $this->app->make(GetSubscriptionPlanAction::class)->execute((int) $input['plan_id'], $context->tenantId);
+
+            return ['plan' => $plan->toArray()];
+        });
+
+        $handlers->register(
+            'commerce.plan.list',
+            fn (array $input, AuthContext $context) => [
+                'plans' => array_map(
+                    fn (SubscriptionPlanData $plan) => $plan->toArray(),
+                    $this->app->make(ListSubscriptionPlansAction::class)->execute(
+                        $context->tenantId,
+                        isset($input['is_active']) ? (bool) $input['is_active'] : null,
+                    ),
+                ),
+            ],
+        );
+
+        $handlers->register('commerce.subscription.create', function (array $input, AuthContext $context) {
+            /** @var SubscriptionData $subscription */
+            $subscription = $this->app->make(CreateSubscriptionAction::class)->execute(
+                tenantId: $context->tenantId,
+                customerId: (int) $input['customer_id'],
+                subscriptionPlanId: (int) $input['subscription_plan_id'],
+                paymentMethodId: $input['payment_method_id'] ?? null,
+            );
+
+            return ['subscription' => $subscription->toArray()];
+        });
+
+        $handlers->register('commerce.subscription.get', function (array $input, AuthContext $context) {
+            /** @var SubscriptionData $subscription */
+            $subscription = $this->app->make(GetSubscriptionAction::class)->execute((int) $input['subscription_id'], $context->tenantId);
+
+            return ['subscription' => $subscription->toArray()];
+        });
+
+        $handlers->register(
+            'commerce.subscription.list',
+            fn (array $input, AuthContext $context) => [
+                'subscriptions' => array_map(
+                    fn (SubscriptionData $subscription) => $subscription->toArray(),
+                    $this->app->make(ListSubscriptionsAction::class)->execute($input, $context->tenantId),
+                ),
+            ],
+        );
+
+        $handlers->register('commerce.subscription.pause', function (array $input, AuthContext $context) {
+            /** @var SubscriptionData $subscription */
+            $subscription = $this->app->make(PauseSubscriptionAction::class)->execute((int) $input['subscription_id'], $context->tenantId);
+
+            return ['subscription' => $subscription->toArray()];
+        });
+
+        $handlers->register('commerce.subscription.resume', function (array $input, AuthContext $context) {
+            /** @var SubscriptionData $subscription */
+            $subscription = $this->app->make(ResumeSubscriptionAction::class)->execute((int) $input['subscription_id'], $context->tenantId);
+
+            return ['subscription' => $subscription->toArray()];
+        });
+
+        $handlers->register('commerce.subscription.cancel', function (array $input, AuthContext $context) {
+            /** @var SubscriptionData $subscription */
+            $subscription = $this->app->make(CancelSubscriptionAction::class)->execute(
+                id: (int) $input['subscription_id'],
+                tenantId: $context->tenantId,
+                immediate: (bool) ($input['immediate'] ?? false),
+            );
+
+            return ['subscription' => $subscription->toArray()];
+        });
+
+        $handlers->register('commerce.subscription.upgrade', function (array $input, AuthContext $context) {
+            /** @var array{subscription: SubscriptionData, invoice: ?SubscriptionInvoiceData} $result */
+            $result = $this->app->make(UpgradeSubscriptionAction::class)->execute(
+                id: (int) $input['subscription_id'],
+                tenantId: $context->tenantId,
+                newSubscriptionPlanId: (int) $input['new_subscription_plan_id'],
+            );
+
+            return [
+                'subscription' => $result['subscription']->toArray(),
+                'invoice' => $result['invoice']?->toArray(),
+            ];
+        });
+
+        $handlers->register(
+            'commerce.invoice.list',
+            fn (array $input, AuthContext $context) => [
+                'invoices' => array_map(
+                    fn (SubscriptionInvoiceData $invoice) => $invoice->toArray(),
+                    $this->app->make(ListSubscriptionInvoicesAction::class)->execute((int) $input['subscription_id'], $context->tenantId),
                 ),
             ],
         );
