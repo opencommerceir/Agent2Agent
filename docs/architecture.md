@@ -1,5 +1,12 @@
 # OpenCommerce Platform Architecture
 
+> This document describes the platform's architectural design and doesn't
+> track build status. For what's actually implemented right now (Phases
+> 1–5 complete: Core/MCP/UCP plus 10 Domain Modules — Commerce, CRM,
+> Finance, Workflows, Loyalty, Reporting, Shipping, Notifications,
+> Analytics — and the Admin Dashboard), see `docs/roadmap.md` for the
+> summary or `HANDOFF.md` for the full build log.
+
 ## Overview
 
 OpenCommerce Platform is an open-source infrastructure layer designed to make business systems AI Agent Ready.

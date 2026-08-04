@@ -1,7 +1,8 @@
 # MCP API — v2
 
 **Status: current.** Shipped 2026-08-02 (Phase 4, Stage 7 — API
-Versioning). Same platform, same 70 capabilities, same authentication,
+Versioning). Same platform, same capabilities (113 as of Phase 5, Stage 5
+— grows with every new module/stage), same authentication,
 same permission model, same error codes as v1 — the only thing v2 changes
 is the shape of the response envelope. See [changes.md](changes.md) for
 the exact diff and [../migration/v1-to-v2.md](../migration/v1-to-v2.md)
@@ -32,7 +33,7 @@ for a step-by-step migration guide.
     "capabilities": [],
     "metadata": {
         "api_version": "v2",
-        "count": 70,
+        "count": 113,
         "timestamp": "2026-08-02T10:00:00+00:00"
     }
 }

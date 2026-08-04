@@ -1,5 +1,19 @@
 # OpenCommerce Platform — MCP API Reference
 
+> **Known stale as of Phase 5, Stage 5 (§7.25).** This table was generated
+> once, during the Tech Debt Sprint (between Phase 4 Stages 1–2), and has
+> not been regenerated since — it covers only the modules/capabilities
+> that existed at that point (Commerce through Shipping, roughly). It does
+> not yet include Notifications, Analytics, API Versioning's own v2
+> surface, Performance Optimization, or any of Phase 5's own capabilities
+> (Product Variants, Multi-warehouse Inventory, Bulk Operations, Advanced
+> Discount Rules, Subscriptions). The platform now has 113 MCP
+> capabilities across 10 modules — see `HANDOFF.md` §6 for the
+> authoritative, current table (name/phase/permission/notes) until this
+> file is regenerated in full from every module's own
+> `Interfaces/MCP/*Capabilities.php` manifest, as its own intro paragraph
+> below describes it should be.
+
 ## Overview
 
 Every capability an AI Agent can call goes through one gateway, described

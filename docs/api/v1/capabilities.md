@@ -23,12 +23,12 @@ checks happen at `execute` time, per capability, not at discovery time).
         ]
     },
     "meta": {
-        "count": 70
+        "count": 113
     }
 }
 ```
 
-For the full, generated table of all 70 capabilities that exist today —
+For the full, generated table of all 113 capabilities that exist today —
 what each one requires as input, returns, and which permission it
 needs — see [`docs/api-reference.md`](../../api-reference.md). That file
 is generated directly from each module's own capability manifest

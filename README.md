@@ -165,42 +165,43 @@ Examples include:
 
 ## First Domain: Commerce
 
-Commerce is the first domain implemented on top of OpenCommerce Platform.
+Commerce was the first domain implemented on top of OpenCommerce Platform, and remains its largest — Products (incl. variants), Categories, Carts, Multi-warehouse Inventory, Orders, Customers, Checkout/Payments, Coupons, Discount Rules, Bulk Operations, and Subscriptions & Recurring Orders. It lets AI Agents:
 
-The initial objective is to allow AI Agents to:
-
-- Discover products
-- Understand product information
-- Search inventory
-- Compare products
-- Create shopping carts
-- Place orders
-- Track orders
+- Discover and search products (incl. variants)
+- Manage carts and place orders
+- Check and transfer inventory across warehouses
 - Access customer information
-- Execute complete commerce workflows
+- Run complete checkout workflows (tax, discounts, coupons)
+- Create and manage recurring Subscriptions (trials, pause/resume/cancel/upgrade, automated billing)
+- Bulk import/export catalog and customer data
 
-This establishes the foundation for **Agentic Commerce**.
+This established the foundation for **Agentic Commerce** — and proved out the pattern every domain below now follows.
 
 ---
 
 ## Beyond Commerce
 
-Although Commerce is the first supported domain, OpenCommerce is designed as a general-purpose Agent infrastructure.
+OpenCommerce was designed as a general-purpose Agent infrastructure from the start, and it no longer only proves that in theory — nine more Domain Modules are built and live on the same Core, none of which required a single change to Core itself:
 
-Future domains may include:
+- **CRM** — Support Tickets, Customer Notes, Tags
+- **Finance** — per-tenant tax rates, Invoices
+- **Workflows** — event-driven automation ("when X happens and Y is true, do Z")
+- **Loyalty** — Points, Rewards, Redemptions
+- **Reporting** — read-only sales/revenue/customer/loyalty analytics
+- **Shipping** — Shipping Methods, Shipments, Tracking, real carrier connector pattern
+- **Notifications** — Email/SMS/Webhook/In-App, cross-module event-driven delivery
+- **Analytics** — KPIs, dashboards, CSV/PDF export
+- Plus a session-authenticated **Admin Dashboard** (bilingual, EN/FA with RTL support) for human operators, and a versioned MCP surface (`/mcp/v1`, `/mcp/v2`)
 
-- CRM
+Future domains under consideration include:
+
 - ERP
-- Finance
 - Human Resources
 - Healthcare
-- Logistics
 - Manufacturing
-- Customer Support
 - Marketing Automation
-- Analytics
 
-The Core Platform remains domain-independent, allowing new modules to be added without changing the underlying architecture.
+The Core Platform remains domain-independent, allowing new modules to be added without changing the underlying architecture — every module above is proof of that, not just a design goal. See `docs/roadmap.md` for the phase-by-phase build order and `HANDOFF.md` for the full engineering log.
 
 ---
 
@@ -245,31 +246,46 @@ OpenCommerce follows a set of core architectural principles.
 
 ## Roadmap
 
-The current roadmap focuses on building the platform foundation.
+Phases 1 through 5 are complete. See `docs/roadmap.md` for the full
+phase/stage breakdown and `HANDOFF.md` for the detailed build log.
 
-- [ ] OpenCommerce Core
-- [ ] Identity & Authentication
-- [ ] Organization Management
-- [ ] Agent Registry
-- [ ] Capability Registry
-- [ ] MCP Gateway
-- [ ] Universal Commerce Protocol (UCP)
-- [ ] SDK Platform
-- [ ] Commerce Connectors
-- [ ] Event System
-- [ ] Multi-tenant Infrastructure
-- [ ] Developer Documentation
+- [x] OpenCommerce Core (Identity, Auth, Organizations, Tenancy, Permissions)
+- [x] Agent Registry
+- [x] Capability Registry
+- [x] MCP Gateway (`/mcp/v1` and `/mcp/v2`)
+- [x] Universal Commerce Protocol (UCP)
+- [x] SDK Platform (PHP SDK — `packages/opencommerce-sdk`)
+- [x] Commerce Connectors (Mock + real WooCommerce)
+- [x] Event System (Domain Events across every module)
+- [x] Multi-tenant Infrastructure (shared-database, `tenant_id` isolation)
+- [x] Developer Documentation (`docs/`, `HANDOFF.md`, per-version API docs)
+- [x] Commerce domain (Products/Variants, Cart, Multi-warehouse Inventory, Orders, Customers, Checkout, Discounts, Bulk Operations, Subscriptions)
+- [x] CRM, Finance, Workflows, Loyalty, Reporting domains
+- [x] Shipping & Logistics domain (incl. a real carrier connector pattern)
+- [x] Notifications domain (Email/SMS/Webhook/In-App)
+- [x] Analytics & KPIs domain
+- [x] Admin Dashboard (session-authenticated, bilingual EN/FA)
+- [ ] Additional SDKs (TypeScript, Node.js, Python, Go — PHP SDK is the
+      only one built so far)
+- [ ] Real carrier (USPS/FedEx/DHL) and SMS gateway integrations (mock/stub today)
 - [ ] Upgrade to Laravel 13 (blocked on the runtime environment moving to PHP 8.3+ first — see `docs/decisions.md`, Decision 003)
 
 ---
 
 ## Project Status
 
-> 🚧 **Foundation Phase**
+> ✅ **Phase 5 Complete — Advanced Commerce**
 
-OpenCommerce Platform is currently focused on designing and implementing the foundational infrastructure required to build the Agent Economy.
+OpenCommerce Platform has moved past the foundation stage: Core, MCP
+Gateway, and UCP are stable, and 10 Domain Modules are built, tested, and
+MCP-reachable — Commerce (incl. multi-warehouse inventory, variants, bulk
+operations, and subscriptions), CRM, Finance, Workflows, Loyalty,
+Reporting, Shipping, Notifications, and Analytics, plus a bilingual Admin
+Dashboard for human operators. 885 automated tests pass across 113 MCP
+capabilities, with zero known regressions.
 
-The first milestone is enabling businesses to become **Agent Ready** while providing developers with an open, extensible platform for building AI-native business integrations.
+The current focus is Phase 6 scoping (not yet decided) alongside the
+ongoing infrastructure track — see `docs/roadmap.md` for both.
 
 ---
 

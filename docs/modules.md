@@ -1,5 +1,11 @@
 # Module Structure & Guidelines
 
+> This document describes the *shape* every module follows, not which
+> modules exist. Ten are built and live today (Commerce, CRM, Finance,
+> Workflows, Loyalty, Reporting, Shipping, Notifications, Analytics, plus
+> Core itself) — see `docs/roadmap.md`/`HANDOFF.md` for the current list
+> and build history.
+
 ## Overview
 OpenCommerce is built as a **Modular Monolith**. Each business domain (e.g., Commerce, CRM, ERP) or platform capability (e.g., Core, MCP) is isolated into its own module. 
 
