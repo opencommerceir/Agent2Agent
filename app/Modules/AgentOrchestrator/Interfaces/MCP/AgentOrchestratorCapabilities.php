@@ -70,6 +70,20 @@ final class AgentOrchestratorCapabilities
                 'outputSchema' => ['profiles' => 'array'],
                 'requiredPermissions' => ['agent.profiles.read'],
             ],
+            [
+                'name' => 'agent.memory.insights',
+                'description' => "Aggregate stats over this tenant's own recent goal-execution history for one Agent persona (§7.29): total/successful executions, average duration, most-used capabilities, success rate",
+                'inputSchema' => ['agent_type' => 'string'],
+                'outputSchema' => ['insights' => 'object'],
+                'requiredPermissions' => ['agent.memory.read'],
+            ],
+            [
+                'name' => 'agent.memory.suggest',
+                'description' => "Preview the plan Learning would use for a goal, if this tenant's own execution history already has a matching, sufficiently-successful pattern (§7.29) — null when nothing qualifies, the same plan ExecuteGoalAction would silently prefer over real planning",
+                'inputSchema' => ['goal' => 'string', 'agent_type' => 'string'],
+                'outputSchema' => ['suggested_plan' => 'object'],
+                'requiredPermissions' => ['agent.memory.read'],
+            ],
         ];
     }
 }

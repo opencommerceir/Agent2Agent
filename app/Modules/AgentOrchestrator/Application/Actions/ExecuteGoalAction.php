@@ -10,6 +10,7 @@ use App\Modules\AgentOrchestrator\Domain\Events\GoalReceived;
 use App\Modules\AgentOrchestrator\Domain\Exceptions\GoalExecutionFailedException;
 use App\Modules\AgentOrchestrator\Domain\Repositories\AgentProfileRepositoryInterface;
 use App\Modules\AgentOrchestrator\Domain\Repositories\ExecutionMemoryRepositoryInterface;
+use App\Modules\AgentOrchestrator\Domain\Services\LearningServiceInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\PlanExecutorInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\PlannerInterface;
 use App\Modules\AgentOrchestrator\Domain\ValueObjects\AgentType;
@@ -40,6 +41,19 @@ use Throwable;
  * allowed to propagate unwrapped, same as any other Action's own
  * `*NotFoundException`; only a genuine *planning* failure (the Planner
  * itself throwing) gets wrapped in `GoalExecutionFailedException` below.
+ *
+ * **Consults `LearningServiceInterface` before either Planner (Phase 6,
+ * Stage 4, §7.29).** `PlannerInterface` is deliberately tenant-independent
+ * (see its own docblock) — a *learned* suggestion is not, so it can't live
+ * behind that Interface without widening a contract two other, already-
+ * reviewed implementations (`DeterministicPlanner`/`LLMPlanner`) share.
+ * This Action already holds a full `AuthContext` (the one other deliberate
+ * exception in this codebase to "no AuthContext below the MCP boundary,"
+ * see class docblock above) — asking "has *this* tenant already solved a
+ * goal like this" here, before either Planner is even consulted, keeps
+ * both Planners completely unaware learning exists, and applies it
+ * uniformly regardless of which one `PlannerInterface` is currently bound
+ * to (`config('agent-orchestrator.planner.type')`).
  */
 final class ExecuteGoalAction
 {
@@ -48,6 +62,7 @@ final class ExecuteGoalAction
         private readonly PlannerInterface $planner,
         private readonly PlanExecutorInterface $executor,
         private readonly ExecutionMemoryRepositoryInterface $memory,
+        private readonly LearningServiceInterface $learning,
     ) {
     }
 
@@ -63,17 +78,23 @@ final class ExecuteGoalAction
         ]);
         Event::dispatch(new GoalReceived($goal, $context->tenantId, $context->agentId));
 
-        $profile = $this->profiles->findByType($agentType->value);
+        $plan = $this->learning->suggestPlan($goal, $context->tenantId);
 
-        try {
-            $plan = $this->planner->createPlan($goal, $profile);
-        } catch (Throwable $e) {
-            Log::error('Plan creation failed', ['goal' => $goal->text, 'error' => $e->getMessage()]);
+        if ($plan !== null) {
+            Log::info('Using learned plan from history', ['goal' => $goal->text, 'tenant_id' => $context->tenantId]);
+        } else {
+            $profile = $this->profiles->findByType($agentType->value);
 
-            throw new GoalExecutionFailedException(
-                "Failed to create an execution plan for goal [{$goal->text}]: {$e->getMessage()}",
-                previous: $e,
-            );
+            try {
+                $plan = $this->planner->createPlan($goal, $profile);
+            } catch (Throwable $e) {
+                Log::error('Plan creation failed', ['goal' => $goal->text, 'error' => $e->getMessage()]);
+
+                throw new GoalExecutionFailedException(
+                    "Failed to create an execution plan for goal [{$goal->text}]: {$e->getMessage()}",
+                    previous: $e,
+                );
+            }
         }
 
         $result = $this->executor->execute($plan, $context);

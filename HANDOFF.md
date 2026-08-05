@@ -1,6 +1,28 @@
 # OpenCommerce Platform — Session Handoff
 
-**Status: Phase 6, Stage 3 (LLM-based Planner, §7.28) is now complete —
+**Status: Phase 6, Stage 4 (Execution Memory & Learning, §7.29) is now
+complete — `ExecuteGoalAction` now consults the tenant's own learned
+`ExecutionPattern`s (Pattern Extraction/Learning, new this stage) before
+either `PlannerInterface` implementation plans anything at all, and a
+sufficiently-successful match skips planning entirely and reuses whatever
+capability sequence already worked. Two real, documented corrections from
+the request's own design, both confirmed with the user before writing any
+code: (1) "Execution Memory Storage" is served entirely by the *existing*
+`ExecutionMemoryRepositoryInterface` (Stage 1, §7.26) — no new, parallel
+`ExecutionMemory` entity/table was built; (2) `agent.memory.history` was
+dropped as a functional duplicate of the already-existing
+`agent.execution.list`. A real bug this stage's own tests caught before
+shipping: a learned pattern only remembers *which* capabilities succeeded,
+never their resolved input — the first working version of
+`LearningService::suggestPlan()` passed a raw, unresolved `'{date:-7}'`
+straight into a real capability call, which then failed that capability's
+own input validation; fixed by extracting `DeterministicPlanner`'s own
+token-resolution logic into a shared `AgentProfileInputResolver` both
+classes now depend on. 1000 tests passing (966 + 34 new), 120 MCP
+capabilities (118 + `agent.memory.insights`/`agent.memory.suggest`), zero
+known regressions. See §7.29 for the full detail.**
+
+**Status: Phase 6, Stage 3 (LLM-based Planner, §7.28) is complete —
 `PlannerInterface` has a second, real implementation (`LLMPlanner`,
 OpenAI/Claude-backed) alongside Stage 1/2's config-driven
 `DeterministicPlanner`, switchable with one env var
@@ -939,7 +961,12 @@ local dev/test, real infra opted into explicitly" reasoning
 the full detail.**
 
 966 tests passing (936 + 30 new), 118 MCP capabilities (unchanged), zero
-known regressions. See §9 for what's next across the whole platform.
+known regressions.
+
+**Phase 6, Stage 4 (Execution Memory & Learning, §7.29) ran immediately
+after — see the summary paragraph at the very top of this file.** 1000
+tests passing (966 + 34 new), 120 MCP capabilities, zero known
+regressions. See §9 for what's next across the whole platform.
 
 This file is a working-state snapshot for picking up development in a new
 session. It assumes you've already read `CLAUDE.md` and `docs/*.md` (the
@@ -1336,6 +1363,61 @@ correction from the request's own `.env.example` (which defaulted to
 `llm`) — see §7.28 for the full reasoning. No new MCP capabilities this
 stage (the planner swap is entirely internal to how `agent.goal.execute`/
 `/api/agents/{agent_type}` already work).**
+
+**Stage 4 (Execution Memory & Learning, §7.29) added `ExecutionPattern`
+(Domain Entity, config-independent — `goalPattern`/`agentType`/
+`successfulCapabilities`/`failedCapabilities`/`usageCount`/`successRate`/
+`lastUsedAt`, built via `create()`/`reconstruct()`, `matches()`/
+`recordOutcome()` its only behavior) + `ExecutionPatternRepositoryInterface`
++ `EloquentExecutionPatternRepository` (new `execution_patterns` table —
+the *only* new table this stage; Part A of the request, "Execution Memory
+Storage," is served entirely by the *existing* `ExecutionMemoryRepositoryInterface`
+from Stage 1, not a second one, confirmed with the user before writing any
+code — see `docs/execution-memory.md`). `PatternExtractorInterface`
+(Domain Service, `extract()`/`patternFor()`) + `PatternExtractor` (the one
+implementation — a fixed 5-keyword vocabulary, deliberately not derived
+from any `AgentProfile`'s own `planning_rules` keys, so a learned pattern
+doesn't silently stop matching if a profile's config changes later).
+`LearningServiceInterface` (Domain Service, `suggestPlan(Goal, int
+$tenantId)`/`getInsights(int $tenantId, AgentType)`) + `LearningService`
+(the one implementation — reads `ExecutionPatternRepositoryInterface` for
+suggestions, the *existing* `ExecutionMemoryRepositoryInterface` for
+insights). `LearnFromExecutionListener` (Application/Listeners) reacts to
+the *existing*, previously-unlistened-to `GoalCompleted` event (§7.26) —
+not a new dependency injected into `ExecuteGoalAction` for the write side
+— on every finished Goal, success or failure: a failure against an
+already-learned pattern degrades its `successRate` (a real, deliberate
+correction from the request's own pseudocode, which only ever extracted a
+pattern on success and never revisited one on a later failure — see
+`docs/execution-memory.md`'s own "How Pattern Extraction works").
+`ExecuteGoalAction` itself gained one new constructor dependency,
+`LearningServiceInterface`, and now calls `suggestPlan()` *before* either
+`PlannerInterface` implementation — deliberately not a `PlannerInterface`
+decorator (that Interface is documented as tenant-independent by design;
+a learned suggestion is not), kept in the one Action that already
+legitimately holds a full `AuthContext`. A real bug caught by this stage's
+own `LearningServiceTest`, not shipped: a learned pattern only remembers
+*which* capabilities succeeded, never their resolved input, so a naive
+`suggestPlan()` passed `AgentProfile::getDefaultInput()`'s own *raw*,
+unresolved value (e.g. the literal string `'{date:-7}'`) straight into a
+new `ExecutionStep` — fixed by extracting `DeterministicPlanner`'s own
+private token-resolution logic into a new, shared
+`AgentProfileInputResolver` both classes now depend on, avoiding a second,
+independently-drifting copy of the same token vocabulary.
+`ExecutionResult` gained `isSuccessful()`/`successfulCapabilities()`/
+`failedCapabilities()` (pure, derived from its own steps) — a small,
+backward-compatible widening, the same "the request's own gap would
+surface ugly at runtime" reasoning behind every prior "add unprompted"
+precedent in this codebase (§3 pattern #12). Two new MCP capabilities,
+`agent.memory.insights`/`agent.memory.suggest` (permission
+`agent.memory.read` for both) — `agent.memory.history` was in the
+request's own list of three but dropped as a functional duplicate of the
+already-existing `agent.execution.list`, confirmed with the user before
+writing any code. New `AgentMemoryController` (`/api/agents/memory/insights`,
+`/api/agents/memory/suggest`) — a third Controller in this module, the
+same "Gateway vs. Discovery vs. [this]" split `AgentController`/
+`AgentProfileController` already establish. See §7.29 for the full
+detail, including both scope corrections and the input-resolution bug.**
 
 ### `app/Modules/Demo/` — unchanged since Phase 1
 
@@ -1959,9 +2041,15 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
                                    Repository Interface
 ├── Domain/
 │   ├── Entities/                 Goal, ExecutionPlan, ExecutionStep,
-│   │                             ExecutionResult, + AgentProfile (§7.27 —
+│   │                             ExecutionResult (+ isSuccessful()/
+│   │                             successfulCapabilities()/failedCapabilities(),
+│   │                             §7.29), + AgentProfile (§7.27 —
 │   │                             config-driven, built via fromConfig(),
-│   │                             framework-free like every other Entity)
+│   │                             framework-free like every other Entity),
+│   │                             + ExecutionPattern (§7.29 — learned,
+│   │                             tenant-scoped goal-keyword ->
+│   │                             capabilities shorthand, matches()/
+│   │                             recordOutcome() its only behavior)
 │   ├── ValueObjects/             AgentType (ceo/sales/support/finance),
 │   │                             StepStatus (+ Skipped, modeled but
 │   │                             unreached this stage), Priority
@@ -1983,10 +2071,17 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │   │                             pattern #1 in this codebase, see
 │   │                             ToolInvokerInterface's own docblock), +
 │   │                             LLMClientInterface (§7.28 — a thin port
-│   │                             over one LLM provider's own API)
+│   │                             over one LLM provider's own API), +
+│   │                             PatternExtractorInterface,
+│   │                             LearningServiceInterface (both §7.29)
 │   ├── Repositories/              ExecutionMemoryRepositoryInterface (owns
 │   │                             ExecutionStep persistence too), +
-│   │                             AgentProfileRepositoryInterface (§7.27)
+│   │                             AgentProfileRepositoryInterface (§7.27),
+│   │                             + ExecutionPatternRepositoryInterface
+│   │                             (§7.29 — the *only* new Repository this
+│   │                             stage; "Execution Memory Storage" itself
+│   │                             reuses ExecutionMemoryRepositoryInterface
+│   │                             above, not a second one)
 │   └── Exceptions/                GoalExecutionFailedException (neither
 │                                  marker interface, same reasoning
 │                                  WooCommerceApiException has),
@@ -2013,11 +2108,16 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │   │                             ListExecutionsAction (both plain
 │   │                             int $tenantId, no exception needed), +
 │   │                             GetAgentProfileAction, ListAgentProfilesAction
-│   │                             (§7.27)
+│   │                             (§7.27), + GetExecutionInsightsAction,
+│   │                             SuggestExecutionPlanAction (§7.29 — both
+│   │                             plain int $tenantId/AgentType, no
+│   │                             AuthContext, §3 pattern #1)
 │   ├── DTOs/                     GoalData, ExecutionStepData,
 │   │                             ExecutionPlanData (unused by anything
-│   │                             yet — a future "preview my plan" surface's
-│   │                             natural return shape), ExecutionResultData
+│   │                             until §7.29 — SuggestExecutionPlanAction
+│   │                             is its first real caller, the "preview my
+│   │                             plan" shape it was always built for),
+│   │                             ExecutionResultData
 │   │                             (deliberately snake_case toArray(), this
 │   │                             module's own documented wire contract), +
 │   │                             AgentProfileData (§7.27)
@@ -2026,9 +2126,11 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │   │                             — salesGrowthSteps()/supportSteps()/
 │   │                             financeSteps() — are gone; §7.27 reads an
 │   │                             AgentProfile's own planning_rules/
-│   │                             default_inputs instead and resolves a
-│   │                             small set of template tokens, see its own
-│   │                             docblock), PlanExecutor, CapabilityToolInvoker,
+│   │                             default_inputs instead; its own former
+│   │                             private token-resolution methods are gone
+│   │                             too as of §7.29, extracted into
+│   │                             AgentProfileInputResolver below), PlanExecutor,
+│   │                             CapabilityToolInvoker,
 │   │                             + LLMPlanner (§7.28 — the 2nd
 │   │                             PlannerInterface implementation, asks a
 │   │                             real LLM provider, falls back to an
@@ -2037,17 +2139,35 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │   │                             (§7.28 — real Guzzle-backed
 │   │                             LLMClientInterface implementations,
 │   │                             mirroring WooCommerceClient's own
-│   │                             injectable-ClientInterface shape)
+│   │                             injectable-ClientInterface shape), +
+│   │                             AgentProfileInputResolver (§7.29 —
+│   │                             extracted out of DeterministicPlanner the
+│   │                             moment LearningService needed the exact
+│   │                             same {date:N}/{coupon_code}/
+│   │                             {discount_percent} token resolution a
+│   │                             suggested plan's own steps also need;
+│   │                             both classes depend on this one resolver
+│   │                             now, not two independently-drifting
+│   │                             copies), PatternExtractor, LearningService
+│   │                             (§7.29 — the one implementation each of
+│   │                             the two Domain Service interfaces above)
 │   ├── Prompts/                  PlanningPromptTemplate (§7.28 — pure
 │   │                             string formatting, no LLM-specific
 │   │                             concerns)
 │   └── Listeners/                LogExecutionStepListener (owns every
 │                                  "a step ran" log line — kept out of
-│                                  PlanExecutor itself)
+│                                  PlanExecutor itself), + LearnFromExecutionListener
+│                                  (§7.29 — reacts to the *existing*,
+│                                  previously-unlistened-to GoalCompleted
+│                                  event from Stage 1; creates or reinforces
+│                                  an ExecutionPattern on every finished
+│                                  Goal, success or failure)
 ├── Infrastructure/
 │   ├── Models/                    Execution, ExecutionStep (2 Eloquent
 │   │                              models — agent_executions/
-│   │                              agent_execution_steps tables)
+│   │                              agent_execution_steps tables), +
+│   │                              ExecutionPattern (§7.29 —
+│   │                              execution_patterns table)
 │   ├── Repositories/               EloquentExecutionMemoryRepository
 │   │                              (ExecutionStep::reconstruct() rebuilds
 │   │                              a persisted step directly into its
@@ -2060,7 +2180,12 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │   │                              — placed here, not Application/Services
 │   │                              as originally requested, see its own
 │   │                              docblock; reads via config(), never
-│   │                              glob())
+│   │                              glob()), + EloquentExecutionPatternRepository
+│   │                              (§7.29 — save() upserts by the Entity's
+│   │                              own id(); a new pattern's real id is
+│   │                              assigned back onto the given Entity via
+│   │                              ExecutionPattern::assignId(), a one-time
+│   │                              mutator)
 │   └── Controllers/                AgentController (throws, never
 │                                   catches — every exception maps to the
 │                                   right HTTP status via MCPExceptionHandler,
@@ -2069,7 +2194,9 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │                                   (§7.27 — a separate Controller, the
 │                                   same "Gateway vs. Discovery" split
 │                                   MCPGatewayController/MCPDiscoveryController
-│                                   already establish)
+│                                   already establish), + AgentMemoryController
+│                                   (§7.29 — a third Controller for a third
+│                                   distinct concern, same reasoning)
 ├── Interfaces/MCP/                AgentOrchestratorCapabilities.php (the
 │                                  manifest AgentOrchestratorCapabilitiesSeeder
 │                                  reads — not named in the original
@@ -2077,10 +2204,16 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │                                  module's own Actions are reachable both
 │                                  via /api/agents/* and via MCP, §3
 │                                  pattern #12; +2 definitions in §7.27 —
-│                                  agent.profile.get/.list)
+│                                  agent.profile.get/.list; +2 more in
+│                                  §7.29 — agent.memory.insights/.suggest;
+│                                  agent.memory.history deliberately not
+│                                  added, see §7.29)
 └── AgentOrchestratorServiceProvider.php   binds ExecutionMemoryRepositoryInterface/
                                    ToolInvokerInterface/PlanExecutorInterface/
                                    AgentProfileRepositoryInterface (§7.27),
+                                   + ExecutionPatternRepositoryInterface/
+                                   PatternExtractorInterface/
+                                   LearningServiceInterface (§7.29),
                                    + LLMClientInterface (by llm.provider)
                                    and PlannerInterface (by planner.type)
                                    as closures re-evaluated on every
@@ -2088,10 +2221,11 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
                                    flips config() and immediately gets the
                                    other implementation (§7.28); loads
                                    routes/agents.php, Event::listen()s
-                                   LogExecutionStepListener, registers 5
-                                   capability handlers (§6, 3+2 — unchanged
-                                   this stage, the planner swap added no
-                                   new capabilities)
+                                   LogExecutionStepListener +
+                                   LearnFromExecutionListener (§7.29),
+                                   registers 7 capability handlers (§6,
+                                   3+2+2 — the 2 §7.29 handlers are
+                                   agent.memory.insights/.suggest)
 
 routes/agents.php                  new in Phase 6, Stage 1 (§7.26) —
                                    loaded by
@@ -2101,7 +2235,10 @@ routes/agents.php                  new in Phase 6, Stage 1 (§7.26) —
                                    routes" shape routes/mcp.php itself
                                    uses via CoreServiceProvider; +2 GET
                                    routes in §7.27 (/profiles,
-                                   /profiles/{agentType})
+                                   /profiles/{agentType}); +2 routes in
+                                   §7.29 (GET /memory/insights, POST
+                                   /memory/suggest) — no /memory/history,
+                                   see §7.29
 
 config/agents/{ceo,sales,support,finance}.php   new in Phase 6, Stage 2
                                    (§7.27) — one file per Agent persona;
@@ -2134,6 +2271,10 @@ app/Core/Exceptions/MCPExceptionHandler.php   handles() extended to also
 
 database/migrations/2026_08_11_000077-000078   agent_executions,
                                    agent_execution_steps (§7.26)
+
+database/migrations/2026_08_12_000079   execution_patterns (§7.29 — the
+                                   *only* new table this stage; no
+                                   execution_memories table, see §7.29)
 
 app/Modules/Demo/                  unchanged since Phase 1
 
@@ -2803,7 +2944,7 @@ end to end.
 
 ---
 
-## 6. The 118 MCP capabilities that exist right now
+## 6. The 120 MCP capabilities that exist right now
 
 | Capability | Phase/Stage | Permission | Notes |
 |---|---|---|---|
@@ -2925,6 +3066,8 @@ end to end.
 | `agent.execution.list` | P6.1 | `agent.executions.read` | Optional `agent_type`/`status`/`limit`. |
 | `agent.profile.get` | P6.2 | `agent.profiles.read` | One Agent persona's own config-driven profile (planning rules, default inputs, expected permissions). |
 | `agent.profile.list` | P6.2 | `agent.profiles.read` | Every configured Agent persona profile (`config/agents/*.php`). |
+| `agent.memory.insights` | P6.4 | `agent.memory.read` | Aggregate stats (total/success rate/avg duration/most-used capabilities) over the tenant's own most recent 50 Executions for one Agent persona. |
+| `agent.memory.suggest` | P6.4 | `agent.memory.read` | Preview the learned plan `ExecuteGoalAction` would silently prefer for this goal, or `null`. No `agent.memory.history` — functionally identical to `agent.execution.list`, see §7.29. |
 
 **Deliberately NOT wired to MCP** despite the underlying Action existing and
 being fully tested (see §8.2 for why, and the same reasoning each time):
@@ -6190,6 +6333,177 @@ unsupported-provider error path).
 known regressions — confirmed by actually running the full suite. Phase 6,
 Stage 3 is complete. See §9 for what's next.
 
+### 7.29 Phase 6, Stage 4 — Execution Memory & Learning
+
+The request's own three-part split (Execution Memory Storage / Pattern
+Extraction / Learning & Suggestion) — audited against the real codebase
+before writing anything, the same discipline every prior stage's own
+request-vs-codebase mismatch got, and this audit turned up the two biggest
+corrections of this stage, both raised and confirmed with the user before
+any code was written (the same weight Stage 1's own stock-column question
+and Stage 6's own Analytics/Reporting question carried).
+
+**Correction 1 — no new `ExecutionMemory` entity/table.** The request's
+own Part A named a new `Domain/Entities/ExecutionMemory.php` +
+`ExecutionMemoryRepositoryInterface` + `execution_memories` migration. Both
+that Entity's job and that Repository Interface's *name* already exist:
+Stage 1 (§7.26) built `ExecutionMemoryRepositoryInterface` (backed by
+`agent_executions`/`agent_execution_steps`) specifically to persist every
+finished Goal execution — goal text, planned+executed steps, duration,
+status, tenant/agent — and `ExecuteGoalAction` has called
+`$this->memory->save($result, ...)` after every run since that stage.
+`docs/agent-orchestrator.md`'s own Future Roadmap had already earmarked
+this exact interface as the future home for execution memory ("today's
+`ExecutionMemoryRepositoryInterface` is a simple relational log, chosen to
+already fit this future without implying it exists yet"). Building the
+request's own second, parallel entity/table would have reintroduced the
+identical two-sources-of-truth risk Stage 1 avoided by extending
+`Inventory` instead of a second stock column (§7.21) and Stage 6 avoided
+by reusing Reporting's own Query Builders instead of re-aggregating
+(§7.18). Resolution: Part A ships via reuse, zero new code; only Pattern
+Extraction and Learning/Suggestion (genuinely new concepts with no
+existing home) are real, new work this stage.
+
+**Correction 2 — no `agent.memory.history` capability.** The request's
+own third MCP capability would have been functionally identical to the
+already-existing, already-tested `agent.execution.list`
+(`GET /api/agents/executions`) — same tenant-scoped Execution history,
+same `{executions: [...]}` shape, differing only in which permission
+gates it. Dropped as a duplicate read path rather than built as a second
+way to read the same data; only `agent.memory.insights`/`agent.memory.suggest`
+are genuinely new capabilities.
+
+**New this stage**: `ExecutionPattern` (Domain Entity — `tenantId`/
+`goalPattern`/`agentType`/`successfulCapabilities`/`failedCapabilities`/
+`usageCount`/`successRate`/`lastUsedAt`; `matches(string $goal): bool` and
+`recordOutcome(bool $successful, array $capabilitiesUsed, DateTimeImmutable $now): void`
+are its only behavior — the latter is deliberately the *one* mutator for
+both `usageCount` and `successRate` together, not the request's own two
+independently-callable `incrementUsage()`/`updateSuccessRate()`, which
+would let a caller update one without the other and leave them
+inconsistent). `ExecutionPatternRepositoryInterface` (`save()`/
+`findExisting()`/`findSimilarPatterns()` — every method takes `tenantId`
+explicitly, HANDOFF §3 pattern #1) + `EloquentExecutionPatternRepository`
+(the one implementation, new `execution_patterns` table — the *only* new
+table this stage). `PatternExtractorInterface` (`extract()`/`patternFor()`)
++ `PatternExtractor` (the one implementation — a fixed 5-keyword
+vocabulary, `sales`/`revenue`/`inventory`/`customer`/`report`, joined with
+`|` when more than one matches, `'general'` when none does; deliberately
+*not* derived from any `AgentProfile`'s own `planning_rules` keys, so a
+learned pattern doesn't silently stop matching if a profile's config
+changes later — a documented MVP simplification, the same "real, working,
+honestly scoped down" precedent `CustomerLifetimeValue`'s own formula
+already set, §7.18/§8.52). `LearningServiceInterface`
+(`suggestPlan(Goal $goal, int $tenantId): ?ExecutionPlan` /
+`getInsights(int $tenantId, AgentType $agentType): array`) + `LearningService`
+(the one implementation). `LearnFromExecutionListener`
+(`Application/Listeners`) reacts to the *existing*, previously-unlistened-to
+`GoalCompleted` event (dispatched by `ExecuteGoalAction` since §7.26) — not
+a new dependency injected into `ExecuteGoalAction` for the write side, the
+same "a Listener reacts to a Domain Event, the dispatching class doesn't
+react inline" convention `LogExecutionStepListener`/`InventoryLowListener`
+already establish (§7.9/§3 pattern #11).
+
+**A real, deliberate correction from the request's own pseudocode: a
+pattern's success rate can fall, not just rise.** The request's own
+`PatternExtractor::extract()` was only ever called on a successful
+`ExecutionMemory`, and nothing in its own design ever revisited an
+already-learned pattern after a *later* failure — meaning `successRate`
+could only ever climb toward (and sit at) 100%, never reflect a goal that
+stopped working. `LearnFromExecutionListener::handle()` instead looks up
+an existing matching pattern *first*, on every finished Goal regardless of
+outcome, and calls `recordOutcome($result->isSuccessful(), ...)` either
+way — a failure against an already-learned pattern genuinely degrades its
+own `successRate`. Only a first-time failure with *no* existing pattern to
+degrade creates nothing (there is no successful capability list to seed
+one from). Caught and fixed during planning, not discovered as a bug
+later.
+
+**`ExecuteGoalAction` gained one new constructor dependency,
+`LearningServiceInterface`, and now calls `suggestPlan()` before either
+`PlannerInterface` implementation is consulted at all.** Deliberately
+*not* a `PlannerInterface` decorator wrapping whichever concrete Planner
+is configured (the shape `LLMPlanner` itself already uses to wrap
+`DeterministicPlanner` as its own fallback) — `PlannerInterface` is
+explicitly documented as tenant-independent by design (its own docblock:
+"a Planner's job is purely... a tenant-independent decision"), and a
+*learned* suggestion is fundamentally tenant-scoped (HANDOFF gotcha: never
+leak one tenant's history into another's). Widening that Interface to
+carry `tenantId` would have touched two already-reviewed implementations
+for a concern neither one needs to know about. `ExecuteGoalAction` already
+legitimately holds a full `AuthContext` (the one other deliberate
+exception to §3 pattern #1 in this module, see that class's own
+docblock) — asking "has this tenant already solved a goal like this" there
+applies learning uniformly to both `DeterministicPlanner` and `LLMPlanner`
+without either ever knowing learning exists.
+
+**A real bug this stage's own `LearningServiceTest` caught before
+shipping, not after.** `ExecutionPattern` only ever remembers *which*
+capabilities succeeded — never their resolved input values (storing a full
+input template per learned pattern would duplicate what
+`AgentProfile::defaultInputs()` already owns and let the two drift apart
+over time). The first working version of `LearningService::suggestPlan()`
+built each suggested `ExecutionStep` from `AgentProfile::getDefaultInput()`'s
+own *raw*, unresolved value directly — meaning a suggested
+`report.sales.generate` step carried the literal, unresolved string
+`'{date:-7}'` as its own `start_date` instead of a real `Y-m-d` date, which
+then failed that capability's own real input validation the moment the
+suggested plan actually ran (a goal that should have completed came back
+`partial`). Fixed by extracting `DeterministicPlanner`'s own private
+`resolveInput()`/`resolveToken()`/`parseDiscountPercent()` methods into a
+new, shared `Application/Services/AgentProfileInputResolver` — both
+`DeterministicPlanner` and `LearningService` now depend on this one
+resolver (constructor-injected, with a `new AgentProfileInputResolver()`
+default so every existing `new DeterministicPlanner()` call-site, framework-free
+Unit tests included, keeps working unchanged) rather than carrying two
+independently-drifting copies of the same `{date:N}`/`{coupon_code}`/
+`{discount_percent}` token vocabulary.
+
+`ExecutionResult` gained `isSuccessful()` (`status === 'completed'`
+exactly — deliberately *not* `'partial'`, since a partially-failed run is
+not a pattern worth repeating), `successfulCapabilities()`, and
+`failedCapabilities()` — three small, pure, backward-compatible additions
+(no new field, only derived methods) that both `PatternExtractor` and
+`LearnFromExecutionListener` read instead of re-deriving the same
+`StepStatus` filtering twice.
+
+Two new MCP capabilities, `agent.memory.insights`/`agent.memory.suggest`
+(permission `agent.memory.read` for both, already exactly 3 dot-separated
+segments — no HANDOFF gotcha #2 rename needed this stage) — see Correction
+2 above for why a third, requested capability doesn't exist. New
+`Infrastructure/Controllers/AgentMemoryController.php`
+(`GET /api/agents/memory/insights`, `POST /api/agents/memory/suggest`) — a
+third Controller in this module, the same "Gateway vs. Discovery vs.
+[this]" split `AgentController`/`AgentProfileController` already
+establish rather than growing either of those two for a third, unrelated
+concern.
+
+`config/agents/*.php` profiles were **not** updated to list
+`agent.memory.read` in their own `permissions` array — that array is
+descriptive metadata only, never a second enforcement layer (§7.27's own
+"What `permissions` does NOT do"), so the omission doesn't block anything;
+flagged as a known, honest gap rather than silently left unmentioned.
+
+New tests: `tests/Unit/AgentOrchestrator/{ExecutionPatternTest,PatternExtractorTest}.php`
+(7+5, framework-free) + 2 new cases in `ExecutionResultTest.php`,
+`tests/Feature/AgentOrchestrator/{LearnFromExecutionListenerTest,LearningServiceTest,ExecutionMemoryLearningTest}.php`
+(6+6+8 — `LearnFromExecutionListenerTest` dispatches real `GoalCompleted`
+events directly and asserts `execution_patterns` row state across
+create/reinforce/degrade/tenant-isolation; `LearningServiceTest` proves
+`suggestPlan()`'s own resolved-input fix and `getInsights()`'s aggregation
+against real `ExecutionMemoryRepositoryInterface` data;
+`ExecutionMemoryLearningTest` is the literal end-to-end scenario, entirely
+through this module's own `/api/agents/*` HTTP surface — the same
+convention every other test in this module already uses, never raw
+`/mcp/v1/execute` — including a deliberately-seeded pattern with fewer
+capabilities than `config/agents/ceo.php`'s own real rule, so a 2-step
+response can only have come from the learned pattern, never a fresh
+`DeterministicPlanner` re-plan).
+
+1000 tests passing (966 + 34 new), 2579 assertions (2484 + 95 new), zero
+known regressions — confirmed by actually running the full suite. Phase 6,
+Stage 4 is complete. See §9 for what's next.
+
 ---
 
 ## 8. Known technical debt (ranked, carried over + Phase 2 additions)
@@ -6656,7 +6970,7 @@ Stage 3 is complete. See §9 for what's next.
     deterministic path; only the log lines capture the real per-call
     outcome, nothing on `ExecutionResult`/the persisted `Execution` row
     does.
-78. **`LLMPlanner` sends the full, uncached capability list (118 today)
+78. **`LLMPlanner` sends the full, uncached capability list (120 today)
     on every single planning call** (§7.28) — no pruning by relevance to
     the goal, no caching of the formatted capability text between calls;
     a real, non-trivial prompt-size cost this stage's own request
@@ -6668,6 +6982,35 @@ Stage 3 is complete. See §9 for what's next.
     shape every external Connector in this codebase already carries
     (WooCommerce, shipping carriers, SMS). `OpenAIClient`/`ClaudeClient`
     are real, tested against mocked HTTP only.
+80. **`ExecutionPattern` matching is a plain keyword substring check, not
+    semantic/embedding-based similarity** (§7.29) — `PatternExtractor`'s
+    own fixed 5-keyword vocabulary is a documented MVP simplification; two
+    goals that mean the same thing in different words ("boost sales" vs.
+    "grow revenue" naming neither of the same literal keywords) never
+    match the same pattern. A vector database was already the natural
+    upgrade path this stage's own `ExecutionPatternRepositoryInterface`
+    doesn't block (`docs/agent-orchestrator.md`'s own Future Roadmap named
+    this before Stage 4 existed).
+81. **Learned patterns never expire or get pruned** (§7.29) — a tenant's
+    own `execution_patterns` table only ever grows; no TTL/decay/manual
+    "forget this" mechanism exists yet. A pattern learned from a since-changed
+    business process (a discontinued promotion, a renamed report) would
+    keep being suggested indefinitely as long as its own success rate
+    stays above the 50% floor.
+82. **`config/agents/*.php` profiles don't list `agent.memory.read` in
+    their own `permissions` array** (§7.29) — purely descriptive metadata,
+    never enforced a second time (§7.27), so this doesn't block anything;
+    simply not yet reflected there for an operator reading a profile to
+    understand what permissions an Agent using it actually needs.
+83. **A suggested/learned plan carries no `priority` per step and always
+    uses `Priority::Medium`** (§7.29) — `ExecutionPattern` doesn't record
+    a capability's own priority from the run it learned from, the same
+    "no per-entry priority concept yet" gap `AgentProfile::planning_rules`
+    already has (§7.27/§8.73).
+84. **No Dashboard UI for Execution Memory & Learning** (§7.29) — same gap
+    item 69/75 already flag for Executions/Goals and Agent Profiles, now
+    also true for `/api/agents/memory/*`'s own data (insights, and which
+    patterns a tenant has learned).
 
 ---
 
@@ -6677,13 +7020,30 @@ Phase 2 (Commerce, all 6 Stages), Phase 3 (CRM, Finance, Workflows,
 Loyalty, Reporting — all 5 Stages), Phase 4 (Shipping & Logistics, all 8
 Stages), Phase 5 (Advanced Commerce, all 5 Stages), Phase 6 Stage 1
 (Agent Orchestrator, §7.26), Phase 6 Stage 2 (Agent Profiles + CEO Agent,
-§7.27), and now **Phase 6, Stage 3 (LLM-based Planner, §7.28)** are all
-complete. Phase 6 itself is only three Stages in — whoever drives scope
-next is choosing where the platform goes from here, not just picking the
-next item off this list (the same framing that applied after Phase 4 and
-Phase 5 each finished). Candidates specific to what Phase 6 has already
-built, roughly in order of how much they'd reuse what already exists:
+§7.27), Phase 6 Stage 3 (LLM-based Planner, §7.28), and now **Phase 6,
+Stage 4 (Execution Memory & Learning, §7.29)** are all complete. Phase 6
+itself is only four Stages in — whoever drives scope next is choosing
+where the platform goes from here, not just picking the next item off
+this list (the same framing that applied after Phase 4 and Phase 5 each
+finished). Candidates specific to what Phase 6 has already built, roughly
+in order of how much they'd reuse what already exists:
 
+- **Semantic/vector-based `ExecutionPattern` matching** (§8.80) — today's
+  plain keyword substring check is a documented MVP simplification;
+  `ExecutionPatternRepositoryInterface` was deliberately shaped not to
+  block a future embedding-based similarity search, the same "the vector
+  database roadmap item, now with a real relational fallback already
+  built and learning from it" step `docs/agent-orchestrator.md`'s own
+  Future Roadmap named before Stage 4 existed.
+- **Pattern pruning/decay** (§8.81) — a tenant's own `execution_patterns`
+  rows never expire; a real "forget patterns unused for N days" or
+  "manually retire a pattern" mechanism is unbuilt.
+- **A `/dashboard/agents` page covering Execution Memory & Learning too**
+  (§8.84) — `GetExecutionInsightsAction`/`SuggestExecutionPlanAction` are
+  already shaped for a Dashboard page the same way every other Phase 4/5
+  resource's own Controller reuses its Actions (§3 pattern #19); only the
+  page itself is missing, the same gap item 69/75 already flag for
+  Executions/Goals and Agent Profiles.
 - **Stand up real OpenAI/Claude credentials and verify `LLMPlanner`
   end to end against a live API** (§8.79) — every test so far is against
   a mock; a real run is the natural next increment once credentials
@@ -6705,7 +7065,7 @@ built, roughly in order of how much they'd reuse what already exists:
   (versus silently falling back); would need a new field on
   `ExecutionResult`/the persisted `Execution` row.
 - **Capability-list caching/pruning for `LLMPlanner`'s own prompt**
-  (§8.78) — today sends all 118 capabilities, uncached, on every planning
+  (§8.78) — today sends all 120 capabilities, uncached, on every planning
   call; a real cost at platform scale.
 - **A domain-aware `summary` from the LLM itself, and recursive/
   self-reflective planning** — both named in this module's own Future

@@ -7,26 +7,36 @@ use App\Core\Application\DTOs\AuthContext;
 use App\Core\Application\Services\CapabilityHandlerRegistry;
 use App\Modules\AgentOrchestrator\Application\Actions\ExecuteGoalAction;
 use App\Modules\AgentOrchestrator\Application\Actions\GetAgentProfileAction;
+use App\Modules\AgentOrchestrator\Application\Actions\GetExecutionInsightsAction;
 use App\Modules\AgentOrchestrator\Application\Actions\GetExecutionResultAction;
 use App\Modules\AgentOrchestrator\Application\Actions\ListAgentProfilesAction;
 use App\Modules\AgentOrchestrator\Application\Actions\ListExecutionsAction;
+use App\Modules\AgentOrchestrator\Application\Actions\SuggestExecutionPlanAction;
+use App\Modules\AgentOrchestrator\Application\Listeners\LearnFromExecutionListener;
 use App\Modules\AgentOrchestrator\Application\Listeners\LogExecutionStepListener;
 use App\Modules\AgentOrchestrator\Application\Services\CapabilityToolInvoker;
 use App\Modules\AgentOrchestrator\Application\Services\ClaudeClient;
 use App\Modules\AgentOrchestrator\Application\Services\DeterministicPlanner;
+use App\Modules\AgentOrchestrator\Application\Services\LearningService;
 use App\Modules\AgentOrchestrator\Application\Services\LLMPlanner;
 use App\Modules\AgentOrchestrator\Application\Services\OpenAIClient;
+use App\Modules\AgentOrchestrator\Application\Services\PatternExtractor;
 use App\Modules\AgentOrchestrator\Application\Services\PlanExecutor;
+use App\Modules\AgentOrchestrator\Domain\Events\GoalCompleted;
 use App\Modules\AgentOrchestrator\Domain\Events\StepExecuted;
 use App\Modules\AgentOrchestrator\Domain\Repositories\AgentProfileRepositoryInterface;
 use App\Modules\AgentOrchestrator\Domain\Repositories\ExecutionMemoryRepositoryInterface;
+use App\Modules\AgentOrchestrator\Domain\Repositories\ExecutionPatternRepositoryInterface;
+use App\Modules\AgentOrchestrator\Domain\Services\LearningServiceInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\LLMClientInterface;
+use App\Modules\AgentOrchestrator\Domain\Services\PatternExtractorInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\PlanExecutorInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\PlannerInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\ToolInvokerInterface;
 use App\Modules\AgentOrchestrator\Domain\ValueObjects\AgentType;
 use App\Modules\AgentOrchestrator\Infrastructure\Repositories\ConfigBasedAgentProfileRepository;
 use App\Modules\AgentOrchestrator\Infrastructure\Repositories\EloquentExecutionMemoryRepository;
+use App\Modules\AgentOrchestrator\Infrastructure\Repositories\EloquentExecutionPatternRepository;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use InvalidArgumentException;
@@ -56,9 +66,12 @@ class AgentOrchestratorServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->bind(ExecutionMemoryRepositoryInterface::class, EloquentExecutionMemoryRepository::class);
+        $this->app->bind(ExecutionPatternRepositoryInterface::class, EloquentExecutionPatternRepository::class);
         $this->app->bind(AgentProfileRepositoryInterface::class, ConfigBasedAgentProfileRepository::class);
         $this->app->bind(ToolInvokerInterface::class, CapabilityToolInvoker::class);
         $this->app->bind(PlanExecutorInterface::class, PlanExecutor::class);
+        $this->app->bind(PatternExtractorInterface::class, PatternExtractor::class);
+        $this->app->bind(LearningServiceInterface::class, LearningService::class);
 
         $this->app->bind(LLMClientInterface::class, function ($app) {
             $provider = config('agent-orchestrator.llm.provider');
@@ -95,6 +108,7 @@ class AgentOrchestratorServiceProvider extends ServiceProvider
         $this->loadRoutesFrom(base_path('routes/agents.php'));
 
         Event::listen(StepExecuted::class, LogExecutionStepListener::class);
+        Event::listen(GoalCompleted::class, LearnFromExecutionListener::class);
 
         $handlers = $this->app->make(CapabilityHandlerRegistry::class);
 
@@ -129,5 +143,22 @@ class AgentOrchestratorServiceProvider extends ServiceProvider
                 $this->app->make(ListAgentProfilesAction::class)->execute(),
             ),
         ]);
+
+        $handlers->register('agent.memory.insights', fn (array $input, AuthContext $context) => [
+            'insights' => $this->app->make(GetExecutionInsightsAction::class)->execute(
+                $context->tenantId,
+                AgentType::from($input['agent_type']),
+            ),
+        ]);
+
+        $handlers->register('agent.memory.suggest', function (array $input, AuthContext $context) {
+            $plan = $this->app->make(SuggestExecutionPlanAction::class)->execute(
+                goalText: $input['goal'],
+                agentType: AgentType::from($input['agent_type']),
+                tenantId: $context->tenantId,
+            );
+
+            return ['suggested_plan' => $plan?->toArray()];
+        });
     }
 }

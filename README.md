@@ -244,12 +244,21 @@ step failed.
 - `DeterministicPlanner` (still the default) reads each profile's own
   config-declared rules and resolves a small set of template tokens
   (`{date:N}`/`{coupon_code}`/`{discount_percent}`).
+- **Execution Memory & Learning (Phase 6, Stage 4)** — every finished Goal
+  execution is learned from: a repeat occurrence of a similar goal skips
+  planning entirely and reuses whichever capability sequence already
+  worked, reinforcing (or, on a later failure, degrading) that same
+  learned pattern's own success rate. `GET /api/agents/memory/insights`/
+  `POST /api/agents/memory/suggest` (+ the identical
+  `agent.memory.insights`/`agent.memory.suggest` MCP capabilities) expose
+  it — reusing the *existing* execution history (Stage 1) rather than a
+  second, parallel record of the same thing.
 
-See `docs/agent-orchestrator.md`/`docs/agent-profiles.md`/`docs/llm-planner.md`
-for the full architecture, how to add a new Agent persona, and how to
-enable the LLM planner, and `HANDOFF.md` §7.26/§7.27/§7.28 for the build
-log, including every deliberate correction made from the original
-requests (real capability names in
+See `docs/agent-orchestrator.md`/`docs/agent-profiles.md`/`docs/llm-planner.md`/`docs/execution-memory.md`
+for the full architecture, how to add a new Agent persona, how to enable
+the LLM planner, and how learning works, and `HANDOFF.md`
+§7.26/§7.27/§7.28/§7.29 for the build log, including every deliberate
+correction made from the original requests (real capability names in
 place of illustrative ones, why `AuthContext` is threaded through this
 module's own Domain Service interfaces as a documented exception, and
 more).
@@ -319,6 +328,7 @@ phase/stage breakdown and `HANDOFF.md` for the detailed build log.
 - [x] Agent Orchestrator (Phase 6, Stage 1 — goal -> plan -> execute, deterministic MVP planner)
 - [x] Agent Profiles + CEO Agent (Phase 6, Stage 2 — config-driven personas, `config/agents/{type}.php`)
 - [x] LLM-based Planner (Phase 6, Stage 3 — real OpenAI/Claude planning with automatic fallback, `PLANNER_TYPE=llm`)
+- [x] Execution Memory & Learning (Phase 6, Stage 4 — pattern extraction from real execution history, learned-plan suggestions ahead of both Planners)
 - [ ] Additional SDKs (TypeScript, Node.js, Python, Go — PHP SDK is the
       only one built so far)
 - [ ] Real carrier (USPS/FedEx/DHL) and SMS gateway integrations (mock/stub today)
@@ -328,22 +338,26 @@ phase/stage breakdown and `HANDOFF.md` for the detailed build log.
 
 ## Project Status
 
-> ✅ **Phase 5 Complete — Advanced Commerce** · 🚧 **Phase 6, Stage 3 — LLM-based Planner**
+> ✅ **Phase 5 Complete — Advanced Commerce** · 🚧 **Phase 6, Stage 4 — Execution Memory & Learning**
 
 OpenCommerce Platform has moved past the foundation stage: Core, MCP
 Gateway, and UCP are stable, and 11 Domain Modules are built, tested, and
 MCP-reachable — Commerce (incl. multi-warehouse inventory, variants, bulk
 operations, and subscriptions), CRM, Finance, Workflows, Loyalty,
 Reporting, Shipping, Notifications, Analytics, and the new Agent
-Orchestrator (config-driven Agent Profiles, a real CEO Agent persona, and
-now a real LLM-based planner with automatic deterministic fallback), plus
-a bilingual Admin Dashboard for human operators. 966 automated tests pass
-across 118 MCP capabilities, with zero known regressions.
+Orchestrator (config-driven Agent Profiles, a real CEO Agent persona, a
+real LLM-based planner with automatic deterministic fallback, and now
+execution memory & learning — a repeat goal skips re-planning and reuses
+whatever already worked), plus a bilingual Admin Dashboard for human
+operators. 1000 automated tests pass across 120 MCP capabilities, with
+zero known regressions.
 
 The current focus is building out the remaining AI Agent personas beyond
-CEO, and extending the LLM planner (recursive planning, self-reflection,
-multi-agent collaboration) — see `docs/agent-orchestrator.md`,
-`docs/agent-profiles.md`, `docs/llm-planner.md`, and `docs/roadmap.md`.
+CEO, extending the LLM planner (recursive planning, self-reflection,
+multi-agent collaboration), and deepening learning (semantic/vector
+pattern matching, pattern pruning) — see `docs/agent-orchestrator.md`,
+`docs/agent-profiles.md`, `docs/llm-planner.md`, `docs/execution-memory.md`,
+and `docs/roadmap.md`.
 
 ---
 

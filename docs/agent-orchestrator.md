@@ -1,12 +1,14 @@
 # Agent Orchestrator Module
 
 > Added in Phase 6, Stage 1 (§7.26 in `HANDOFF.md`), extended in Stage 2
-> — Agent Profiles + the CEO Agent (§7.27) — and Stage 3 — an LLM-based
-> Planner (§7.28). This document is the module's own reference;
-> `HANDOFF.md` §7.26/§7.27/§7.28 carry the full narrative of what was
-> built, what was corrected from the original requests, and why. See
-> `docs/agent-profiles.md` for the how-to-add-a-new-Agent guide and
-> `docs/llm-planner.md` for the how-to-use-the-LLM-planner guide.
+> — Agent Profiles + the CEO Agent (§7.27) — Stage 3 — an LLM-based
+> Planner (§7.28) — and Stage 4 — Execution Memory & Learning (§7.29).
+> This document is the module's own reference; `HANDOFF.md`
+> §7.26/§7.27/§7.28/§7.29 carry the full narrative of what was built, what
+> was corrected from the original requests, and why. See
+> `docs/agent-profiles.md` for the how-to-add-a-new-Agent guide,
+> `docs/llm-planner.md` for the how-to-use-the-LLM-planner guide, and
+> `docs/execution-memory.md` for the how-learning-works guide.
 
 ## Overview
 
@@ -35,8 +37,11 @@ one of them fails.
 | ExecutionPlan / ExecutionStep | `Domain\Entities\{ExecutionPlan,ExecutionStep}` | The plan itself, and each individual planned capability call (`capability` + `input` + `priority`), with mutable `status`/`output`/`error` as it runs. |
 | Executor | `Domain\Services\PlanExecutorInterface` | Runs every step of a plan, in order, never aborting on a single step's failure. `PlanExecutor` is the one implementation. |
 | ToolInvoker | `Domain\Services\ToolInvokerInterface` | Invokes exactly one capability by name. `CapabilityToolInvoker` is the one implementation — backed entirely by Core's own `GetCapabilityAction` / `CheckPermissionAction` / `CapabilityExecutionService`, the same three building blocks `AbstractMCPGatewayController` itself uses. |
-| ExecutionResult | `Domain\Entities\ExecutionResult` | The finished outcome of one plan run — every step's final state, a derived `status` (`completed`/`partial`/`failed`/`empty`), and a generic completion summary. |
+| ExecutionResult | `Domain\Entities\ExecutionResult` | The finished outcome of one plan run — every step's final state, a derived `status` (`completed`/`partial`/`failed`/`empty`), and a generic completion summary. `isSuccessful()`/`successfulCapabilities()`/`failedCapabilities()` (Stage 4, §7.29) are what Pattern Extraction reads. |
 | Memory | `Domain\Repositories\ExecutionMemoryRepositoryInterface` | Persists every finished `ExecutionResult` (and its steps) so it can be listed/retrieved later. `EloquentExecutionMemoryRepository` is the one implementation — two real tables (`agent_executions`/`agent_execution_steps`), not an in-process array, so history survives across requests. |
+| ExecutionPattern | `Domain\Entities\ExecutionPattern` | A learned, tenant-scoped "goals mentioning these keywords tend to need these capabilities" shorthand (Stage 4, §7.29) — `Domain\Repositories\ExecutionPatternRepositoryInterface` persists it (`execution_patterns` table); `EloquentExecutionPatternRepository` is the one implementation. |
+| PatternExtractor | `Domain\Services\PatternExtractorInterface` | Classifies a Goal's own text into a keyword pattern and turns a successful `ExecutionResult` into a fresh `ExecutionPattern`. `PatternExtractor` is the one implementation — a pure Domain calculation, no Repository dependency. |
+| LearningService | `Domain\Services\LearningServiceInterface` | Reads learned patterns back into a real `ExecutionPlan` (`suggestPlan()`) and aggregates recent execution history (`getInsights()`). `LearningService` is the one implementation. See `docs/execution-memory.md`. |
 
 ## Execution flow
 
@@ -44,10 +49,14 @@ one of them fails.
    or system-facing HTTP client) or the `agent.goal.execute` MCP capability
    (another Agent, or a future multi-agent orchestration one level up) —
    both reuse the exact same `ExecuteGoalAction`.
-2. `ExecuteGoalAction` builds a `Goal`, dispatches `GoalReceived`, loads
-   the calling `AgentType`'s own `AgentProfile` (`AgentProfileNotFoundException`
-   — 404 — if no `config/agents/{type}.php` exists for it), and asks the
-   bound `PlannerInterface` for an `ExecutionPlan`.
+2. `ExecuteGoalAction` builds a `Goal`, dispatches `GoalReceived`, and asks
+   `LearningServiceInterface::suggestPlan()` (Stage 4, §7.29) whether this
+   tenant has already solved a similar goal successfully before. If so,
+   that learned plan is used and **neither Planner nor `AgentProfile` is
+   ever consulted**. Otherwise it loads the calling `AgentType`'s own
+   `AgentProfile` (`AgentProfileNotFoundException` — 404 — if no
+   `config/agents/{type}.php` exists for it) and asks the bound
+   `PlannerInterface` for an `ExecutionPlan`.
 3. `PlanExecutor` runs each `ExecutionStep` through `CapabilityToolInvoker`,
    in order. Each step is authenticated as the calling Agent, permission-
    checked against the target capability's own `requiredPermissions`, input-
@@ -55,7 +64,10 @@ one of them fails.
    call. **A failed step is recorded and execution continues** — it never
    aborts the rest of the plan.
 4. The finished `ExecutionResult` is persisted via
-   `ExecutionMemoryRepositoryInterface` and `GoalCompleted` is dispatched.
+   `ExecutionMemoryRepositoryInterface` and `GoalCompleted` is dispatched —
+   `LearnFromExecutionListener` (Stage 4, §7.29) reacts to it, creating or
+   reinforcing an `ExecutionPattern` for next time. See
+   `docs/execution-memory.md`.
 5. The caller gets back the full step-by-step result, a derived `status`,
    and a plain-language `summary`.
 
@@ -151,6 +163,17 @@ is itself an Agent: `agent.goal.execute` / `agent.execution.get` /
 `agent.execution.list` (permissions `agent.goals.execute` /
 `agent.executions.read`) — plus `agent.profile.get`/`agent.profile.list`
 (Stage 2), mirroring the `/api/agents/profiles*` HTTP routes above.
+
+```
+GET  /api/agents/memory/insights?agent_type=ceo   # aggregate stats over recent history
+POST /api/agents/memory/suggest                   # preview the learned plan for a goal, or null
+```
+
+Also reachable over MCP: `agent.memory.insights`/`agent.memory.suggest`
+(permission `agent.memory.read` for both, Stage 4, §7.29). There is
+deliberately no `agent.memory.history` — it would be functionally
+identical to `agent.execution.list`/`GET /api/agents/executions` above.
+See `docs/execution-memory.md`.
 
 Every exception either surface can raise — a missing/invalid bearer token,
 a missing permission, an empty goal, an unknown execution id, an unknown
@@ -252,6 +275,21 @@ for the full reasoning behind each:
 - **No pre-validation of LLM-returned capability names, no per-call
   "which planner actually built this plan" record** — see
   `docs/llm-planner.md`'s own "Known scope decisions."
+- **Stage 4's own "Execution Memory Storage" request is served entirely by
+  the *existing* `ExecutionMemoryRepositoryInterface` (Stage 1)** — not a
+  new, parallel `ExecutionMemory` entity/table, and `agent.memory.history`
+  was dropped as a duplicate of `agent.execution.list`. Confirmed with the
+  user before writing any code — see `docs/execution-memory.md`'s own "Why
+  no new ExecutionMemory entity" section for the full reasoning.
+- **A pattern's success rate can fall, not just rise** — a real correction
+  from the request's own pseudocode, which only ever extracted a pattern
+  on success and never revisited one on a later failure. See
+  `docs/execution-memory.md`'s own "How Pattern Extraction works."
+- **`config/agents/*.php` profiles were not updated to list
+  `agent.memory.read` in their own `permissions` array** — that array is
+  descriptive metadata only, never a second enforcement layer (see
+  `docs/agent-profiles.md`'s own "What `permissions` does NOT do"), so
+  omitting it doesn't block anything; it's simply not yet reflected there.
 
 ## Future Roadmap
 
@@ -262,7 +300,16 @@ for the full reasoning behind each:
   another)
 - A vector database for long-term, semantic execution memory — today's
   `ExecutionMemoryRepositoryInterface` is a simple relational log, chosen
-  to already fit this future without implying it exists yet
+  to already fit this future without implying it exists yet.
+  `ExecutionPattern` matching (Stage 4, §7.29) is still a plain keyword
+  substring check, not embedding-based similarity — the natural next step
+  once this exists.
+- Pattern pruning/decay — a tenant's own `execution_patterns` rows never
+  expire or get removed today (Stage 4, §7.29)
+- A real permission-sync check between `config/agents/*.php`'s own
+  `permissions` list and the new `agent.memory.read` capabilities (Stage
+  4, §7.29 didn't add it to any profile's own list — see "Known scope
+  decisions")
 - A database-backed `AgentProfileRepositoryInterface` implementation,
   letting an operator edit a profile without a deployment — a drop-in
   replacement behind the same Interface `ConfigBasedAgentProfileRepository`

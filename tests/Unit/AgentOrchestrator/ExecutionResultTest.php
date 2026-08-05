@@ -64,4 +64,40 @@ class ExecutionResultTest extends TestCase
         $this->assertSame('empty', $result->status);
         $this->assertSame('No matching plan was found for this goal.', $result->summary);
     }
+
+    public function test_isSuccessful_isTrueOnlyWhenEveryStepCompleted(): void
+    {
+        $goal = Goal::fromText('Increase sales', AgentType::Ceo);
+
+        $completed = new ExecutionStep('commerce.coupon.create', []);
+        $completed->markAsRunning();
+        $completed->markAsCompleted(['coupon' => []]);
+
+        $this->assertTrue(ExecutionResult::fromSteps($goal, [$completed], 1.0)->isSuccessful());
+
+        $failed = new ExecutionStep('report.sales.generate', []);
+        $failed->markAsRunning();
+        $failed->markAsFailed('boom');
+
+        $this->assertFalse(ExecutionResult::fromSteps($goal, [$completed, $failed], 1.0)->isSuccessful());
+        $this->assertFalse(ExecutionResult::fromSteps($goal, [], 0.01)->isSuccessful());
+    }
+
+    public function test_successfulAndFailedCapabilities_splitStepsByTerminalStatus(): void
+    {
+        $goal = Goal::fromText('Increase sales', AgentType::Ceo);
+
+        $completed = new ExecutionStep('report.sales.generate', []);
+        $completed->markAsRunning();
+        $completed->markAsCompleted(['report' => []]);
+
+        $failed = new ExecutionStep('commerce.coupon.create', []);
+        $failed->markAsRunning();
+        $failed->markAsFailed('boom');
+
+        $result = ExecutionResult::fromSteps($goal, [$completed, $failed], 2.0);
+
+        $this->assertSame(['report.sales.generate'], $result->successfulCapabilities());
+        $this->assertSame(['commerce.coupon.create'], $result->failedCapabilities());
+    }
 }

@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\AgentOrchestrator\Infrastructure\Controllers\AgentController;
+use App\Modules\AgentOrchestrator\Infrastructure\Controllers\AgentMemoryController;
 use App\Modules\AgentOrchestrator\Infrastructure\Controllers\AgentProfileController;
 use Illuminate\Support\Facades\Route;
 
@@ -43,4 +44,11 @@ Route::prefix('api/agents')->group(function () {
     // route-level 404 with no body.
     Route::get('/profiles', [AgentProfileController::class, 'index']);
     Route::get('/profiles/{agentType}', [AgentProfileController::class, 'show']);
+
+    // Execution Memory & Learning (§7.29) — insights/suggest only; a
+    // "/memory/history" route was deliberately not added, see
+    // AgentMemoryController's own docblock (functionally identical to the
+    // already-existing GET /executions above).
+    Route::get('/memory/insights', [AgentMemoryController::class, 'insights']);
+    Route::post('/memory/suggest', [AgentMemoryController::class, 'suggest']);
 });

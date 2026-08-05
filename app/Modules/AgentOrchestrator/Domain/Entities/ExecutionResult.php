@@ -69,4 +69,46 @@ final class ExecutionResult
 
         return new self($goal, $steps, $status, $summary, $executionTimeSeconds);
     }
+
+    /**
+     * A full success only — every planned step completed, none failed.
+     * `'partial'` is deliberately not success here (Phase 6, Stage 4,
+     * §7.29's own PatternExtractor only ever learns from a run where the
+     * *whole* plan worked; a partially-failed run is not a pattern worth
+     * repeating). Matches `status === 'completed'` exactly — added as a
+     * named method rather than repeating that string comparison in every
+     * new §7.29 class that needs it.
+     */
+    public function isSuccessful(): bool
+    {
+        return $this->status === 'completed';
+    }
+
+    /**
+     * Capability names for every step that actually completed, in plan
+     * order, duplicates included (order/repetition matters for a future
+     * pattern's own "these ran together" signal — HANDOFF §7.29). Never
+     * includes a Skipped/Pending step, and never a Failed one — see
+     * `failedCapabilities()` for those.
+     *
+     * @return list<string>
+     */
+    public function successfulCapabilities(): array
+    {
+        return array_values(array_map(
+            fn (ExecutionStep $step) => $step->capability,
+            array_filter($this->steps, fn (ExecutionStep $step) => $step->status() === StepStatus::Completed),
+        ));
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function failedCapabilities(): array
+    {
+        return array_values(array_map(
+            fn (ExecutionStep $step) => $step->capability,
+            array_filter($this->steps, fn (ExecutionStep $step) => $step->status() === StepStatus::Failed),
+        ));
+    }
 }
