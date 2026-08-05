@@ -5840,7 +5840,7 @@ built, roughly in order of how much they'd reuse what already exists:
   `OrderConnectorInterface` still has no implementation.
 - **A dedicated `capabilities:sync` artisan command**, graduating away from
   the seeder pattern — flagged as an open decision since Phase 1, still
-  open, now with 70 capabilities across ten seeders instead of 3.
+  open, now with 113 capabilities across ten seeders instead of 3.
 - **A real v3, or retiring v1 once 2028-01-01 passes** (§7.19) — the
   versioning infrastructure (`ApiVersion` enum, `ShippingProviderName`-style
   modeled-but-unimplemented `V3` case, `config('api.deprecation')`) is
@@ -5851,3 +5851,73 @@ built, roughly in order of how much they'd reuse what already exists:
 
 Whatever comes next, follow §3's patterns and check §8 before assuming a
 piece of the puzzle doesn't already exist.
+
+---
+
+## 10. Documentation Sync — 2026-08-05 (post-Phase-5, no code changes)
+
+**Not a build stage — a docs-only pass, done after Phase 5, Stage 5
+(§7.25) shipped, because `docs/roadmap.md` and `README.md` had gone stale
+all the way back to a pre-Phase-1 "Foundation Phase" framing (every
+roadmap checkbox unchecked, zero mention of Phases 2 through 5 anywhere)
+despite the platform being 5 phases in.** Recorded here, appended rather
+than folded into §7.25's own text, so a fresh session picking up this file
+knows this happened as its own discrete pass and can see exactly what's
+still open from it.
+
+**Fixed:**
+- `docs/roadmap.md` — full rewrite. Was 3 phases (1–3) with no stage
+  detail and no completion status at all; now lists all 5 completed
+  Phases with their Stages and a ✅ status, a "Phase 6 — Not Yet Scoped"
+  section pulling candidates from this file's own §9, and a separate
+  cross-cutting infrastructure track (Laravel 13, CI coverage, Redis,
+  etc.) kept apart from phase-bound work.
+- `README.md` — three sections corrected: **Beyond Commerce** now lists
+  the 9 real Domain Modules (CRM, Finance, Workflows, Loyalty, Reporting,
+  Shipping, Notifications, Analytics, + the Admin Dashboard) instead of
+  presenting all of them as still-speculative future work; **Roadmap**
+  checklist items are checked off accurately; **Project Status** replaced
+  the stale "🚧 Foundation Phase" badge with the real state (885 tests,
+  113 MCP capabilities, 10 modules).
+- `docs/api/v1/capabilities.md` and `docs/api/v2/README.md` — both
+  hardcoded a stale capability count ("70") from whichever stage last
+  hand-edited them; corrected to 113 in both places (the JSON example
+  `meta.count` and the surrounding prose).
+- `docs/architecture.md`/`docs/modules.md` — both are doctrine documents
+  (describe the *shape* the platform follows, not a status tracker) and
+  were deliberately left otherwise untouched, but each gained a short
+  pointer note at the top to `docs/roadmap.md`/this file, so a reader
+  doesn't mistake either doctrine doc's own illustrative "Examples:
+  Commerce, CRM, ERP, Finance, Healthcare..." lists for a claim about
+  what's actually built.
+- This file's own §9 — one more stale "70 capabilities across ten
+  seeders" reference corrected to 113 (same root cause as the API docs
+  above — a count that stopped being updated after an early stage).
+
+**Found, flagged, and deliberately NOT fixed this pass — a real gap
+worth knowing about before trusting this file blindly:** `docs/api-reference.md`
+claims in its own intro paragraph to be "generated from each module's own
+capability manifest... so it stays accurate to what's actually wired" —
+but it was only ever generated once, during the Tech Debt Sprint (between
+Phase 4 Stages 1–2, §7.13), and has not been regenerated since. It covers
+roughly Commerce-through-Shipping as those modules existed at that single
+point in time — it is missing Notifications, Analytics, API Versioning's
+own v2 surface, Performance Optimization, and everything from Phase 5
+(Product Variants, Multi-warehouse Inventory, Bulk Operations, Advanced
+Discount Rules, Subscriptions) — over 60 of the platform's 113
+capabilities aren't in it. Regenerating it properly means reading all 10
+modules' own `Interfaces/MCP/*Capabilities.php` manifests and rebuilding
+its `## Capabilities by Module` table from scratch (name/description/
+input/output/permission per capability) — a real, sizeable, mostly
+mechanical task, not attempted this pass since it was out of scope for
+what was asked. Added an honest staleness banner at the top of that file
+itself rather than silently leaving its own "never drift apart" claim
+false. **This file's own §6 table is the current, authoritative source**
+until `docs/api-reference.md` is actually regenerated — don't trust
+`docs/api-reference.md` for anything past Shipping without cross-checking
+here first.
+
+No code, tests, migrations, or capabilities changed in this pass — 885
+tests still passing, same as §7.25's own closing count. Committed as
+`docs: bring roadmap, README, and API docs in line with Phases 1-5`
+(pushed to `origin/main`, commit `29fa0cb`).
