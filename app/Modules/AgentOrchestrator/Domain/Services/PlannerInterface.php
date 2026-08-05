@@ -18,16 +18,29 @@ use App\Modules\AgentOrchestrator\Domain\Entities\Goal;
  * each planned capability is enforced later, per step, by
  * ToolInvokerInterface.
  *
- * `DeterministicPlanner` (Application/Services) is the only implementation
- * today — reads an AgentProfile's own config-declared rules, still no
- * real reasoning. A future LLM-based implementation is a drop-in
- * replacement behind this same Interface (Interfaces Over Tight
- * Coupling); nothing above the Interface — PlanExecutor, ExecuteGoalAction
- * — needs to change, and it would presumably still take the same
- * AgentProfile as context (a persona's own permissions/description are
- * exactly the kind of thing a real planner would want to reason with).
+ * Two implementations exist as of Phase 6, Stage 3 (§7.28):
+ * `DeterministicPlanner` (Application/Services, config-driven table
+ * lookups, no real reasoning) and `LLMPlanner` (Application/Services,
+ * delegates to a real LLM provider through `LLMClientInterface`, falling
+ * back to a `DeterministicPlanner` instance on any failure). Which one is
+ * bound to this Interface is a single config-driven choice
+ * (`config('agent-orchestrator.planner.type')`,
+ * `AgentOrchestratorServiceProvider::register()`) — nothing above the
+ * Interface (PlanExecutor, ExecuteGoalAction, either HTTP/MCP surface)
+ * needs to know or care which one is active (Interfaces Over Tight
+ * Coupling).
  */
 interface PlannerInterface
 {
     public function createPlan(Goal $goal, AgentProfile $profile): ExecutionPlan;
+
+    /**
+     * A static capability descriptor, not a per-call runtime signal —
+     * `false` for `DeterministicPlanner`, `true` for `LLMPlanner` (even
+     * when `LLMPlanner` silently falls back to a deterministic plan on a
+     * given call — see that class's own docblock for why per-call
+     * "which planner actually produced this specific plan" tracking is a
+     * real, honest gap, not built this stage, HANDOFF §8).
+     */
+    public function supportsLLM(): bool;
 }

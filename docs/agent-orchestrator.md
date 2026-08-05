@@ -1,10 +1,12 @@
 # Agent Orchestrator Module
 
 > Added in Phase 6, Stage 1 (§7.26 in `HANDOFF.md`), extended in Stage 2
-> — Agent Profiles + the CEO Agent (§7.27). This document is the module's
-> own reference; `HANDOFF.md` §7.26/§7.27 carry the full narrative of what
-> was built, what was corrected from the original requests, and why. See
-> `docs/agent-profiles.md` for the how-to-add-a-new-Agent guide.
+> — Agent Profiles + the CEO Agent (§7.27) — and Stage 3 — an LLM-based
+> Planner (§7.28). This document is the module's own reference;
+> `HANDOFF.md` §7.26/§7.27/§7.28 carry the full narrative of what was
+> built, what was corrected from the original requests, and why. See
+> `docs/agent-profiles.md` for the how-to-add-a-new-Agent guide and
+> `docs/llm-planner.md` for the how-to-use-the-LLM-planner guide.
 
 ## Overview
 
@@ -28,7 +30,8 @@ one of them fails.
 | Goal | `Domain\Entities\Goal` | A business objective as plain text + an `AgentType` classification. |
 | AgentProfile | `Domain\Entities\AgentProfile` | The config-driven definition of one Agent persona — `planning_rules` (goal-keyword → capabilities) + `default_inputs` (capability → raw input), read from `config/agents/{type}.php`. See `docs/agent-profiles.md`. |
 | Profile repository | `Domain\Repositories\AgentProfileRepositoryInterface` | Loads an `AgentProfile` by type. `ConfigBasedAgentProfileRepository` is the one implementation — reads via Laravel's own `config()`, never the filesystem directly. |
-| Planner | `Domain\Services\PlannerInterface` | Turns a Goal + the calling Agent's own `AgentProfile` into an `ExecutionPlan`. `DeterministicPlanner` is the one MVP implementation — reads the profile's own rules/inputs, resolves a small set of template tokens (`{date:N}`/`{coupon_code}`/`{discount_percent}`) into real values. |
+| Planner | `Domain\Services\PlannerInterface` | Turns a Goal + the calling Agent's own `AgentProfile` into an `ExecutionPlan`. Two implementations: `DeterministicPlanner` (config-driven rule lookups, resolves a small set of template tokens) and `LLMPlanner` (asks a real LLM provider, falls back to `DeterministicPlanner` on any failure) — chosen by `config('agent-orchestrator.planner.type')`. See `docs/llm-planner.md`. |
+| LLM client | `Domain\Services\LLMClientInterface` | A thin port over one LLM provider's own API. `OpenAIClient`/`ClaudeClient` are the two real implementations, chosen by `config('agent-orchestrator.llm.provider')`. |
 | ExecutionPlan / ExecutionStep | `Domain\Entities\{ExecutionPlan,ExecutionStep}` | The plan itself, and each individual planned capability call (`capability` + `input` + `priority`), with mutable `status`/`output`/`error` as it runs. |
 | Executor | `Domain\Services\PlanExecutorInterface` | Runs every step of a plan, in order, never aborting on a single step's failure. `PlanExecutor` is the one implementation. |
 | ToolInvoker | `Domain\Services\ToolInvokerInterface` | Invokes exactly one capability by name. `CapabilityToolInvoker` is the one implementation — backed entirely by Core's own `GetCapabilityAction` / `CheckPermissionAction` / `CapabilityExecutionService`, the same three building blocks `AbstractMCPGatewayController` itself uses. |
@@ -238,11 +241,20 @@ for the full reasoning behind each:
   (`HANDOFF.md` §3 pattern #1), because this module's whole job is
   re-entering the same MCP capability boundary that rule was written to
   keep AuthContext *at*. See `ToolInvokerInterface`'s own docblock.
+- **`LLMPlanner` uses Core's own `DiscoverCapabilitiesAction`, not a
+  "CapabilityRegistry" class** — no such class exists anywhere in this
+  codebase; `DiscoverCapabilitiesAction` is the real, already-existing
+  building block `GET /mcp/v1/capabilities` itself uses.
+- **`config/agent-orchestrator.php`'s own `planner.type` defaults to
+  `deterministic`, not `llm`** — defaulting a fresh environment with no
+  real API key to attempting real network calls on every goal isn't a
+  safe default; see `docs/llm-planner.md`.
+- **No pre-validation of LLM-returned capability names, no per-call
+  "which planner actually built this plan" record** — see
+  `docs/llm-planner.md`'s own "Known scope decisions."
 
 ## Future Roadmap
 
-- LLM-based planning (a second `PlannerInterface` implementation, reading
-  the same `AgentProfile` for context)
 - Recursive planning (a step's own output feeding a later step's input)
 - Self-reflection (the Orchestrator revising a plan mid-run based on a
   step's result)
@@ -262,3 +274,7 @@ for the full reasoning behind each:
   can drift — see `docs/agent-profiles.md`)
 - A Dashboard page under `/dashboard/agents` (every other Phase 4/5
   resource got one; this module didn't request one)
+- A third `LLMClientInterface` provider (see `docs/llm-planner.md`'s own
+  "Adding a third provider")
+- Capability-list caching/pruning for `LLMPlanner`'s own prompt (today
+  sends all 118, uncached, on every planning call)

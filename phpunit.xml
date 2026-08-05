@@ -35,6 +35,13 @@
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
+        <!-- Phase 6, Stage 3 (§7.28) — explicit, not just relying on
+             config/agent-orchestrator.php's own default: the whole suite
+             must never attempt a real LLM network call. Tests that
+             specifically exercise LLMPlanner override this per-test via
+             config(['agent-orchestrator.planner.type' => 'llm']) after
+             also rebinding LLMClientInterface to a fake. -->
+        <env name="PLANNER_TYPE" value="deterministic"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>

@@ -1,12 +1,24 @@
 # OpenCommerce Platform — Session Handoff
 
-**Status: Phase 6, Stage 2 (Agent Profiles + CEO Agent, §7.27) is now
+**Status: Phase 6, Stage 3 (LLM-based Planner, §7.28) is now complete —
+`PlannerInterface` has a second, real implementation (`LLMPlanner`,
+OpenAI/Claude-backed) alongside Stage 1/2's config-driven
+`DeterministicPlanner`, switchable with one env var
+(`PLANNER_TYPE=llm`), and falls back to the deterministic planner
+automatically on any failure so a broken/unreachable LLM never turns
+into a hard failure for the caller. Ships defaulted to
+`PLANNER_TYPE=deterministic` — a deliberate correction from the
+request's own `.env.example` default, see §7.28. 966 tests passing
+(936 + 30 new), 118 MCP capabilities (unchanged — no new capability
+names this stage), zero known regressions. See §7.28 for the full
+detail.**
+
+**Status: Phase 6, Stage 2 (Agent Profiles + CEO Agent, §7.27) is
 complete — every Agent persona's own planning rules now live in
 `config/agents/{type}.php` instead of PHP (`DeterministicPlanner` reads
 an `AgentProfile` instead of hardcoding keyword branches per type), and
-the CEO Agent is the first fully-realized persona. 936 tests passing
-(920 + 16 new), 118 MCP capabilities (116 + 2 new), zero known
-regressions. See §7.27 for the full detail.**
+the CEO Agent is the first fully-realized persona. See §7.27 for the
+full detail.**
 
 **Status: Phase 6, Stage 1 (Agent Orchestrator, §7.26) is complete — the
 platform's first module built after Phase 5 finished, and its first that
@@ -904,7 +916,30 @@ in `ConfigBasedAgentProfileRepository::listAll()`'s own request-specified
 by reading `config('agents')` instead) — see §7.27 for the full detail.**
 
 936 tests passing (920 + 16 new), 118 MCP capabilities, zero known
-regressions. See §9 for what's next across the whole platform.
+regressions.
+
+**Phase 6, Stage 3 (LLM-based Planner, §7.28) ran immediately after Stage
+2 — a second, real `PlannerInterface` implementation (`LLMPlanner`) that
+asks a configured LLM provider (OpenAI or Claude, `LLMClientInterface`)
+to plan a Goal against every capability the platform has (via Core's own
+`DiscoverCapabilitiesAction` — not a "CapabilityRegistry" class, which
+doesn't exist anywhere in this codebase, the request's own pseudocode
+notwithstanding), falling back to `DeterministicPlanner` automatically on
+any failure. Both `OpenAIClient`/`ClaudeClient` are real, Guzzle-backed
+implementations (no live credentials exist in this dev environment, the
+same "needs real credentials to test honestly" reasoning every external
+Connector in this codebase already carries) — every test injects a fake
+`LLMClientInterface` or a Guzzle `MockHandler`-backed real client
+instead. One real, deliberate correction from the request's own
+`.env.example`: `PLANNER_TYPE` defaults to `deterministic`, not `llm` —
+defaulting a fresh environment with no API key to real, keyless network
+calls on every goal isn't a safe default, the same "safe default for
+local dev/test, real infra opted into explicitly" reasoning
+`CACHE_STORE=database`/`WOOCOMMERCE_*` already establish. See §7.28 for
+the full detail.**
+
+966 tests passing (936 + 30 new), 118 MCP capabilities (unchanged), zero
+known regressions. See §9 for what's next across the whole platform.
 
 This file is a working-state snapshot for picking up development in a new
 session. It assumes you've already read `CLAUDE.md` and `docs/*.md` (the
@@ -1190,7 +1225,7 @@ Controllers Rule: no business logic in Controllers). Gated by the `auth`
 - **Seeded default admin**: `admin@opencommerce.test` / `password`
   (`DatabaseSeeder`) — change or remove before any real deployment.
 
-### `app/Modules/AgentOrchestrator/` — **new in Phase 6, Stage 1 (§7.26), extended in Stage 2 (Agent Profiles + CEO Agent, §7.27). Goal -> Plan -> Execute — an orchestration layer over every other module's own MCP capabilities, with no business logic of its own.**
+### `app/Modules/AgentOrchestrator/` — **new in Phase 6, Stage 1 (§7.26), extended in Stage 2 (Agent Profiles + CEO Agent, §7.27) and Stage 3 (LLM-based Planner, §7.28). Goal -> Plan -> Execute — an orchestration layer over every other module's own MCP capabilities, with no business logic of its own.**
 
 See §7.26 for the full detail. 4 Domain Entities (`Goal`, `ExecutionPlan`,
 `ExecutionStep`, `ExecutionResult`), 3 Value Objects (`AgentType`,
@@ -1276,6 +1311,31 @@ values. Four config files ship (`config/agents/{ceo,sales,support,finance}.php`)
 required by its own explicit "backward compatible" rule, migrating Stage
 1's own hardcoded rules for those two types into the new config shape
 verbatim. See §7.27 for the full detail.**
+
+**Stage 3 (§7.28) added `LLMClientInterface` (Domain Service) +
+`OpenAIClient`/`ClaudeClient` (Application/Services, real Guzzle-backed
+implementations, injectable `ClientInterface` for tests — the same shape
+`WooCommerceClient` already establishes) + `LLMRequestFailedException`
+(neither Core marker interface, same reasoning `WooCommerceApiException`
+has). `PlannerInterface` gained `supportsLLM(): bool`;
+`LLMPlanner` (Application/Services) is the second real implementation —
+builds a prompt (`PlanningPromptTemplate`) from the Goal, the calling
+`AgentProfile`, and every capability Core's own `DiscoverCapabilitiesAction`
+returns, asks the configured provider for a structured response, converts
+it into a real `ExecutionPlan`, and falls back to the injected
+`DeterministicPlanner` on any failure (network, malformed response, a
+step missing a valid capability name) unless
+`config('agent-orchestrator.planner.fallback_to_deterministic')` is
+`false`. `AgentOrchestratorServiceProvider::register()` binds both
+`LLMClientInterface` (by `llm.provider`) and `PlannerInterface` (by
+`planner.type`) as closures re-evaluated on every resolution, not
+`singleton()`, specifically so a test can flip `config()` and immediately
+get the other implementation. New config file: `config/agent-orchestrator.php`
+— `planner.type` defaults to `deterministic`, a real, documented
+correction from the request's own `.env.example` (which defaulted to
+`llm`) — see §7.28 for the full reasoning. No new MCP capabilities this
+stage (the planner swap is entirely internal to how `agent.goal.execute`/
+`/api/agents/{agent_type}` already work).**
 
 ### `app/Modules/Demo/` — unchanged since Phase 1
 
@@ -1915,12 +1975,15 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │   │                             this module's own LogExecutionStepListener,
 │   │                             which only reacts to StepExecuted)
 │   ├── Services/                 PlannerInterface (createPlan() gained a
-│   │                             required AgentProfile parameter, §7.27),
+│   │                             required AgentProfile parameter, §7.27;
+│   │                             + supportsLLM(): bool, §7.28),
 │   │                             PlanExecutorInterface, ToolInvokerInterface
 │   │                             (the latter two take AuthContext directly
 │   │                             — the one deliberate exception to §3
 │   │                             pattern #1 in this codebase, see
-│   │                             ToolInvokerInterface's own docblock)
+│   │                             ToolInvokerInterface's own docblock), +
+│   │                             LLMClientInterface (§7.28 — a thin port
+│   │                             over one LLM provider's own API)
 │   ├── Repositories/              ExecutionMemoryRepositoryInterface (owns
 │   │                             ExecutionStep persistence too), +
 │   │                             AgentProfileRepositoryInterface (§7.27)
@@ -1933,8 +1996,12 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │                                  #9), ExecutionNotFoundException (added
 │                                  unprompted, §3 pattern #12), +
 │                                  AgentProfileNotFoundException (§7.27 —
-│                                  all 3 *NotFoundException classes
-│                                  implement NotFoundExceptionInterface)
+│                                  these 3 *NotFoundException classes all
+│                                  implement NotFoundExceptionInterface),
+│                                  + LLMRequestFailedException (§7.28 —
+│                                  implements neither marker interface,
+│                                  same reasoning WooCommerceApiException
+│                                  has)
 ├── Application/
 │   ├── Actions/                  ExecuteGoalAction (the one Action every
 │   │                             Agent-facing surface calls into — the
@@ -1961,7 +2028,19 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │   │                             AgentProfile's own planning_rules/
 │   │                             default_inputs instead and resolves a
 │   │                             small set of template tokens, see its own
-│   │                             docblock), PlanExecutor, CapabilityToolInvoker
+│   │                             docblock), PlanExecutor, CapabilityToolInvoker,
+│   │                             + LLMPlanner (§7.28 — the 2nd
+│   │                             PlannerInterface implementation, asks a
+│   │                             real LLM provider, falls back to an
+│   │                             injected DeterministicPlanner on any
+│   │                             failure), OpenAIClient, ClaudeClient
+│   │                             (§7.28 — real Guzzle-backed
+│   │                             LLMClientInterface implementations,
+│   │                             mirroring WooCommerceClient's own
+│   │                             injectable-ClientInterface shape)
+│   ├── Prompts/                  PlanningPromptTemplate (§7.28 — pure
+│   │                             string formatting, no LLM-specific
+│   │                             concerns)
 │   └── Listeners/                LogExecutionStepListener (owns every
 │                                  "a step ran" log line — kept out of
 │                                  PlanExecutor itself)
@@ -2000,11 +2079,19 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │                                  pattern #12; +2 definitions in §7.27 —
 │                                  agent.profile.get/.list)
 └── AgentOrchestratorServiceProvider.php   binds ExecutionMemoryRepositoryInterface/
-                                   PlannerInterface/ToolInvokerInterface/
-                                   PlanExecutorInterface, + AgentProfileRepositoryInterface
-                                   (§7.27), loads routes/agents.php,
-                                   Event::listen()s LogExecutionStepListener,
-                                   registers 5 capability handlers (§6, 3+2)
+                                   ToolInvokerInterface/PlanExecutorInterface/
+                                   AgentProfileRepositoryInterface (§7.27),
+                                   + LLMClientInterface (by llm.provider)
+                                   and PlannerInterface (by planner.type)
+                                   as closures re-evaluated on every
+                                   resolution, never singleton() — a test
+                                   flips config() and immediately gets the
+                                   other implementation (§7.28); loads
+                                   routes/agents.php, Event::listen()s
+                                   LogExecutionStepListener, registers 5
+                                   capability handlers (§6, 3+2 — unchanged
+                                   this stage, the planner swap added no
+                                   new capabilities)
 
 routes/agents.php                  new in Phase 6, Stage 1 (§7.26) —
                                    loaded by
@@ -2021,6 +2108,21 @@ config/agents/{ceo,sales,support,finance}.php   new in Phase 6, Stage 2
                                    adding a new persona is exactly one new
                                    file here, no PHP change (see
                                    docs/agent-profiles.md)
+
+config/agent-orchestrator.php      new in Phase 6, Stage 3 (§7.28) —
+                                   llm.provider/openai/claude +
+                                   planner.type/fallback_to_deterministic;
+                                   planner.type defaults to
+                                   `deterministic`, a real correction from
+                                   the request's own `.env.example`
+                                   default of `llm` (see docs/llm-planner.md)
+
+phpunit.xml                        + PLANNER_TYPE=deterministic (§7.28) —
+                                   explicit, not just relying on the
+                                   config file's own default, so the whole
+                                   suite never attempts a real LLM network
+                                   call; LLM-specific tests override this
+                                   per-test via config()
 
 app/Core/Exceptions/MCPExceptionHandler.php   handles() extended to also
                                    match api/agents/* (§7.26) — also fixed
@@ -5948,7 +6050,145 @@ Stage 1's now-superseded behavior.
 
 936 tests passing (920 + 16 new), 2431 assertions (2393 + 38 new), zero
 known regressions — confirmed by actually running the full suite. Phase 6,
-Stage 2 is complete. See §9 for what's next.
+Stage 2 is complete.
+
+### 7.28 Phase 6, Stage 3 — LLM-based Planner
+
+**Upgrades the Orchestrator from "deterministic" to "intelligent," per
+this stage's own explicit framing — a second, real `PlannerInterface`
+implementation that delegates actual reasoning to a real LLM provider,
+switchable with one config value, falling back to the existing
+deterministic path on any failure so the upgrade is purely additive: a
+caller who never sets `PLANNER_TYPE=llm` sees zero behavior change from
+Stage 2.** Built in the same two-part shape the request itself specified
+— a provider-agnostic LLM integration layer first (`LLMClientInterface`
++ two real implementations), then `LLMPlanner` on top of it — though both
+landed together this session rather than as a literal two-PR split, since
+neither part is independently useful without the other.
+
+**The request's own pseudocode referenced `CapabilityRegistry` (`$capabilityRegistry->getAll()`)
+— no such class exists anywhere in this codebase.** Audited before
+writing any code, the same discipline every prior stage's own
+request-vs-codebase check already established (§7.20 onward — most
+recently Stage 2's own `glob()`→`config()` correction, §7.27). The real,
+already-existing building block is Core's own `DiscoverCapabilitiesAction`
+— literally the same Action `GET /mcp/v1/capabilities` itself calls to
+list every registered capability (its own docblock: "Discovery is
+documentation... actual authorization is enforced separately, at
+execution time"). `LLMPlanner` constructor-injects it directly, the same
+"depend on the real existing building block, not an invented one" shape
+every prior capability-name/mechanism correction in this codebase has
+followed.
+
+**`PlannerInterface` gained `supportsLLM(): bool`, exactly as requested**
+— a static capability descriptor (`false` for `DeterministicPlanner`,
+`true` for `LLMPlanner`), not a per-call runtime signal. It does **not**
+answer "did *this specific* plan actually come from the LLM, or did it
+silently fall back?" — that would need a different mechanism (a field on
+`ExecutionResult`/the persisted `Execution` row), which the request never
+asked for and wasn't added unprompted this stage; flagged as a real,
+honest gap in §8/`docs/llm-planner.md` rather than conflated with what
+`supportsLLM()` actually answers.
+
+**Fallback is real and tested, not just a try/catch around the happy
+path.** `LLMPlanner::createPlan()` wraps the entire discover-capabilities
+→ build-prompt → call-LLM → parse-response → build-plan sequence in one
+try/catch (`Throwable`, matching `PlanExecutor`'s/`ExecuteGoalAction`'s own
+convention of catching broadly at an orchestration boundary) — a network
+failure, a non-2xx response, a malformed JSON body, or a well-formed JSON
+body missing the expected `steps` shape all funnel through the identical
+path: log a warning, return whatever the injected fallback `PlannerInterface`
+(a `DeterministicPlanner` in practice, resolved via the container, not
+`new DeterministicPlanner()` as the request's own pseudocode wrote — a
+small, harmless consistency correction, letting the container manage
+every dependency uniformly) produces instead. `FallbackPlannerTest`
+proves the fallback plan is **byte-identical** to what a direct
+`PLANNER_TYPE=deterministic` call would produce for the same goal — not
+merely "some plan," the real one.
+
+**The request's own `config('agent-orchestrator.planner.fallback_to_deterministic')`
+flag is genuinely wired, not decorative** — `LLMPlanner` takes a
+constructor-level `bool $fallbackEnabled = true`; when `false`, a caught
+failure is logged the same way but then rethrown rather than
+substituted, propagating up through `ExecuteGoalAction`'s own existing
+try/catch (wrapped in `GoalExecutionFailedException`) to
+`MCPExceptionHandler`'s default `INTERNAL_ERROR`/500 branch. Useful while
+debugging the LLM integration itself, where a silent substitution would
+hide the real problem — confirmed as a real, tested behavior
+(`FallbackPlannerTest::test_whenFallbackIsDisabledTheFailurePropagatesAsAnError`),
+not left as an inert config key nobody reads.
+
+**One real, deliberate correction from the request's own `.env.example`
+default:** `PLANNER_TYPE=llm` there would make a fresh `composer install`
+— with no `OPENAI_API_KEY` configured — attempt a real, keyless network
+request to `api.openai.com` on every single `/api/agents/*` call before
+falling back. Whether that fails fast (connection refused) or hangs
+depends entirely on the local network environment, and either way it's
+not a sane default for a codebase whose own established convention
+(`WOOCOMMERCE_*`, `CACHE_STORE=database`, `DB_PERSISTENT_CONNECTIONS=false`)
+is consistently "real infrastructure opted into explicitly, safe default
+for local dev/CI/test otherwise." `config/agent-orchestrator.php`'s own
+`planner.type` defaults to `deterministic` instead — `.env.example`
+matches. `phpunit.xml` also explicitly sets `PLANNER_TYPE=deterministic`
+(belt-and-suspenders, not relying solely on the config file's own
+default) so the entire test suite is guaranteed to never attempt a real
+LLM call; the handful of tests that specifically exercise `LLMPlanner`
+override this per-test via `config(['agent-orchestrator.planner.type' => 'llm'])`
+*and* rebind `LLMClientInterface` to a fake before resolving
+`PlannerInterface` — both bindings are closures re-evaluated on every
+container resolution (`bind()`, never `singleton()`), specifically so
+this rebind-in-a-test pattern works, unlike the `ConnectorRegistry`-style
+gotcha (HANDOFF §4 item 11) where a already-constructed instance held
+inside a registry can't be swapped this way.
+
+**`OpenAIClient`/`ClaudeClient` are both real, Guzzle-backed
+implementations** — no live OpenAI/Anthropic credentials exist in this
+dev environment, the identical "needs real credentials to test honestly"
+situation `WooCommerceClient`/`MockShippingProviderAdapter`/`SmsSender`
+are all already in. Both mirror `WooCommerceClient`'s own exact shape: a
+required config scalar or two in the constructor, an optional injectable
+`?ClientInterface $http = null` defaulting to a real `GuzzleHttp\Client`,
+every Guzzle-level failure normalized into one exception type
+(`LLMRequestFailedException`). `completeStructured()` uses each
+provider's own idiomatic structured-output mechanism rather than a
+naive "ask for JSON in the prompt, hope for the best" on either one:
+OpenAI's `response_format: json_object` (the schema itself is embedded in
+the prompt text, since that mode only guarantees syntactically valid
+JSON, not schema conformance — OpenAI's Chat Completions API has no
+separate "enforce this schema" parameter the Interface's own `$schema`
+argument might suggest) versus Claude's own tool-use mechanism (a single
+forced `tool_choice`, `input_schema` set directly to the caller's schema
+— genuinely schema-validated by the API itself before the response is
+ever returned, a real capability difference between the two providers
+worth knowing before assuming they behave identically).
+
+**Every LLM-facing test uses either a fake `LLMClientInterface` (an
+anonymous class, for `LLMPlannerTest`/`FallbackPlannerTest`/
+`LLMPlannerIntegrationTest`) or a Guzzle `MockHandler`-backed real client
+(`OpenAIClientTest`/`ClaudeClientTest`, proving the real HTTP request/
+response-parsing code itself, not just the port it implements) — never a
+real network call**, satisfying this stage's own explicit "Mock LLM
+responses in tests" rule at two different levels of the stack.
+
+New tests: `tests/Unit/AgentOrchestrator/{PromptTemplateTest,OpenAIClientTest,ClaudeClientTest}.php`
+(framework-free — the latter two via Guzzle `MockHandler`, no Laravel
+container needed since `OpenAIClient`/`ClaudeClient` take a plain
+injectable `ClientInterface`), `tests/Feature/AgentOrchestrator/LLMPlannerTest.php`
+(moved from an intended Unit test to Feature — `LLMPlanner` logs through
+the `Log` facade, the identical reason `PlanExecutorTest` is a Feature
+test, §7.26 — no database touched, a fake `CapabilityRepositoryInterface`
+stands in for the real Eloquent one so a real `DiscoverCapabilitiesAction`
+can be constructed without one), `tests/Feature/AgentOrchestrator/{LLMPlannerIntegrationTest,FallbackPlannerTest,PlannerConfigTest}.php`
+(the literal end-to-end scenario — a fake LLM response drives a real
+`POST /api/agents/ceo` execution end to end; a thrown/malformed LLM
+response falls back to the byte-identical deterministic plan, proven via
+`Log::spy()` assertions too; `PLANNER_TYPE`/`LLM_PROVIDER` config
+switching resolves the correct concrete class each way, including the
+unsupported-provider error path).
+
+966 tests passing (936 + 30 new), 2484 assertions (2431 + 53 new), zero
+known regressions — confirmed by actually running the full suite. Phase 6,
+Stage 3 is complete. See §9 for what's next.
 
 ---
 
@@ -6403,6 +6643,31 @@ Stage 2 is complete. See §9 for what's next.
 75. **No Dashboard UI for Agent Profiles** (§7.27) — same gap item 69
     already flags for Executions/Goals, now also true for
     `/api/agents/profiles`'s own data.
+76. **No pre-validation of an LLM-returned capability name against the
+    real Capability Registry** (§7.28) — a hallucinated capability name
+    simply fails that one step at execution time
+    (`CapabilityNotFoundException`), the same as any other bad plan;
+    `LLMPlanner` never checks the LLM's own claimed capability names
+    against `DiscoverCapabilitiesAction`'s own list before returning a
+    plan built from them.
+77. **`supportsLLM()` is a static capability flag, not a per-call
+    "which planner actually produced this plan" record** (§7.28) — it's
+    `true` for `LLMPlanner` even on a call that silently fell back to the
+    deterministic path; only the log lines capture the real per-call
+    outcome, nothing on `ExecutionResult`/the persisted `Execution` row
+    does.
+78. **`LLMPlanner` sends the full, uncached capability list (118 today)
+    on every single planning call** (§7.28) — no pruning by relevance to
+    the goal, no caching of the formatted capability text between calls;
+    a real, non-trivial prompt-size cost this stage's own request
+    explicitly expected ("Prompt ساخته می‌شود با ۱۰۰+ capability
+    موجود"), not addressed further.
+79. **No live end-to-end verification against a real OpenAI/Claude API
+    exists anywhere** (§7.28) — the same "real infra assumed in
+    production, verified honestly only once real credentials exist"
+    shape every external Connector in this codebase already carries
+    (WooCommerce, shipping carriers, SMS). `OpenAIClient`/`ClaudeClient`
+    are real, tested against mocked HTTP only.
 
 ---
 
@@ -6411,30 +6676,42 @@ Stage 2 is complete. See §9 for what's next.
 Phase 2 (Commerce, all 6 Stages), Phase 3 (CRM, Finance, Workflows,
 Loyalty, Reporting — all 5 Stages), Phase 4 (Shipping & Logistics, all 8
 Stages), Phase 5 (Advanced Commerce, all 5 Stages), Phase 6 Stage 1
-(Agent Orchestrator, §7.26), and now **Phase 6, Stage 2 (Agent Profiles +
-CEO Agent, §7.27)** are all complete. Phase 6 itself is only two Stages
-in — whoever drives scope next is choosing where the platform goes from
-here, not just picking the next item off this list (the same framing
-that applied after Phase 4 and Phase 5 each finished). Candidates
-specific to what Phase 6 has already built, roughly in order of how much
-they'd reuse what already exists:
+(Agent Orchestrator, §7.26), Phase 6 Stage 2 (Agent Profiles + CEO Agent,
+§7.27), and now **Phase 6, Stage 3 (LLM-based Planner, §7.28)** are all
+complete. Phase 6 itself is only three Stages in — whoever drives scope
+next is choosing where the platform goes from here, not just picking the
+next item off this list (the same framing that applied after Phase 4 and
+Phase 5 each finished). Candidates specific to what Phase 6 has already
+built, roughly in order of how much they'd reuse what already exists:
 
+- **Stand up real OpenAI/Claude credentials and verify `LLMPlanner`
+  end to end against a live API** (§8.79) — every test so far is against
+  a mock; a real run is the natural next increment once credentials
+  exist, the same "real infra assumed in production, verified honestly
+  once credentials exist" step every external Connector in this codebase
+  eventually needs.
 - **Give each Agent persona real identity/specialized behavior beyond its
   own `planning_rules`** (§7.27) — CEO/Sales/Support/Finance all have
   working profiles now, but "a persona" today only means "a different
   config-driven rule table"; nothing yet gives one its own memory,
   conversational state, or genuinely distinct reasoning beyond which
-  capabilities it calls.
-- **Replace `DeterministicPlanner` with an LLM-based `PlannerInterface`
-  implementation** (§7.26/§7.27) — the single swap the whole module was
-  designed around; nothing above `PlannerInterface` (`PlanExecutor`,
-  `ExecuteGoalAction`, either the HTTP or MCP surface) needs to change.
-  It would take the same `AgentProfile` as context (a persona's own
-  `description`/`permissions` are exactly the kind of thing a real
-  planner would reason with) and would be the natural place to finally
-  use `AgentType` *within* a profile's own rule matching (§8.67), not
-  just to select the profile, and to produce a domain-aware `summary`
-  instead of a generic completion report.
+  capabilities it calls. `LLMPlanner` (§7.28) already reads a profile's
+  own `description`/`permissions` into its prompt — the natural next
+  step is letting `AgentType` shape the plan more directly (§8.67), not
+  just select which profile/prompt-framing is used.
+- **A per-call "which planner actually produced this plan" record**
+  (§8.77) — today `supportsLLM()` only says a Planner is *capable* of
+  using an LLM, not whether a specific `ExecutionResult` actually did
+  (versus silently falling back); would need a new field on
+  `ExecutionResult`/the persisted `Execution` row.
+- **Capability-list caching/pruning for `LLMPlanner`'s own prompt**
+  (§8.78) — today sends all 118 capabilities, uncached, on every planning
+  call; a real cost at platform scale.
+- **A domain-aware `summary` from the LLM itself, and recursive/
+  self-reflective planning** — both named in this module's own Future
+  Roadmap (`docs/agent-orchestrator.md`) as unstarted; the LLM path
+  (§7.28) is the natural place either would first become possible, since
+  neither is reachable from `DeterministicPlanner`'s own table lookups.
 - **A database-backed `AgentProfileRepositoryInterface` implementation**
   (§8.74) — letting an operator edit a profile without a deployment; a
   drop-in replacement behind the same Interface

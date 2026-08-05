@@ -232,16 +232,24 @@ step failed.
   (`config/agents/ceo.php`) — sales/revenue/inventory goals, a real
   discount-percentage parsed straight from the goal text, a real
   generated coupon code. Sales/Support/Finance profiles ship alongside it.
-- Today's planner (`DeterministicPlanner`) reads each profile's own
+- **A real LLM-based planner (Phase 6, Stage 3)** — set `PLANNER_TYPE=llm`
+  (+ `LLM_PROVIDER=openai|claude` and the matching API key) and
+  `LLMPlanner` asks a real GPT-4 or Claude model to plan each Goal against
+  every capability the platform currently has, instead of matching
+  config-declared keyword rules. Any failure — network, a malformed
+  response — is caught and falls back to the deterministic planner
+  automatically, so a broken/unreachable LLM never turns into a hard
+  failure for the caller. Ships defaulted to `PLANNER_TYPE=deterministic`
+  (no code change needed to keep using the config-driven planner).
+- `DeterministicPlanner` (still the default) reads each profile's own
   config-declared rules and resolves a small set of template tokens
-  (`{date:N}`/`{coupon_code}`/`{discount_percent}`) — still an explicit
-  MVP, designed to be replaced by an LLM-based planner behind the same
-  `PlannerInterface` without changing anything above it.
+  (`{date:N}`/`{coupon_code}`/`{discount_percent}`).
 
-See `docs/agent-orchestrator.md`/`docs/agent-profiles.md` for the full
-architecture and how to add a new Agent persona, and `HANDOFF.md`
-§7.26/§7.27 for the build log, including every deliberate correction made
-from the original requests (real capability names in
+See `docs/agent-orchestrator.md`/`docs/agent-profiles.md`/`docs/llm-planner.md`
+for the full architecture, how to add a new Agent persona, and how to
+enable the LLM planner, and `HANDOFF.md` §7.26/§7.27/§7.28 for the build
+log, including every deliberate correction made from the original
+requests (real capability names in
 place of illustrative ones, why `AuthContext` is threaded through this
 module's own Domain Service interfaces as a documented exception, and
 more).
@@ -310,6 +318,7 @@ phase/stage breakdown and `HANDOFF.md` for the detailed build log.
 - [x] Admin Dashboard (session-authenticated, bilingual EN/FA)
 - [x] Agent Orchestrator (Phase 6, Stage 1 — goal -> plan -> execute, deterministic MVP planner)
 - [x] Agent Profiles + CEO Agent (Phase 6, Stage 2 — config-driven personas, `config/agents/{type}.php`)
+- [x] LLM-based Planner (Phase 6, Stage 3 — real OpenAI/Claude planning with automatic fallback, `PLANNER_TYPE=llm`)
 - [ ] Additional SDKs (TypeScript, Node.js, Python, Go — PHP SDK is the
       only one built so far)
 - [ ] Real carrier (USPS/FedEx/DHL) and SMS gateway integrations (mock/stub today)
@@ -319,24 +328,22 @@ phase/stage breakdown and `HANDOFF.md` for the detailed build log.
 
 ## Project Status
 
-> ✅ **Phase 5 Complete — Advanced Commerce** · 🚧 **Phase 6, Stage 2 — Agent Profiles + CEO Agent**
+> ✅ **Phase 5 Complete — Advanced Commerce** · 🚧 **Phase 6, Stage 3 — LLM-based Planner**
 
 OpenCommerce Platform has moved past the foundation stage: Core, MCP
 Gateway, and UCP are stable, and 11 Domain Modules are built, tested, and
 MCP-reachable — Commerce (incl. multi-warehouse inventory, variants, bulk
 operations, and subscriptions), CRM, Finance, Workflows, Loyalty,
 Reporting, Shipping, Notifications, Analytics, and the new Agent
-Orchestrator (now with config-driven Agent Profiles and a real CEO Agent
-persona), plus a bilingual Admin Dashboard for human operators. 936
-automated tests pass across 118 MCP capabilities, with zero known
-regressions.
+Orchestrator (config-driven Agent Profiles, a real CEO Agent persona, and
+now a real LLM-based planner with automatic deterministic fallback), plus
+a bilingual Admin Dashboard for human operators. 966 automated tests pass
+across 118 MCP capabilities, with zero known regressions.
 
-The current focus is building out the remaining AI Agent personas
-(Sales/Support/Finance already have working profiles; CEO is the first
-fully fleshed-out one) on top of the Agent Orchestrator, and replacing its
-MVP deterministic planner with an LLM-based one — see
-`docs/agent-orchestrator.md`, `docs/agent-profiles.md`, and
-`docs/roadmap.md`.
+The current focus is building out the remaining AI Agent personas beyond
+CEO, and extending the LLM planner (recursive planning, self-reflection,
+multi-agent collaboration) — see `docs/agent-orchestrator.md`,
+`docs/agent-profiles.md`, `docs/llm-planner.md`, and `docs/roadmap.md`.
 
 ---
 

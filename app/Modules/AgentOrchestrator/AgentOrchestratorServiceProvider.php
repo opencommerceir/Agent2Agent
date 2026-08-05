@@ -2,6 +2,7 @@
 
 namespace App\Modules\AgentOrchestrator;
 
+use App\Core\Application\Actions\DiscoverCapabilitiesAction;
 use App\Core\Application\DTOs\AuthContext;
 use App\Core\Application\Services\CapabilityHandlerRegistry;
 use App\Modules\AgentOrchestrator\Application\Actions\ExecuteGoalAction;
@@ -11,11 +12,15 @@ use App\Modules\AgentOrchestrator\Application\Actions\ListAgentProfilesAction;
 use App\Modules\AgentOrchestrator\Application\Actions\ListExecutionsAction;
 use App\Modules\AgentOrchestrator\Application\Listeners\LogExecutionStepListener;
 use App\Modules\AgentOrchestrator\Application\Services\CapabilityToolInvoker;
+use App\Modules\AgentOrchestrator\Application\Services\ClaudeClient;
 use App\Modules\AgentOrchestrator\Application\Services\DeterministicPlanner;
+use App\Modules\AgentOrchestrator\Application\Services\LLMPlanner;
+use App\Modules\AgentOrchestrator\Application\Services\OpenAIClient;
 use App\Modules\AgentOrchestrator\Application\Services\PlanExecutor;
 use App\Modules\AgentOrchestrator\Domain\Events\StepExecuted;
 use App\Modules\AgentOrchestrator\Domain\Repositories\AgentProfileRepositoryInterface;
 use App\Modules\AgentOrchestrator\Domain\Repositories\ExecutionMemoryRepositoryInterface;
+use App\Modules\AgentOrchestrator\Domain\Services\LLMClientInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\PlanExecutorInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\PlannerInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\ToolInvokerInterface;
@@ -24,16 +29,21 @@ use App\Modules\AgentOrchestrator\Infrastructure\Repositories\ConfigBasedAgentPr
 use App\Modules\AgentOrchestrator\Infrastructure\Repositories\EloquentExecutionMemoryRepository;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
+use InvalidArgumentException;
 
 /**
- * Registers the Agent Orchestrator module. `PlannerInterface` ->
- * `DeterministicPlanner` is the one binding a future LLM-based planner
- * replaces (docs/agent-orchestrator.md's own roadmap) — nothing else in
- * this module, or any caller of it, needs to change when that happens
- * (Interfaces Over Tight Coupling). `AgentProfileRepositoryInterface` ->
- * `ConfigBasedAgentProfileRepository` (§7.27) is the second such binding
- * — a future database-backed profile store is the same kind of drop-in
- * replacement.
+ * Registers the Agent Orchestrator module. `AgentProfileRepositoryInterface`
+ * -> `ConfigBasedAgentProfileRepository` (§7.27) — a future database-backed
+ * profile store is a drop-in replacement behind the same Interface.
+ *
+ * `PlannerInterface`'s own binding (§7.28) is a runtime, config-driven
+ * choice between `DeterministicPlanner` and `LLMPlanner` — deliberately a
+ * closure, not a plain class-string bind, re-evaluated on every
+ * resolution (never `singleton()`) specifically so a test can override
+ * `config('agent-orchestrator.planner.type')` before resolving it and get
+ * the other implementation, the same "read config fresh, don't cache the
+ * binding" shape `LLMClientInterface`'s own binding below needs for the
+ * identical reason.
  *
  * Capability *handler* registration lives here (pure in-memory, safe on
  * every boot); capability *description* registration follows the
@@ -47,9 +57,37 @@ class AgentOrchestratorServiceProvider extends ServiceProvider
     {
         $this->app->bind(ExecutionMemoryRepositoryInterface::class, EloquentExecutionMemoryRepository::class);
         $this->app->bind(AgentProfileRepositoryInterface::class, ConfigBasedAgentProfileRepository::class);
-        $this->app->bind(PlannerInterface::class, DeterministicPlanner::class);
         $this->app->bind(ToolInvokerInterface::class, CapabilityToolInvoker::class);
         $this->app->bind(PlanExecutorInterface::class, PlanExecutor::class);
+
+        $this->app->bind(LLMClientInterface::class, function ($app) {
+            $provider = config('agent-orchestrator.llm.provider');
+
+            return match ($provider) {
+                'openai' => new OpenAIClient(
+                    config('agent-orchestrator.llm.openai.api_key'),
+                    config('agent-orchestrator.llm.openai.model'),
+                ),
+                'claude' => new ClaudeClient(
+                    config('agent-orchestrator.llm.claude.api_key'),
+                    config('agent-orchestrator.llm.claude.model'),
+                ),
+                default => throw new InvalidArgumentException("Unsupported LLM provider: [{$provider}]."),
+            };
+        });
+
+        $this->app->bind(PlannerInterface::class, function ($app) {
+            if (config('agent-orchestrator.planner.type') !== 'llm') {
+                return $app->make(DeterministicPlanner::class);
+            }
+
+            return new LLMPlanner(
+                $app->make(LLMClientInterface::class),
+                $app->make(DiscoverCapabilitiesAction::class),
+                $app->make(DeterministicPlanner::class),
+                (bool) config('agent-orchestrator.planner.fallback_to_deterministic', true),
+            );
+        });
     }
 
     public function boot(): void

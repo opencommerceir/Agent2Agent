@@ -69,6 +69,11 @@ final class DeterministicPlanner implements PlannerInterface
         return new ExecutionPlan($goal, $steps);
     }
 
+    public function supportsLLM(): bool
+    {
+        return false;
+    }
+
     /**
      * @param array<string, mixed> $rawInput
      * @return array<string, mixed>
