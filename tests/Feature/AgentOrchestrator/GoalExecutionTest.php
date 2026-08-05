@@ -18,17 +18,25 @@ use App\Modules\Notifications\Application\Actions\CreateTemplateAction;
 use Database\Seeders\AgentOrchestratorCapabilitiesSeeder;
 use Database\Seeders\AnalyticsCapabilitiesSeeder;
 use Database\Seeders\CommerceCapabilitiesSeeder;
+use Database\Seeders\CRMCapabilitiesSeeder;
+use Database\Seeders\FinanceCapabilitiesSeeder;
 use Database\Seeders\NotificationsCapabilitiesSeeder;
 use Database\Seeders\ReportingCapabilitiesSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * The literal end-to-end scenario from this module's own request:
- * POST /api/agents/ceo with a "sales" goal -> the 5-step
- * DeterministicPlanner plan runs -> every step completes -> a real
+ * The literal end-to-end scenario from Phase 6 Stage 2's own request
+ * (§7.27): POST /api/agents/ceo with a "sales" goal -> the real
+ * config/agents/ceo.php profile is loaded -> its own 'sales' planning
+ * rule resolves to 4 real capabilities -> every step completes -> a real
  * summary is produced -> the run is retrievable afterward via
  * GET /api/agents/executions and /api/agents/executions/{id}.
+ *
+ * Was a literal 5-step plan (analytics.kpi.calculate called twice) under
+ * Stage 1's own hardcoded DeterministicPlanner (§7.26) — now 4, since
+ * config/agents/ceo.php's own 'sales' rule names each capability exactly
+ * once (§7.27's own config-driven design, HANDOFF §7.27).
  */
 class GoalExecutionTest extends TestCase
 {
@@ -38,13 +46,16 @@ class GoalExecutionTest extends TestCase
         'agent.goals.execute',
         'agent.executions.read',
         'reporting.sales.read',
+        'reporting.revenue.read',
         'analytics.kpis.read',
         'commerce.coupons.create',
         'notifications.messages.send',
         'notifications.templates.manage',
+        'crm.tickets.read',
+        'finance.invoices.read',
     ];
 
-    public function test_ceoSalesGoal_runsAllFiveStepsToCompletion(): void
+    public function test_ceoSalesGoal_runsAllFourStepsToCompletion(): void
     {
         [$tenantId, , $token] = $this->registerAgentWithPermissions(self::REQUIRED_PERMISSIONS);
         $this->seedPromotionTemplate($tenantId);
@@ -55,12 +66,11 @@ class GoalExecutionTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertJsonPath('agent_type', 'ceo');
-        $response->assertJsonCount(5, 'steps');
+        $response->assertJsonCount(4, 'steps');
 
         $capabilities = array_column($response->json('steps'), 'capability');
         $this->assertSame([
             'report.sales.generate',
-            'analytics.kpi.calculate',
             'analytics.kpi.calculate',
             'commerce.coupon.create',
             'notification.message.send',
@@ -75,7 +85,7 @@ class GoalExecutionTest extends TestCase
         $this->assertIsFloat($response->json('execution_time'));
 
         $this->assertDatabaseHas('agent_executions', ['tenant_id' => $tenantId, 'status' => 'completed']);
-        $this->assertDatabaseCount('agent_execution_steps', 5);
+        $this->assertDatabaseCount('agent_execution_steps', 4);
     }
 
     public function test_executionIsRetrievableAfterwardById(): void
@@ -92,7 +102,7 @@ class GoalExecutionTest extends TestCase
 
         $get->assertStatus(200);
         $get->assertJsonPath('id', $executionId);
-        $get->assertJsonCount(5, 'steps');
+        $get->assertJsonCount(4, 'steps');
     }
 
     public function test_listExecutions_returnsThisTenantsPastRuns(): void
@@ -100,8 +110,13 @@ class GoalExecutionTest extends TestCase
         [$tenantId, , $token] = $this->registerAgentWithPermissions(self::REQUIRED_PERMISSIONS);
         $this->seedPromotionTemplate($tenantId);
 
-        $this->postJson('/api/agents/support', ['goal' => 'Review open support tickets'], ['Authorization' => "Bearer {$token}"]);
-        $this->postJson('/api/agents/finance', ['goal' => 'Review finance and revenue'], ['Authorization' => "Bearer {$token}"]);
+        $support = $this->postJson('/api/agents/support', ['goal' => 'Review open support tickets'], ['Authorization' => "Bearer {$token}"]);
+        $finance = $this->postJson('/api/agents/finance', ['goal' => 'Review finance and revenue'], ['Authorization' => "Bearer {$token}"]);
+
+        $support->assertStatus(200);
+        $support->assertJsonPath('status', 'completed');
+        $finance->assertStatus(200);
+        $finance->assertJsonPath('status', 'completed');
 
         $list = $this->getJson('/api/agents/executions', ['Authorization' => "Bearer {$token}"]);
 
@@ -119,6 +134,8 @@ class GoalExecutionTest extends TestCase
         $this->seed(ReportingCapabilitiesSeeder::class);
         $this->seed(AnalyticsCapabilitiesSeeder::class);
         $this->seed(NotificationsCapabilitiesSeeder::class);
+        $this->seed(CRMCapabilitiesSeeder::class);
+        $this->seed(FinanceCapabilitiesSeeder::class);
         $this->seed(AgentOrchestratorCapabilitiesSeeder::class);
 
         $tenant = app(CreateTenantAction::class)->execute('Acme Inc', 'acme-'.uniqid());

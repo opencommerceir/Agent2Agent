@@ -221,16 +221,27 @@ step failed.
   plus the identical `agent.goal.execute`/`agent.execution.get`/
   `agent.execution.list` MCP capabilities for a caller that is itself an
   Agent.
-- Today's planner (`DeterministicPlanner`) is a small, hardcoded set of
-  keyword rules — an explicit MVP, designed to be replaced by an
-  LLM-based planner behind the same `PlannerInterface` without changing
-  anything above it.
-- Built to be the foundation a CEO Agent, Sales Agent, Support Agent, and
-  Finance Agent can all be layered on top of next.
+- **Agent Profiles (Phase 6, Stage 2)** — every persona's own planning
+  rules now live entirely in config (`config/agents/{type}.php`), not PHP:
+  adding a new Agent is exactly one new config file, no code change.
+  `GET /api/agents/profiles`/`GET /api/agents/profiles/{agent_type}`
+  (+ the identical `agent.profile.list`/`agent.profile.get` MCP
+  capabilities) inspect a persona's own rules, default inputs, and
+  expected permissions.
+- **The CEO Agent** is the first fully-realized persona
+  (`config/agents/ceo.php`) — sales/revenue/inventory goals, a real
+  discount-percentage parsed straight from the goal text, a real
+  generated coupon code. Sales/Support/Finance profiles ship alongside it.
+- Today's planner (`DeterministicPlanner`) reads each profile's own
+  config-declared rules and resolves a small set of template tokens
+  (`{date:N}`/`{coupon_code}`/`{discount_percent}`) — still an explicit
+  MVP, designed to be replaced by an LLM-based planner behind the same
+  `PlannerInterface` without changing anything above it.
 
-See `docs/agent-orchestrator.md` for the full architecture and
-`HANDOFF.md` §7.26 for the build log, including every deliberate
-correction made from the original request (real capability names in
+See `docs/agent-orchestrator.md`/`docs/agent-profiles.md` for the full
+architecture and how to add a new Agent persona, and `HANDOFF.md`
+§7.26/§7.27 for the build log, including every deliberate correction made
+from the original requests (real capability names in
 place of illustrative ones, why `AuthContext` is threaded through this
 module's own Domain Service interfaces as a documented exception, and
 more).
@@ -298,6 +309,7 @@ phase/stage breakdown and `HANDOFF.md` for the detailed build log.
 - [x] Analytics & KPIs domain
 - [x] Admin Dashboard (session-authenticated, bilingual EN/FA)
 - [x] Agent Orchestrator (Phase 6, Stage 1 — goal -> plan -> execute, deterministic MVP planner)
+- [x] Agent Profiles + CEO Agent (Phase 6, Stage 2 — config-driven personas, `config/agents/{type}.php`)
 - [ ] Additional SDKs (TypeScript, Node.js, Python, Go — PHP SDK is the
       only one built so far)
 - [ ] Real carrier (USPS/FedEx/DHL) and SMS gateway integrations (mock/stub today)
@@ -307,20 +319,23 @@ phase/stage breakdown and `HANDOFF.md` for the detailed build log.
 
 ## Project Status
 
-> ✅ **Phase 5 Complete — Advanced Commerce** · 🚧 **Phase 6, Stage 1 — Agent Orchestrator**
+> ✅ **Phase 5 Complete — Advanced Commerce** · 🚧 **Phase 6, Stage 2 — Agent Profiles + CEO Agent**
 
 OpenCommerce Platform has moved past the foundation stage: Core, MCP
 Gateway, and UCP are stable, and 11 Domain Modules are built, tested, and
 MCP-reachable — Commerce (incl. multi-warehouse inventory, variants, bulk
 operations, and subscriptions), CRM, Finance, Workflows, Loyalty,
 Reporting, Shipping, Notifications, Analytics, and the new Agent
-Orchestrator, plus a bilingual Admin Dashboard for human operators. 920
-automated tests pass across 116 MCP capabilities, with zero known
+Orchestrator (now with config-driven Agent Profiles and a real CEO Agent
+persona), plus a bilingual Admin Dashboard for human operators. 936
+automated tests pass across 118 MCP capabilities, with zero known
 regressions.
 
-The current focus is building real AI Agents (CEO/Sales/Support/Finance)
-on top of the Agent Orchestrator, and replacing its MVP deterministic
-planner with an LLM-based one — see `docs/agent-orchestrator.md` and
+The current focus is building out the remaining AI Agent personas
+(Sales/Support/Finance already have working profiles; CEO is the first
+fully fleshed-out one) on top of the Agent Orchestrator, and replacing its
+MVP deterministic planner with an LLM-based one — see
+`docs/agent-orchestrator.md`, `docs/agent-profiles.md`, and
 `docs/roadmap.md`.
 
 ---

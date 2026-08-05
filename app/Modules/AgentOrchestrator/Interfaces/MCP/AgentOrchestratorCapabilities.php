@@ -56,6 +56,20 @@ final class AgentOrchestratorCapabilities
                 'outputSchema' => ['executions' => 'array'],
                 'requiredPermissions' => ['agent.executions.read'],
             ],
+            [
+                'name' => 'agent.profile.get',
+                'description' => 'Retrieve one Agent persona\'s own config-driven profile (planning rules, default inputs, expected permissions)',
+                'inputSchema' => ['agent_type' => 'string'],
+                'outputSchema' => ['profile' => 'array'],
+                'requiredPermissions' => ['agent.profiles.read'],
+            ],
+            [
+                'name' => 'agent.profile.list',
+                'description' => 'List every configured Agent persona profile (§7.27)',
+                'inputSchema' => [],
+                'outputSchema' => ['profiles' => 'array'],
+                'requiredPermissions' => ['agent.profiles.read'],
+            ],
         ];
     }
 }

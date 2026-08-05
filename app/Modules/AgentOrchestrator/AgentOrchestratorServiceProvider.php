@@ -5,18 +5,22 @@ namespace App\Modules\AgentOrchestrator;
 use App\Core\Application\DTOs\AuthContext;
 use App\Core\Application\Services\CapabilityHandlerRegistry;
 use App\Modules\AgentOrchestrator\Application\Actions\ExecuteGoalAction;
+use App\Modules\AgentOrchestrator\Application\Actions\GetAgentProfileAction;
 use App\Modules\AgentOrchestrator\Application\Actions\GetExecutionResultAction;
+use App\Modules\AgentOrchestrator\Application\Actions\ListAgentProfilesAction;
 use App\Modules\AgentOrchestrator\Application\Actions\ListExecutionsAction;
 use App\Modules\AgentOrchestrator\Application\Listeners\LogExecutionStepListener;
 use App\Modules\AgentOrchestrator\Application\Services\CapabilityToolInvoker;
 use App\Modules\AgentOrchestrator\Application\Services\DeterministicPlanner;
 use App\Modules\AgentOrchestrator\Application\Services\PlanExecutor;
 use App\Modules\AgentOrchestrator\Domain\Events\StepExecuted;
+use App\Modules\AgentOrchestrator\Domain\Repositories\AgentProfileRepositoryInterface;
 use App\Modules\AgentOrchestrator\Domain\Repositories\ExecutionMemoryRepositoryInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\PlanExecutorInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\PlannerInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\ToolInvokerInterface;
 use App\Modules\AgentOrchestrator\Domain\ValueObjects\AgentType;
+use App\Modules\AgentOrchestrator\Infrastructure\Repositories\ConfigBasedAgentProfileRepository;
 use App\Modules\AgentOrchestrator\Infrastructure\Repositories\EloquentExecutionMemoryRepository;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
@@ -26,7 +30,10 @@ use Illuminate\Support\ServiceProvider;
  * `DeterministicPlanner` is the one binding a future LLM-based planner
  * replaces (docs/agent-orchestrator.md's own roadmap) — nothing else in
  * this module, or any caller of it, needs to change when that happens
- * (Interfaces Over Tight Coupling).
+ * (Interfaces Over Tight Coupling). `AgentProfileRepositoryInterface` ->
+ * `ConfigBasedAgentProfileRepository` (§7.27) is the second such binding
+ * — a future database-backed profile store is the same kind of drop-in
+ * replacement.
  *
  * Capability *handler* registration lives here (pure in-memory, safe on
  * every boot); capability *description* registration follows the
@@ -39,6 +46,7 @@ class AgentOrchestratorServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->bind(ExecutionMemoryRepositoryInterface::class, EloquentExecutionMemoryRepository::class);
+        $this->app->bind(AgentProfileRepositoryInterface::class, ConfigBasedAgentProfileRepository::class);
         $this->app->bind(PlannerInterface::class, DeterministicPlanner::class);
         $this->app->bind(ToolInvokerInterface::class, CapabilityToolInvoker::class);
         $this->app->bind(PlanExecutorInterface::class, PlanExecutor::class);
@@ -72,5 +80,16 @@ class AgentOrchestratorServiceProvider extends ServiceProvider
 
             return ['executions' => array_map(fn ($result) => $result->toArray(), $results)];
         });
+
+        $handlers->register('agent.profile.get', fn (array $input, AuthContext $context) => [
+            'profile' => $this->app->make(GetAgentProfileAction::class)->execute($input['agent_type'])->toArray(),
+        ]);
+
+        $handlers->register('agent.profile.list', fn (array $input, AuthContext $context) => [
+            'profiles' => array_map(
+                fn ($profile) => $profile->toArray(),
+                $this->app->make(ListAgentProfilesAction::class)->execute(),
+            ),
+        ]);
     }
 }

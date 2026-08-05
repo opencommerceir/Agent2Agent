@@ -34,7 +34,7 @@ class ErrorHandlingTest extends TestCase
     public function test_aSingleFailedStepDoesNotAbortTheRestOfThePlan(): void
     {
         // Deliberately missing commerce.coupons.create — the coupon step
-        // (and only that step) must fail while the other 4 still run.
+        // must fail while the other steps in this 4-step plan still run.
         [$tenantId, , $token] = $this->registerAgentWithPermissions([
             'agent.goals.execute',
             'reporting.sales.read',
@@ -48,7 +48,7 @@ class ErrorHandlingTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertJsonPath('status', 'partial');
-        $response->assertJsonCount(5, 'steps');
+        $response->assertJsonCount(4, 'steps');
 
         $steps = collect($response->json('steps'))->keyBy('capability');
 

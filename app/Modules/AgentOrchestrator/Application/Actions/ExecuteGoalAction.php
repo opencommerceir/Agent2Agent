@@ -8,6 +8,7 @@ use App\Modules\AgentOrchestrator\Domain\Entities\Goal;
 use App\Modules\AgentOrchestrator\Domain\Events\GoalCompleted;
 use App\Modules\AgentOrchestrator\Domain\Events\GoalReceived;
 use App\Modules\AgentOrchestrator\Domain\Exceptions\GoalExecutionFailedException;
+use App\Modules\AgentOrchestrator\Domain\Repositories\AgentProfileRepositoryInterface;
 use App\Modules\AgentOrchestrator\Domain\Repositories\ExecutionMemoryRepositoryInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\PlanExecutorInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\PlannerInterface;
@@ -32,10 +33,18 @@ use Throwable;
  * never invoke another capability, still take plain `int $tenantId` per
  * HANDOFF §3 pattern #1 — this exception is deliberately as narrow as
  * possible.
+ *
+ * Loads the calling `AgentType`'s own `AgentProfile` (§7.27) before
+ * planning — `AgentProfileNotFoundException` (a real 404, e.g. an
+ * `AgentType` case with no `config/agents/{type}.php` of its own yet) is
+ * allowed to propagate unwrapped, same as any other Action's own
+ * `*NotFoundException`; only a genuine *planning* failure (the Planner
+ * itself throwing) gets wrapped in `GoalExecutionFailedException` below.
  */
 final class ExecuteGoalAction
 {
     public function __construct(
+        private readonly AgentProfileRepositoryInterface $profiles,
         private readonly PlannerInterface $planner,
         private readonly PlanExecutorInterface $executor,
         private readonly ExecutionMemoryRepositoryInterface $memory,
@@ -54,8 +63,10 @@ final class ExecuteGoalAction
         ]);
         Event::dispatch(new GoalReceived($goal, $context->tenantId, $context->agentId));
 
+        $profile = $this->profiles->findByType($agentType->value);
+
         try {
-            $plan = $this->planner->createPlan($goal);
+            $plan = $this->planner->createPlan($goal, $profile);
         } catch (Throwable $e) {
             Log::error('Plan creation failed', ['goal' => $goal->text, 'error' => $e->getMessage()]);
 

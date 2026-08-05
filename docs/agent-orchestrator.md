@@ -1,8 +1,10 @@
 # Agent Orchestrator Module
 
-> Added in Phase 6, Stage 1 (§7.26 in `HANDOFF.md`). This document is the
-> module's own reference; `HANDOFF.md` §7.26 carries the full narrative of
-> what was built, what was corrected from the original request, and why.
+> Added in Phase 6, Stage 1 (§7.26 in `HANDOFF.md`), extended in Stage 2
+> — Agent Profiles + the CEO Agent (§7.27). This document is the module's
+> own reference; `HANDOFF.md` §7.26/§7.27 carry the full narrative of what
+> was built, what was corrected from the original requests, and why. See
+> `docs/agent-profiles.md` for the how-to-add-a-new-Agent guide.
 
 ## Overview
 
@@ -24,7 +26,9 @@ one of them fails.
 | Concept | Class | Role |
 |---|---|---|
 | Goal | `Domain\Entities\Goal` | A business objective as plain text + an `AgentType` classification. |
-| Planner | `Domain\Services\PlannerInterface` | Turns a Goal into an `ExecutionPlan` (an ordered list of capability calls). `DeterministicPlanner` is the one MVP implementation — hardcoded keyword rules. |
+| AgentProfile | `Domain\Entities\AgentProfile` | The config-driven definition of one Agent persona — `planning_rules` (goal-keyword → capabilities) + `default_inputs` (capability → raw input), read from `config/agents/{type}.php`. See `docs/agent-profiles.md`. |
+| Profile repository | `Domain\Repositories\AgentProfileRepositoryInterface` | Loads an `AgentProfile` by type. `ConfigBasedAgentProfileRepository` is the one implementation — reads via Laravel's own `config()`, never the filesystem directly. |
+| Planner | `Domain\Services\PlannerInterface` | Turns a Goal + the calling Agent's own `AgentProfile` into an `ExecutionPlan`. `DeterministicPlanner` is the one MVP implementation — reads the profile's own rules/inputs, resolves a small set of template tokens (`{date:N}`/`{coupon_code}`/`{discount_percent}`) into real values. |
 | ExecutionPlan / ExecutionStep | `Domain\Entities\{ExecutionPlan,ExecutionStep}` | The plan itself, and each individual planned capability call (`capability` + `input` + `priority`), with mutable `status`/`output`/`error` as it runs. |
 | Executor | `Domain\Services\PlanExecutorInterface` | Runs every step of a plan, in order, never aborting on a single step's failure. `PlanExecutor` is the one implementation. |
 | ToolInvoker | `Domain\Services\ToolInvokerInterface` | Invokes exactly one capability by name. `CapabilityToolInvoker` is the one implementation — backed entirely by Core's own `GetCapabilityAction` / `CheckPermissionAction` / `CapabilityExecutionService`, the same three building blocks `AbstractMCPGatewayController` itself uses. |
@@ -37,8 +41,10 @@ one of them fails.
    or system-facing HTTP client) or the `agent.goal.execute` MCP capability
    (another Agent, or a future multi-agent orchestration one level up) —
    both reuse the exact same `ExecuteGoalAction`.
-2. `ExecuteGoalAction` builds a `Goal`, dispatches `GoalReceived`, and asks
-   the bound `PlannerInterface` for an `ExecutionPlan`.
+2. `ExecuteGoalAction` builds a `Goal`, dispatches `GoalReceived`, loads
+   the calling `AgentType`'s own `AgentProfile` (`AgentProfileNotFoundException`
+   — 404 — if no `config/agents/{type}.php` exists for it), and asks the
+   bound `PlannerInterface` for an `ExecutionPlan`.
 3. `PlanExecutor` runs each `ExecutionStep` through `CapabilityToolInvoker`,
    in order. Each step is authenticated as the calling Agent, permission-
    checked against the target capability's own `requiredPermissions`, input-
@@ -52,29 +58,51 @@ one of them fails.
 
 ## Planner
 
-**Today: `DeterministicPlanner`** — a small, hardcoded set of keyword
-rules over the Goal's own text (not the `AgentType` — see "Known scope
-decisions" below):
+**Today: `DeterministicPlanner`** — reads the calling Agent's own
+`AgentProfile` (Stage 2, §7.27) instead of Stage 1's own hardcoded
+per-agent-type keyword branches. `AgentProfile::getCapabilitiesForGoal()`
+matches the Goal's own text against that profile's `planning_rules`
+(first keyword found, in config declaration order, wins — falls back to
+the profile's required `default` rule); `DeterministicPlanner` then
+resolves each matched capability's own `default_inputs` template into
+real values (see `docs/agent-profiles.md`'s own token table) and builds
+the `ExecutionStep`s.
 
-| Goal text contains | Plan |
-|---|---|
-| `sales` | `report.sales.generate` → `analytics.kpi.calculate` (top products) → `analytics.kpi.calculate` (low stock) → `commerce.coupon.create` → `notification.message.send` |
-| `support` / `ticket` | `crm.ticket.list` (open tickets) |
-| `finance` / `revenue` / `invoice` | `report.revenue.generate` → `finance.invoice.list` |
-| anything else | an empty plan (`status: empty`, an explanatory summary) |
+Four profiles ship today (`config/agents/{ceo,sales,support,finance}.php`)
+— see `docs/agent-profiles.md` for the exact rules each one declares and
+how to add a fifth.
 
 **Future: an LLM-based planner** — a drop-in replacement behind
 `PlannerInterface`. Nothing above the Interface (`PlanExecutor`,
 `ExecuteGoalAction`, either HTTP/MCP surface) needs to change; only the
 `PlannerInterface` binding in `AgentOrchestratorServiceProvider::register()`
-would be swapped.
+would be swapped. It would presumably still take the same `AgentProfile`
+as context.
 
 ## Supported Agents
 
 `AgentType` (`ceo`/`sales`/`support`/`finance`) is recorded on every Goal
-and every persisted Execution as routing/classification metadata. It is
-**not** yet what `DeterministicPlanner` branches on — see "Known scope
+and every persisted Execution, and is what `AgentProfileRepositoryInterface`
+looks a profile up by — but `DeterministicPlanner` itself still keys off
+the Goal's own *text*, not the type, when matching a profile's planning
+rules (a CEO Agent and a Sales Agent asking the identical goal text
+against their own, different profiles can still get different plans,
+since each profile's own rules differ — see `CEOAgentTest`/the Sales
+profile in `docs/agent-profiles.md` — but within one profile, `AgentType`
+itself plays no role in *which* rule matches). See "Known scope
 decisions" below.
+
+## Agent Profile API
+
+```
+GET /api/agents/profiles              # every configured profile
+GET /api/agents/profiles/{agent_type} # one profile's own rules/inputs/permissions
+```
+
+Also reachable over MCP: `agent.profile.list` / `agent.profile.get`
+(permission `agent.profiles.read` for both). An unknown `agent_type`
+raises `AgentProfileNotFoundException` (404) — the same mechanism as
+every other module's own `*NotFoundException`.
 
 ## API
 
@@ -90,17 +118,25 @@ Authorization: Bearer <agent-token>
   "goal": "Increase sales by 15% this week",
   "agent_type": "ceo",
   "steps": [
-    { "capability": "report.sales.generate", "input": {"start_date": "2026-07-29", "end_date": "2026-08-05"}, "priority": "high", "status": "completed", "output": {"report": {"...": "..."}}, "error": null },
-    { "capability": "analytics.kpi.calculate", "input": {"kpi_type": "top_products", "...": "..."}, "priority": "medium", "status": "completed", "output": {"...": "..."}, "error": null },
-    { "capability": "analytics.kpi.calculate", "input": {"kpi_type": "low_stock_products", "...": "..."}, "priority": "medium", "status": "completed", "output": {"...": "..."}, "error": null },
-    { "capability": "commerce.coupon.create", "input": {"code": "COUPON-A1B2C", "discount_type": "percentage", "discount_value": 15}, "priority": "low", "status": "completed", "output": {"coupon": {"...": "..."}}, "error": null },
-    { "capability": "notification.message.send", "input": {"type": "promotion_announcement", "channel": "email", "...": "..."}, "priority": "low", "status": "completed", "output": {"...": "..."}, "error": null }
+    { "capability": "report.sales.generate", "input": {"start_date": "2026-07-29", "end_date": "2026-08-05"}, "priority": "medium", "status": "completed", "output": {"report": {"...": "..."}}, "error": null },
+    { "capability": "analytics.kpi.calculate", "input": {"kpi_type": "revenue", "time_period": "weekly", "...": "..."}, "priority": "medium", "status": "completed", "output": {"...": "..."}, "error": null },
+    { "capability": "commerce.coupon.create", "input": {"code": "COUPON-A1B2C", "discount_type": "percentage", "discount_value": 15}, "priority": "medium", "status": "completed", "output": {"coupon": {"...": "..."}}, "error": null },
+    { "capability": "notification.message.send", "input": {"type": "promotion_announcement", "channel": "email", "...": "..."}, "priority": "medium", "status": "completed", "output": {"...": "..."}, "error": null }
   ],
-  "summary": "Goal executed: 5 of 5 step(s) completed, in 0.18s.",
+  "summary": "Goal executed: 4 of 4 step(s) completed, in 0.18s.",
   "status": "completed",
   "execution_time": 0.18
 }
 ```
+
+(Stage 1's own worked example showed 5 steps, with `analytics.kpi.calculate`
+called twice for two different `KPIType`s — Stage 2's config-driven CEO
+profile calls each matched capability exactly once per its own
+`planning_rules` list, 4 steps for the `sales` rule. `priority` is now
+always `medium`, since `DeterministicPlanner` no longer hand-assigns a
+per-step priority the way its Stage 1 hardcoded branches did — a config-driven
+`planning_rules` list is just an ordered array of capability names today,
+with no per-rule priority concept yet; see `docs/agent-profiles.md`.)
 
 ```
 GET /api/agents/executions              # this tenant's own past runs (optional ?agent_type=&status=&limit=)
@@ -110,19 +146,21 @@ GET /api/agents/executions/{id}         # one past run by id
 The identical 3 operations are also reachable over MCP, for a caller that
 is itself an Agent: `agent.goal.execute` / `agent.execution.get` /
 `agent.execution.list` (permissions `agent.goals.execute` /
-`agent.executions.read`).
+`agent.executions.read`) — plus `agent.profile.get`/`agent.profile.list`
+(Stage 2), mirroring the `/api/agents/profiles*` HTTP routes above.
 
 Every exception either surface can raise — a missing/invalid bearer token,
-a missing permission, an empty goal, an unknown execution id — is mapped
-to the correct HTTP status by Core's own `MCPExceptionHandler` (extended
-this stage to also cover `api/agents/*`, not a second, parallel error
+a missing permission, an empty goal, an unknown execution id, an unknown
+agent/profile type (`AgentProfileNotFoundException`) — is mapped to the
+correct HTTP status by Core's own `MCPExceptionHandler` (extended in
+Stage 1 to also cover `api/agents/*`, not a second, parallel error
 mapper). See that class's own docblock.
 
 ## Known scope decisions (read before extending this module)
 
 These are deliberate, documented departures from a literal reading of the
-original request — see `HANDOFF.md` §7.26 for the full reasoning behind
-each:
+original requests — see `HANDOFF.md` §7.26 (Stage 1) / §7.27 (Stage 2)
+for the full reasoning behind each:
 
 - **Every capability name in `DeterministicPlanner` is real.** The
   request's own illustrative names (`reporting.sales.summary`,
@@ -135,10 +173,49 @@ each:
   This is still orchestration, not business logic: it never decides what
   a *good* discount or campaign is, only supplies structurally-valid
   parameters, the same way any tool-calling orchestrator must.
-- **`DeterministicPlanner` keys off the Goal's own text, not `AgentType`.**
-  The request's own pseudocode did the same (`str_contains($goal->text, 'sales')`).
-  A future LLM-based planner is the natural place for `AgentType` to start
-  actually shaping the plan.
+- **`DeterministicPlanner` keys off the Goal's own text against a profile's
+  own `planning_rules`, not `AgentType` directly.** Both requests' own
+  pseudocode did the same (`str_contains($goal->text, 'sales')`); Stage 2
+  moved the *rules themselves* into config (one profile per `AgentType`),
+  but matching still happens by keyword within whichever profile was
+  already selected by type — `AgentType` chooses *which profile*, not
+  *which rule inside it*. A future LLM-based planner is the natural place
+  for `AgentType` (and a profile's own `description`) to shape the plan
+  more directly.
+- **Stage 2's `AgentProfile::fromConfig()` requires the type argument
+  separately from the config array** — the request's own literal
+  `fromConfig(array $config)` signature had nowhere to read the type from,
+  since `config/agents/ceo.php` (per the request's own example) never
+  embeds its own type as a key; the type is implied by the filename, the
+  same convention Laravel's own recursive config loading already uses.
+  `AgentProfile::fromConfig(AgentType $type, array $config)` reads it from
+  the caller instead.
+- **`ConfigBasedAgentProfileRepository::listAll()` reads `config('agents')`,
+  not `glob(config_path('agents/*.php'))`** as the request's own literal
+  implementation did — `glob()` reads the filesystem directly, which
+  silently breaks under `php artisan config:cache` (a cached config
+  repository has no original file paths left to glob); `config()` reads
+  through Laravel's own already-cache-aware repository instead. Found and
+  fixed during this stage, not a pre-existing bug.
+- **`config/agents/support.php`/`finance.php` were added even though only
+  `ceo.php`/`sales.php` were requested this stage** — required by this
+  stage's own explicit "backward compatible" rule: Stage 1's own hardcoded
+  `support`/`finance` keyword rules would otherwise 404
+  (`AgentProfileNotFoundException`) the instant `DeterministicPlanner`
+  switched to being profile-driven, since no config existed for either
+  type yet. Both migrate Stage 1's own hardcoded plan for that type
+  verbatim into the new config shape.
+- **A profile's own `permissions` array is descriptive metadata only,
+  never a second enforcement layer** — see `docs/agent-profiles.md`'s own
+  "What `permissions` does NOT do" section for the full reasoning; real
+  enforcement stays exactly where Stage 1 put it, inside
+  `CapabilityToolInvoker`, per planned step.
+- **Every `ExecutionStep` a `DeterministicPlanner` produces now carries
+  `Priority::Medium`**, not the mixed High/Medium/Low Stage 1's own
+  hardcoded branches hand-assigned — a config-driven `planning_rules`
+  list is just an ordered array of capability names, with no per-entry
+  priority concept yet (a real, honest simplification, not an oversight;
+  see `HANDOFF.md` §8).
 - **`summary` is a generic completion report** (step counts + timing),
   never a domain-aware narrative ("created coupon SALE15 and sent 500
   notifications") — producing that would require this module to
@@ -164,7 +241,8 @@ each:
 
 ## Future Roadmap
 
-- LLM-based planning (a second `PlannerInterface` implementation)
+- LLM-based planning (a second `PlannerInterface` implementation, reading
+  the same `AgentProfile` for context)
 - Recursive planning (a step's own output feeding a later step's input)
 - Self-reflection (the Orchestrator revising a plan mid-run based on a
   step's result)
@@ -173,6 +251,14 @@ each:
 - A vector database for long-term, semantic execution memory — today's
   `ExecutionMemoryRepositoryInterface` is a simple relational log, chosen
   to already fit this future without implying it exists yet
-- Folding `AgentType` into planning (see "Known scope decisions" above)
+- A database-backed `AgentProfileRepositoryInterface` implementation,
+  letting an operator edit a profile without a deployment — a drop-in
+  replacement behind the same Interface `ConfigBasedAgentProfileRepository`
+  implements today
+- Per-rule `priority` in `planning_rules` (today every step is
+  `Priority::Medium`, see "Known scope decisions" above)
+- A real permission-sync check between a profile's own `permissions` list
+  and what its `planning_rules` actually call (today purely descriptive,
+  can drift — see `docs/agent-profiles.md`)
 - A Dashboard page under `/dashboard/agents` (every other Phase 4/5
   resource got one; this module didn't request one)

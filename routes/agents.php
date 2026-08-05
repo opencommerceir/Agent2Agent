@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\AgentOrchestrator\Infrastructure\Controllers\AgentController;
+use App\Modules\AgentOrchestrator\Infrastructure\Controllers\AgentProfileController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -32,4 +33,14 @@ Route::prefix('api/agents')->group(function () {
     Route::get('/executions', [AgentController::class, 'listExecutions']);
     Route::get('/executions/{execution}', [AgentController::class, 'getExecution'])
         ->where('execution', '[0-9]+');
+
+    // Agent persona profiles (§7.27) — a separate Controller
+    // (AgentProfileController), the same "Gateway vs. Discovery" split
+    // MCPGatewayController/MCPDiscoveryController already establish.
+    // Deliberately no {agentType} where() constraint here (unlike the
+    // POST route above) — an unknown type should reach
+    // AgentProfileNotFoundException's own informative message, not a bare
+    // route-level 404 with no body.
+    Route::get('/profiles', [AgentProfileController::class, 'index']);
+    Route::get('/profiles/{agentType}', [AgentProfileController::class, 'show']);
 });

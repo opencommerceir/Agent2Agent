@@ -1,13 +1,20 @@
 # OpenCommerce Platform — Session Handoff
 
-**Status: Phase 6, Stage 1 (Agent Orchestrator, §7.26) is now complete —
-the platform's first module built after Phase 5 finished, and its first
-that is an orchestration layer rather than a business domain: it turns a
+**Status: Phase 6, Stage 2 (Agent Profiles + CEO Agent, §7.27) is now
+complete — every Agent persona's own planning rules now live in
+`config/agents/{type}.php` instead of PHP (`DeterministicPlanner` reads
+an `AgentProfile` instead of hardcoding keyword branches per type), and
+the CEO Agent is the first fully-realized persona. 936 tests passing
+(920 + 16 new), 118 MCP capabilities (116 + 2 new), zero known
+regressions. See §7.27 for the full detail.**
+
+**Status: Phase 6, Stage 1 (Agent Orchestrator, §7.26) is complete — the
+platform's first module built after Phase 5 finished, and its first that
+is an orchestration layer rather than a business domain: it turns a
 plain-text Goal into a sequence of *existing* MCP capability calls,
-holding no business logic of its own. 920 tests passing (885 + 35 new),
-116 MCP capabilities (113 + 3 new), zero known regressions. See §7.26 for
-the full detail, including every real capability-name/architecture
-correction made from the original request.**
+holding no business logic of its own. See §7.26 for the full detail,
+including every real capability-name/architecture correction made from
+the original request.**
 
 **Status: Phase 1 (Core + MCP Gateway), Phase 2 (Commerce, all 6
 Stages), Phase 3 (Domain Expansion, all 5 Stages — CRM, Finance,
@@ -877,6 +884,26 @@ discipline every prior stage's own request-vs-codebase mismatch got. See
 §7.26 for the full detail.**
 
 920 tests passing (885 + 35 new), 116 MCP capabilities, zero known
+regressions.
+
+**Phase 6, Stage 2 (Agent Profiles + CEO Agent, §7.27) ran immediately
+after Stage 1 — the request's own explicit two-part scope: a shared,
+config-driven `AgentProfile` system every future Agent persona builds on,
+plus the CEO Agent as the first fully-realized persona. `DeterministicPlanner`
+no longer hardcodes a per-agent-type keyword branch in PHP
+(`salesGrowthSteps()`/`supportSteps()`/`financeSteps()`, §7.26) — it now
+reads `planning_rules`/`default_inputs` from whichever `AgentProfile`
+`config/agents/{type}.php` supplies, so adding a new Agent is exactly one
+new config file. `PlannerInterface::createPlan()` gained an `AgentProfile`
+parameter accordingly. Two real corrections from the request's own
+literal `config/agents/ceo.php` example (a raw `'-7 days'`/`'now'` date
+pair, and a `'code' => 'AUTO_{date}'` coupon template that can never
+become a valid `COUPON-XXXXX`) and one real, previously-latent bug found
+in `ConfigBasedAgentProfileRepository::listAll()`'s own request-specified
+`glob()` implementation (breaks under `php artisan config:cache`, fixed
+by reading `config('agents')` instead) — see §7.27 for the full detail.**
+
+936 tests passing (920 + 16 new), 118 MCP capabilities, zero known
 regressions. See §9 for what's next across the whole platform.
 
 This file is a working-state snapshot for picking up development in a new
@@ -1163,7 +1190,7 @@ Controllers Rule: no business logic in Controllers). Gated by the `auth`
 - **Seeded default admin**: `admin@opencommerce.test` / `password`
   (`DatabaseSeeder`) — change or remove before any real deployment.
 
-### `app/Modules/AgentOrchestrator/` — **new in Phase 6, Stage 1 (§7.26). Goal -> Plan -> Execute — an orchestration layer over every other module's own MCP capabilities, with no business logic of its own.**
+### `app/Modules/AgentOrchestrator/` — **new in Phase 6, Stage 1 (§7.26), extended in Stage 2 (Agent Profiles + CEO Agent, §7.27). Goal -> Plan -> Execute — an orchestration layer over every other module's own MCP capabilities, with no business logic of its own.**
 
 See §7.26 for the full detail. 4 Domain Entities (`Goal`, `ExecutionPlan`,
 `ExecutionStep`, `ExecutionResult`), 3 Value Objects (`AgentType`,
@@ -1224,6 +1251,31 @@ case, `PromotionAnnouncement` — the same shape `SubscriptionPaymentFailed`
 was added in (§7.25) — since `DeterministicPlanner`'s own sales-growth
 plan needs a real `notification.message.send` `type` for "a marketing
 message" and none of the other 5 existing cases fit.
+
+**Stage 2 (§7.27) added `AgentProfile` (Domain Entity, config-driven —
+`planning_rules`/`default_inputs`/`permissions`, built via `fromConfig()`
+from an already-fetched `config/agents/{type}.php` array, never calls
+`config()` itself), `AgentProfileRepositoryInterface` +
+`ConfigBasedAgentProfileRepository` (reads via Laravel's own `config()`,
+not `glob()` — see that class's own docblock for the `config:cache`
+correctness bug this avoided), and `AgentProfileNotFoundException`. Two
+new Application Actions (`GetAgentProfileAction`/`ListAgentProfilesAction`)
+and a DTO (`AgentProfileData`) back both 2 new MCP capabilities
+(`agent.profile.get`/`agent.profile.list`) and a new, separate
+`AgentProfileController` (`/api/agents/profiles`/`/api/agents/profiles/{agentType}`
+— the same "Gateway vs. Discovery" split `MCPGatewayController`/
+`MCPDiscoveryController` already establish, rather than growing
+`AgentController` to cover a third unrelated concern). `PlannerInterface::createPlan()`
+gained a required `AgentProfile $profile` parameter;
+`DeterministicPlanner` no longer hardcodes
+`salesGrowthSteps()`/`supportSteps()`/`financeSteps()` — it reads a
+profile's own rules/inputs instead, resolving a small set of template
+tokens (`{date:N}`/`{coupon_code}`/`{discount_percent}`) into real
+values. Four config files ship (`config/agents/{ceo,sales,support,finance}.php`)
+— `support.php`/`finance.php` weren't requested this stage but were
+required by its own explicit "backward compatible" rule, migrating Stage
+1's own hardcoded rules for those two types into the new config shape
+verbatim. See §7.27 for the full detail.**
 
 ### `app/Modules/Demo/` — unchanged since Phase 1
 
@@ -1847,24 +1899,31 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
                                    Repository Interface
 ├── Domain/
 │   ├── Entities/                 Goal, ExecutionPlan, ExecutionStep,
-│   │                             ExecutionResult
+│   │                             ExecutionResult, + AgentProfile (§7.27 —
+│   │                             config-driven, built via fromConfig(),
+│   │                             framework-free like every other Entity)
 │   ├── ValueObjects/             AgentType (ceo/sales/support/finance),
 │   │                             StepStatus (+ Skipped, modeled but
 │   │                             unreached this stage), Priority
 │   │                             (informational only, doesn't affect
-│   │                             execution order)
+│   │                             execution order; every step
+│   │                             DeterministicPlanner now produces is
+│   │                             Priority::Medium since §7.27, see that
+│   │                             class's own docblock)
 │   ├── Events/                   GoalReceived, StepExecuted, GoalCompleted
 │   │                             (none has a registered Listener except
 │   │                             this module's own LogExecutionStepListener,
 │   │                             which only reacts to StepExecuted)
-│   ├── Services/                 PlannerInterface, PlanExecutorInterface,
-│   │                             ToolInvokerInterface (the latter two take
-│   │                             AuthContext directly — the one deliberate
-│   │                             exception to §3 pattern #1 in this
-│   │                             codebase, see ToolInvokerInterface's own
-│   │                             docblock)
+│   ├── Services/                 PlannerInterface (createPlan() gained a
+│   │                             required AgentProfile parameter, §7.27),
+│   │                             PlanExecutorInterface, ToolInvokerInterface
+│   │                             (the latter two take AuthContext directly
+│   │                             — the one deliberate exception to §3
+│   │                             pattern #1 in this codebase, see
+│   │                             ToolInvokerInterface's own docblock)
 │   ├── Repositories/              ExecutionMemoryRepositoryInterface (owns
-│   │                             ExecutionStep persistence too)
+│   │                             ExecutionStep persistence too), +
+│   │                             AgentProfileRepositoryInterface (§7.27)
 │   └── Exceptions/                GoalExecutionFailedException (neither
 │                                  marker interface, same reasoning
 │                                  WooCommerceApiException has),
@@ -1872,28 +1931,37 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │                                  module's own wrapper around Core's
 │                                  identically-named exception, §3 pattern
 │                                  #9), ExecutionNotFoundException (added
-│                                  unprompted, §3 pattern #12 — both
-│                                  NotFoundExceptionInterface)
+│                                  unprompted, §3 pattern #12), +
+│                                  AgentProfileNotFoundException (§7.27 —
+│                                  all 3 *NotFoundException classes
+│                                  implement NotFoundExceptionInterface)
 ├── Application/
 │   ├── Actions/                  ExecuteGoalAction (the one Action every
 │   │                             Agent-facing surface calls into — the
 │   │                             other deliberate AuthContext exception,
-│   │                             kept as narrow as possible),
+│   │                             kept as narrow as possible; now also
+│   │                             loads the calling AgentType's own
+│   │                             AgentProfile before planning, §7.27),
 │   │                             GetExecutionResultAction,
 │   │                             ListExecutionsAction (both plain
-│   │                             int $tenantId, no exception needed)
+│   │                             int $tenantId, no exception needed), +
+│   │                             GetAgentProfileAction, ListAgentProfilesAction
+│   │                             (§7.27)
 │   ├── DTOs/                     GoalData, ExecutionStepData,
 │   │                             ExecutionPlanData (unused by anything
 │   │                             yet — a future "preview my plan" surface's
 │   │                             natural return shape), ExecutionResultData
 │   │                             (deliberately snake_case toArray(), this
-│   │                             module's own documented wire contract)
-│   ├── Services/                 DeterministicPlanner (the one MVP
-│   │                             PlannerInterface implementation —
-│   │                             hardcoded keyword rules, see its own
-│   │                             docblock for the full request-vs-real-
-│   │                             capability-name correction), PlanExecutor,
-│   │                             CapabilityToolInvoker
+│   │                             module's own documented wire contract), +
+│   │                             AgentProfileData (§7.27)
+│   ├── Services/                 DeterministicPlanner (Stage 1's own
+│   │                             hardcoded per-agent-type keyword branches
+│   │                             — salesGrowthSteps()/supportSteps()/
+│   │                             financeSteps() — are gone; §7.27 reads an
+│   │                             AgentProfile's own planning_rules/
+│   │                             default_inputs instead and resolves a
+│   │                             small set of template tokens, see its own
+│   │                             docblock), PlanExecutor, CapabilityToolInvoker
 │   └── Listeners/                LogExecutionStepListener (owns every
 │                                  "a step ran" log line — kept out of
 │                                  PlanExecutor itself)
@@ -1908,25 +1976,35 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │   │                              entity's own transition guards — the
 │   │                              same "toEntity() reconstructs directly"
 │   │                              shape every other Eloquent Repository
-│   │                              in this codebase already has)
+│   │                              in this codebase already has), +
+│   │                              ConfigBasedAgentProfileRepository (§7.27
+│   │                              — placed here, not Application/Services
+│   │                              as originally requested, see its own
+│   │                              docblock; reads via config(), never
+│   │                              glob())
 │   └── Controllers/                AgentController (throws, never
 │                                   catches — every exception maps to the
 │                                   right HTTP status via MCPExceptionHandler,
 │                                   extended this stage to also cover
-│                                   api/agents/*)
+│                                   api/agents/*), + AgentProfileController
+│                                   (§7.27 — a separate Controller, the
+│                                   same "Gateway vs. Discovery" split
+│                                   MCPGatewayController/MCPDiscoveryController
+│                                   already establish)
 ├── Interfaces/MCP/                AgentOrchestratorCapabilities.php (the
 │                                  manifest AgentOrchestratorCapabilitiesSeeder
 │                                  reads — not named in the original
 │                                  request, added unprompted so this
 │                                  module's own Actions are reachable both
 │                                  via /api/agents/* and via MCP, §3
-│                                  pattern #12)
+│                                  pattern #12; +2 definitions in §7.27 —
+│                                  agent.profile.get/.list)
 └── AgentOrchestratorServiceProvider.php   binds ExecutionMemoryRepositoryInterface/
                                    PlannerInterface/ToolInvokerInterface/
-                                   PlanExecutorInterface, loads
-                                   routes/agents.php, Event::listen()s
-                                   LogExecutionStepListener, registers 3
-                                   capability handlers (§6)
+                                   PlanExecutorInterface, + AgentProfileRepositoryInterface
+                                   (§7.27), loads routes/agents.php,
+                                   Event::listen()s LogExecutionStepListener,
+                                   registers 5 capability handlers (§6, 3+2)
 
 routes/agents.php                  new in Phase 6, Stage 1 (§7.26) —
                                    loaded by
@@ -1934,7 +2012,15 @@ routes/agents.php                  new in Phase 6, Stage 1 (§7.26) —
                                    via loadRoutesFrom(), the same
                                    "a module owns and loads its own
                                    routes" shape routes/mcp.php itself
-                                   uses via CoreServiceProvider
+                                   uses via CoreServiceProvider; +2 GET
+                                   routes in §7.27 (/profiles,
+                                   /profiles/{agentType})
+
+config/agents/{ceo,sales,support,finance}.php   new in Phase 6, Stage 2
+                                   (§7.27) — one file per Agent persona;
+                                   adding a new persona is exactly one new
+                                   file here, no PHP change (see
+                                   docs/agent-profiles.md)
 
 app/Core/Exceptions/MCPExceptionHandler.php   handles() extended to also
                                    match api/agents/* (§7.26) — also fixed
@@ -2615,7 +2701,7 @@ end to end.
 
 ---
 
-## 6. The 116 MCP capabilities that exist right now
+## 6. The 118 MCP capabilities that exist right now
 
 | Capability | Phase/Stage | Permission | Notes |
 |---|---|---|---|
@@ -2735,6 +2821,8 @@ end to end.
 | `agent.goal.execute` | P6.1 | `agent.goals.execute` | Renamed/derived from the request's own `/api/agents/{agent_type}` HTTP-only surface — added unprompted so this module's own Actions are reachable via MCP too, §7.26/§3 pattern #12. Plans and executes a Goal via `DeterministicPlanner`. |
 | `agent.execution.get` | P6.1 | `agent.executions.read` | One past Execution by id, tenant-scoped by `findById()`, same shape as `crm.ticket.get`. |
 | `agent.execution.list` | P6.1 | `agent.executions.read` | Optional `agent_type`/`status`/`limit`. |
+| `agent.profile.get` | P6.2 | `agent.profiles.read` | One Agent persona's own config-driven profile (planning rules, default inputs, expected permissions). |
+| `agent.profile.list` | P6.2 | `agent.profiles.read` | Every configured Agent persona profile (`config/agents/*.php`). |
 
 **Deliberately NOT wired to MCP** despite the underlying Action existing and
 being fully tested (see §8.2 for why, and the same reasoning each time):
@@ -5703,7 +5791,164 @@ Executions, never someone else's data.
 
 920 tests passing (885 + 35 new), 2393 assertions (2295 + 98 new), zero
 known regressions — confirmed by actually running the full suite. Phase 6,
-Stage 1 is complete. See §9 for what's next.
+Stage 1 is complete.
+
+### 7.27 Phase 6, Stage 2 — Agent Profiles + CEO Agent
+
+**Requested as two parts explicitly bundled together — a shared,
+config-driven `AgentProfile` system every future Agent persona would
+build on, plus the CEO Agent as the first fully-realized persona built on
+top of it — and built in exactly that order, foundation first.** Unlike
+Stage 1 (a genuinely new architectural layer with nothing to extend),
+Stage 2 is a real, load-bearing change to a mechanism Stage 1 already
+shipped: `DeterministicPlanner`'s own hardcoded per-agent-type keyword
+branches (`salesGrowthSteps()`/`supportSteps()`/`financeSteps()`, §7.26)
+are gone, replaced by config lookups. This is a deliberate supersession,
+not a bug being fixed — Stage 1's own docblocks already framed
+`DeterministicPlanner` as "the MVP, built to be replaced," just one step
+short of an LLM (config-driven first, then LLM-driven later).
+
+**`PlannerInterface::createPlan()` gained a required second parameter,
+`AgentProfile $profile`** — a real, deliberate interface-breaking change,
+safe because `DeterministicPlanner` is still the only implementation and
+nothing outside this module implements the Interface. `ExecuteGoalAction`
+loads the calling `AgentType`'s own profile (via the new
+`AgentProfileRepositoryInterface`) immediately after dispatching
+`GoalReceived`, before calling the Planner — `AgentProfileNotFoundException`
+(a real 404) is allowed to propagate unwrapped from that lookup, the same
+as any other Action's own `*NotFoundException`; only a genuine *planning*
+failure (the Planner itself throwing, after a profile was successfully
+found) still gets wrapped in `GoalExecutionFailedException`.
+
+**Two real corrections from the request's own literal
+`config/agents/ceo.php` example, found by checking each declared default
+input against the real target capability's own domain rules before
+shipping — the same discipline Stage 1's own capability-name audit
+established (§7.26):**
+
+1. `'start_date' => '-7 days', 'end_date' => 'now'` — happens to parse as
+   a valid *relative* PHP date string, but isn't the `Y-m-d` shape
+   `report.sales.generate` actually expects (and isn't obviously safe to
+   assume every downstream Action normalizes the same way). Replaced with
+   a small, explicit `{date:N}` token (N days from today,
+   `DeterministicPlanner` resolves it to a real `Y-m-d` string) — see that
+   class's own docblock for the full token list.
+2. `'code' => 'AUTO_{date}'` — can never become a valid `COUPON-XXXXX`
+   code no matter how `{date}` is interpolated, since `CouponCode`'s own
+   regex requires the literal `COUPON-` prefix (`Domain\ValueObjects\CouponCode`,
+   §7.5); every single `commerce.coupon.create` step in the request's own
+   worked example would have thrown `InvalidCouponException` on every
+   run. Replaced with a `{coupon_code}` token that generates a real,
+   correctly-formatted code.
+
+**One real, previously-latent bug found and fixed in the request's own
+literal `ConfigBasedAgentProfileRepository::listAll()` implementation,
+before it ever shipped**: the request's own pseudocode used
+`glob(config_path("{$this->configPath}/*.php"))` to enumerate profiles —
+reading the filesystem directly. This silently breaks in any real
+deployment running `php artisan config:cache` (Laravel's own standard
+production optimization): a cached config repository has no original
+file paths left for `glob()` to find, so `listAll()` would return an
+empty list in production while working fine in local dev — exactly the
+kind of gap that passes every test locally and fails silently the moment
+it matters. Confirmed this Laravel version's own `LoadConfiguration::getConfigurationFiles()`
+already recursively scans `config/` subdirectories and merges
+`config/agents/{type}.php` into `config('agents.{type}')` automatically
+(the same mechanism any nested `config/*/*.php` file already relies on)
+— `listAll()` now reads `config('agents', [])` instead, which is
+`config:cache`-safe by construction, the same way every other `config()`
+call in this codebase already is.
+
+**`AgentProfile::fromConfig()` takes the `AgentType` as an explicit first
+argument, not read from inside the config array** — the request's own
+literal `fromConfig(array $config)` signature had nowhere to read a type
+from, since `config/agents/ceo.php`'s own example array never embeds its
+own type as a key (it's implied entirely by the filename/config path,
+`config('agents.ceo')`). `ConfigBasedAgentProfileRepository::findByType()`
+supplies it from the lookup key itself.
+
+**`config/agents/support.php`/`finance.php` weren't named in this
+stage's own request** (only `ceo.php` + `sales.php`, "for testing
+extensibility") **— added anyway, required by this same stage's own
+explicit "Backward Compatible: Agent Orchestrator قبلی همچنان کار کند"
+rule.** The instant `DeterministicPlanner` became profile-driven, calling
+`/api/agents/support` or `/api/agents/finance` with no corresponding
+config file would 404 (`AgentProfileNotFoundException`) — a real
+regression from Stage 1's own working hardcoded rules for those two
+types, and Stage 1's own `GoalExecutionTest`/`ErrorHandlingTest` already
+exercised both. Both new config files migrate Stage 1's own hardcoded
+plan for their type verbatim into the new config shape (`support.php`:
+`crm.ticket.list` with `status: open`; `finance.php`:
+`report.revenue.generate` + `finance.invoice.list` with `status: issued`,
+30-day range) — see each file's own docblock.
+
+**The CEO profile's own `sales` planning rule includes all 4 capabilities
+(matching `default`), not the 3 the request's own config example showed
+for that specific rule** (`notification.message.send` appeared only in
+the example's `default` rule) — this stage's own explicit end-to-end
+scenario text asks for "۴ step اجرا شده (`report.sales.generate`,
+`analytics.kpi.calculate`, `commerce.coupon.create`,
+`notification.message.send`)" for a *sales* goal specifically, a real
+inconsistency between the request's own config example and its own
+worked scenario, resolved in favor of the testable, explicitly-stated
+behavioral contract.
+
+**A profile's own `permissions` array is descriptive metadata only, not
+a second enforcement layer** — confirmed as the correct scope during
+planning, not assumed: real per-capability enforcement already exists,
+unchanged, inside `CapabilityToolInvoker` (Stage 1). Actively
+cross-checking a profile's own `permissions` list against what its
+`planning_rules` genuinely call — and rejecting a mismatch — would be new
+validation logic this stage's own request never asked for; flagged as a
+real, honest gap in §8/`docs/agent-profiles.md` instead of silently
+built or silently ignored.
+
+**`ConfigBasedAgentProfileRepository` lives under `Infrastructure/Repositories/`,
+not `Application/Services/` as the request's own file list named it** —
+every other implementation of a Domain Repository Interface in this
+codebase lives there regardless of backing mechanism (a database, or —
+here — the config system, itself an external, non-Domain data source);
+the same kind of placement correction `ApiVersioning` middleware's own
+docblock already made (§7.19, "lives under Interfaces/HTTP, not
+Infrastructure/Middleware as originally requested").
+
+**`agent.profile.get`/`agent.profile.list` weren't named in the
+request's own MCP capability list as needing a separate HTTP Controller**
+— `AgentProfileController` is new and deliberately separate from
+`AgentController`, the same "Gateway vs. Discovery" split
+`MCPGatewayController`/`MCPDiscoveryController` already establish for the
+platform-wide MCP surface, rather than growing one Controller to cover
+three unrelated concerns (goals, executions, profiles).
+
+Every `ExecutionStep` `DeterministicPlanner` now produces carries
+`Priority::Medium` — Stage 1's own hardcoded branches hand-assigned
+High/Medium/Low per step; a `planning_rules` list is just an ordered
+array of capability names today, with no per-entry priority concept.
+Flagged in §8 as a real, honest simplification, not an oversight.
+
+New tests: `tests/Unit/AgentOrchestrator/AgentProfileTest.php` (8 —
+`fromConfig()` success/2 failure modes, `getCapabilitiesForGoal()`
+matching/case-insensitivity/fallback, `getDefaultInput()`),
+`tests/Unit/AgentOrchestrator/DeterministicPlannerTest.php` (rewritten
+for the new 2-arg `createPlan()` signature — token resolution for all 3
+recognized tokens, literal values passed through untouched, two different
+profiles producing different plans for the identical goal text),
+`tests/Feature/AgentOrchestrator/ConfigBasedAgentProfileRepositoryTest.php`
+(3 — a Feature test, not Unit, specifically because it loads the real
+`config/agents/*.php` files through Laravel's own `config()`),
+`tests/Feature/AgentOrchestrator/CEOAgentTest.php` (2 — proves the real
+`config/agents/ceo.php` file's own declared defaults are what actually
+reach each capability call, resolved correctly, not just that steps
+completed), `tests/Feature/AgentOrchestrator/AgentProfileAPITest.php` (4
+— list/get/unknown-type-404/missing-permission-403). `GoalExecutionTest`/
+`ErrorHandlingTest` (Stage 1) updated in place for the new 4-step CEO
+plan (was 5, `analytics.kpi.calculate` no longer called twice — see
+`DeterministicPlanner`'s own docblock) rather than left asserting
+Stage 1's now-superseded behavior.
+
+936 tests passing (920 + 16 new), 2431 assertions (2393 + 38 new), zero
+known regressions — confirmed by actually running the full suite. Phase 6,
+Stage 2 is complete. See §9 for what's next.
 
 ---
 
@@ -6106,10 +6351,15 @@ Stage 1 is complete. See §9 for what's next.
     it meaningfully today (every charge just succeeds/declines based on
     `simulate_failure`), so this gap has no test-visible symptom yet, only
     a real one once a real gateway integration exists.
-67. **`DeterministicPlanner` keys off a Goal's own text, not `AgentType`**
-    (§7.26) — a CEO Agent and a Sales Agent stating the identical goal text
-    get the identical plan today; `AgentType` is recorded on every
-    Goal/Execution as metadata but not yet read by the planner itself.
+67. **`DeterministicPlanner` keys off a Goal's own text, not `AgentType`,
+    within whichever profile was already selected** (§7.26/§7.27) —
+    `AgentType` now does choose *which* `AgentProfile` a Goal is planned
+    against (Stage 2), so a CEO Agent and a Sales Agent asking the same
+    goal text genuinely can get different plans if their two profiles'
+    own `planning_rules` differ (§7.27's own `CEOAgentTest`/Sales
+    profile) — but *within* one profile, only the Goal's own text decides
+    which rule matches, `AgentType` plays no further role. Still an
+    honest MVP gap, just one layer narrower than before.
 68. **`notification.message.send`'s `recipient` is a fixed placeholder
     address, not a real customer/segment list** (§7.26) — a Goal's own
     free text carries no real recipient list, and this module has no
@@ -6119,17 +6369,40 @@ Stage 1 is complete. See §9 for what's next.
 69. **No Dashboard UI for Agent Orchestrator** (§7.26) — every Phase 4/5
     resource with a Dashboard page got one; Executions/Goals didn't,
     since no `/dashboard/agents` page was requested this stage.
-70. **`DeterministicPlanner` only has 3 keyword rules** (`sales`/
-    `support`+`ticket`/`finance`+`revenue`+`invoice`) — any other goal text
-    produces an empty plan (`status: empty`), a real, honestly-scoped MVP
-    limitation, not a bug — the request's own worked example only ever
-    specified the sales-growth rule in detail.
+70. ~~**`DeterministicPlanner` only has 3 keyword rules.**~~ **Superseded
+    in Phase 6, Stage 2 (§7.27)** — planning rules are no longer hardcoded
+    in `DeterministicPlanner` at all; each `AgentProfile`'s own
+    `planning_rules` supplies as many as its own `config/agents/{type}.php`
+    declares (CEO: 3 + default; Sales: 3 + default; Support/Finance: 2-3
+    + default each). A goal matching none of a *specific* profile's own
+    rules still falls back to that profile's own required `default` rule
+    rather than an empty plan — a real behavior improvement over Stage 1,
+    where an unrecognized goal for *any* type produced zero steps.
 71. **`ExecutionPlanData` (Application/DTOs) has no caller yet** (§7.26) —
     built as the natural return shape for a future "preview my plan before
     running it" capability (the same "preview vs. durable apply" split §3
     pattern #4 already establishes elsewhere), but nothing requests a plan
     preview this stage; `ExecuteGoalAction` always plans *and* executes in
     one call.
+72. **A profile's own `permissions` array is descriptive only, never
+    cross-checked against what its `planning_rules` actually call**
+    (§7.27) — it can silently drift out of date as a profile's rules
+    change over time; real enforcement is unaffected (still per-step,
+    inside `CapabilityToolInvoker`), but the descriptive list itself could
+    mislead an operator provisioning an Agent's permissions from it alone.
+73. **Every `ExecutionStep` `DeterministicPlanner` produces is
+    `Priority::Medium`** (§7.27) — a `planning_rules` list is just an
+    ordered array of capability names, with no per-entry priority concept
+    in the config shape yet, unlike Stage 1's own hand-assigned
+    High/Medium/Low per hardcoded step.
+74. **No `AgentProfileRepositoryInterface` implementation lets an
+    operator edit a profile without a deployment** (§7.27) —
+    `ConfigBasedAgentProfileRepository` is the only implementation; a
+    database-backed one is a real, drop-in future replacement behind the
+    same Interface, not built this stage.
+75. **No Dashboard UI for Agent Profiles** (§7.27) — same gap item 69
+    already flags for Executions/Goals, now also true for
+    `/api/agents/profiles`'s own data.
 
 ---
 
@@ -6137,34 +6410,42 @@ Stage 1 is complete. See §9 for what's next.
 
 Phase 2 (Commerce, all 6 Stages), Phase 3 (CRM, Finance, Workflows,
 Loyalty, Reporting — all 5 Stages), Phase 4 (Shipping & Logistics, all 8
-Stages), Phase 5 (Advanced Commerce, all 5 Stages), and now **Phase 6,
-Stage 1 (Agent Orchestrator, §7.26)** are all complete. Phase 6 itself is
-only one Stage in — whoever drives scope next is choosing where the
-platform goes from here, not just picking the next item off this list
-(the same framing that applied after Phase 4 and Phase 5 each finished).
-Candidates specific to what Phase 6 Stage 1 has already built, roughly in
-order of how much they'd reuse what already exists:
+Stages), Phase 5 (Advanced Commerce, all 5 Stages), Phase 6 Stage 1
+(Agent Orchestrator, §7.26), and now **Phase 6, Stage 2 (Agent Profiles +
+CEO Agent, §7.27)** are all complete. Phase 6 itself is only two Stages
+in — whoever drives scope next is choosing where the platform goes from
+here, not just picking the next item off this list (the same framing
+that applied after Phase 4 and Phase 5 each finished). Candidates
+specific to what Phase 6 has already built, roughly in order of how much
+they'd reuse what already exists:
 
-- **Build the CEO/Sales/Support/Finance Agent personas themselves**
-  (§7.26) — the Orchestrator is explicitly the foundation, not the
-  product; `AgentType` already exists as a classification, `/api/agents/{agent_type}`
-  already routes by it, but nothing yet gives each persona its own
-  identity, memory, or specialized behavior beyond which keyword rules
-  `DeterministicPlanner` happens to match.
+- **Give each Agent persona real identity/specialized behavior beyond its
+  own `planning_rules`** (§7.27) — CEO/Sales/Support/Finance all have
+  working profiles now, but "a persona" today only means "a different
+  config-driven rule table"; nothing yet gives one its own memory,
+  conversational state, or genuinely distinct reasoning beyond which
+  capabilities it calls.
 - **Replace `DeterministicPlanner` with an LLM-based `PlannerInterface`
-  implementation** (§7.26) — the single swap the whole module was
+  implementation** (§7.26/§7.27) — the single swap the whole module was
   designed around; nothing above `PlannerInterface` (`PlanExecutor`,
   `ExecuteGoalAction`, either the HTTP or MCP surface) needs to change.
-  Would also be the natural place to finally use `AgentType` in planning
-  (§8.67) and to produce a domain-aware `summary` instead of a generic
-  completion report.
-- **Fold `AgentType` into `DeterministicPlanner`'s own rule matching**
-  (§8.67) — a smaller, non-LLM increment if the full planner swap isn't
-  ready yet: e.g. a Finance Agent's own goals never touching
-  `commerce.coupon.*`.
-- **A `/dashboard/agents` page** (§8.69) — every Phase 4/5 resource with a
-  Dashboard page reuses the same Actions its own capabilities do (§3
-  pattern #19); Agent Orchestrator's own `ExecuteGoalAction`/
+  It would take the same `AgentProfile` as context (a persona's own
+  `description`/`permissions` are exactly the kind of thing a real
+  planner would reason with) and would be the natural place to finally
+  use `AgentType` *within* a profile's own rule matching (§8.67), not
+  just to select the profile, and to produce a domain-aware `summary`
+  instead of a generic completion report.
+- **A database-backed `AgentProfileRepositoryInterface` implementation**
+  (§8.74) — letting an operator edit a profile without a deployment; a
+  drop-in replacement behind the same Interface
+  `ConfigBasedAgentProfileRepository` implements today.
+- **A real permission-sync check between a profile's own `permissions`
+  and its `planning_rules`** (§8.72) — today purely descriptive, can
+  silently drift.
+- **A `/dashboard/agents` page (Goals/Executions) and a profiles view**
+  (§8.69/§8.75) — every Phase 4/5 resource with a Dashboard page reuses
+  the same Actions its own capabilities do (§3 pattern #19); Agent
+  Orchestrator's own `ExecuteGoalAction`/
   `GetExecutionResultAction`/`ListExecutionsAction` are already shaped for
   this, only the page itself is missing.
 - **A real recipient/segment source for `notification.message.send`**
