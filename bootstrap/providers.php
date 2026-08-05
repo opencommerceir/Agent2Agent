@@ -1,6 +1,7 @@
 <?php
 
 use App\Core\CoreServiceProvider;
+use App\Modules\AgentOrchestrator\AgentOrchestratorServiceProvider;
 use App\Modules\Analytics\AnalyticsServiceProvider;
 use App\Modules\Commerce\CommerceServiceProvider;
 use App\Modules\CRM\CRMServiceProvider;
@@ -38,5 +39,13 @@ return [
     // on, HANDOFF §7.8), so this ordering is a readability choice, not a
     // correctness requirement.
     NotificationsServiceProvider::class,
+    // Registered last — the Agent Orchestrator's own CapabilityToolInvoker
+    // re-enters the Capability Registry every other module's boot() has
+    // already populated by this point (Laravel still runs every
+    // provider's register() before any boot() regardless of this
+    // ordering, the same mechanics Finance/Commerce's
+    // TaxRateProviderInterface rebind already relies on, HANDOFF §7.8) —
+    // a readability choice, not a correctness requirement.
+    AgentOrchestratorServiceProvider::class,
     DemoServiceProvider::class,
 ];

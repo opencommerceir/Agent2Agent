@@ -15,14 +15,26 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 
 /**
  * The single place that turns any Throwable escaping an MCP route into the
  * MCP error envelope ({"error":{"code","message"}}) — wired in
- * bootstrap/app.php, scoped to `mcp/*` requests only via handles(). Every
- * other route (a future Admin API, for instance) keeps Laravel's default
- * exception handling untouched.
+ * bootstrap/app.php, scoped via handles() to `mcp/*` and — Agent
+ * Orchestrator, §7.26 — `api/agents/*` requests. Every other route (the
+ * Admin Dashboard's own `/dashboard/*`, for instance) keeps Laravel's
+ * default exception handling untouched.
+ *
+ * `api/agents/*` was added to handles() rather than duplicating this same
+ * exception -> envelope mapping a second time inside AgentController —
+ * that controller authenticates/rate-limits/authorizes through the exact
+ * same Core Actions MCPGatewayController itself calls
+ * (AgentAuthenticationService/EnforceRateLimitAction/CheckPermissionAction),
+ * so it throws the exact same exception types
+ * (InvalidAgentTokenException/RateLimitExceededException/
+ * PermissionDeniedException) this class already maps correctly; only the
+ * URL prefix differs, not the shape of what can go wrong.
  *
  * Controllers no longer catch these exceptions themselves the way Phase 4
  * did — that logic was duplicated per-controller; it now lives here once.
@@ -58,7 +70,7 @@ final class MCPExceptionHandler
 
     public static function handles(Request $request): bool
     {
-        return $request->is('mcp/*');
+        return $request->is('mcp/*') || $request->is('api/agents/*');
     }
 
     public function render(Throwable $e, Request $request): JsonResponse
@@ -106,8 +118,26 @@ final class MCPExceptionHandler
         };
     }
 
+    /**
+     * A latent gap this class always had, only ever surfaced once a
+     * second route prefix (`api/agents/*`, §7.26) started sharing it: an
+     * unmatched route (a bad `{agentType}` segment, a wrong HTTP verb)
+     * throws Symfony's own `HttpExceptionInterface` — `NotFoundHttpException`/
+     * `MethodNotAllowedHttpException` — carrying its own correct status
+     * code (404/405), which this method used to flatten to 500 the same
+     * as a genuinely unexpected error. Every `mcp/*` route was always
+     * exact-string (`mcp/v1/execute`), so this never had a real chance to
+     * fire there; `api/agents/{agentType}` is this codebase's first route
+     * under either prefix with a `where()` constraint that can fail. Now
+     * preserves the framework's own status code/message for this class of
+     * exception instead of coercing it to INTERNAL_ERROR.
+     */
     private function respondToUnexpected(Throwable $e, Request $request): JsonResponse
     {
+        if ($e instanceof HttpExceptionInterface) {
+            return $this->respond('HTTP_ERROR', $e->getMessage() ?: 'Not found.', $e->getStatusCode(), $request);
+        }
+
         report($e);
 
         $message = config('app.debug')

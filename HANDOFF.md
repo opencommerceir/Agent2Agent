@@ -1,5 +1,14 @@
 # OpenCommerce Platform — Session Handoff
 
+**Status: Phase 6, Stage 1 (Agent Orchestrator, §7.26) is now complete —
+the platform's first module built after Phase 5 finished, and its first
+that is an orchestration layer rather than a business domain: it turns a
+plain-text Goal into a sequence of *existing* MCP capability calls,
+holding no business logic of its own. 920 tests passing (885 + 35 new),
+116 MCP capabilities (113 + 3 new), zero known regressions. See §7.26 for
+the full detail, including every real capability-name/architecture
+correction made from the original request.**
+
 **Status: Phase 1 (Core + MCP Gateway), Phase 2 (Commerce, all 6
 Stages), Phase 3 (Domain Expansion, all 5 Stages — CRM, Finance,
 Workflows, Loyalty, Reporting), and Phase 4 (Shipping & Logistics, all 8
@@ -851,8 +860,24 @@ real retries — transitioning to PastDue, proving the `markPastDue()`
 self-transition fix above end to end). 885 tests total (810 + 75 new),
 2295 assertions, zero known regressions.
 
-Phase 5 (Advanced Commerce) is now fully complete — all 5 Stages. See §9
-for what's next across the whole platform.
+Phase 5 (Advanced Commerce) is now fully complete — all 5 Stages.
+
+**Phase 6, Stage 1 (Agent Orchestrator, §7.26) ran immediately after —
+the platform's first module scoped after Phase 5 finished, and a
+different shape than any Domain Module before it: an orchestration layer
+that turns a plain-text Goal into a sequence of *existing* MCP capability
+calls, with no business logic of its own (every fact it produces comes
+from another module's own capability, invoked through the same
+`CapabilityExecutionService` machinery `/mcp/v1/execute` itself uses).
+The request's own worked example named 3 illustrative capabilities that
+don't exist anywhere in this codebase
+(`reporting.sales.summary`/`analytics.top_products`/`inventory.check`) —
+corrected to real ones during planning, the same "audit before building"
+discipline every prior stage's own request-vs-codebase mismatch got. See
+§7.26 for the full detail.**
+
+920 tests passing (885 + 35 new), 116 MCP capabilities, zero known
+regressions. See §9 for what's next across the whole platform.
 
 This file is a working-state snapshot for picking up development in a new
 session. It assumes you've already read `CLAUDE.md` and `docs/*.md` (the
@@ -1137,6 +1162,68 @@ Controllers Rule: no business logic in Controllers). Gated by the `auth`
   `$this->withoutVite()` so they never depend on a fresh build existing.
 - **Seeded default admin**: `admin@opencommerce.test` / `password`
   (`DatabaseSeeder`) — change or remove before any real deployment.
+
+### `app/Modules/AgentOrchestrator/` — **new in Phase 6, Stage 1 (§7.26). Goal -> Plan -> Execute — an orchestration layer over every other module's own MCP capabilities, with no business logic of its own.**
+
+See §7.26 for the full detail. 4 Domain Entities (`Goal`, `ExecutionPlan`,
+`ExecutionStep`, `ExecutionResult`), 3 Value Objects (`AgentType`,
+`StepStatus`, `Priority`), 3 domain events (`GoalReceived`/`StepExecuted`/
+`GoalCompleted` — none has a registered Listener yet except this module's
+own `LogExecutionStepListener`, which only reacts to `StepExecuted`), 3
+exceptions (`GoalExecutionFailedException`/`CapabilityNotFoundException`/
+`ExecutionNotFoundException` — the last one added unprompted, §3 pattern
+#12), 3 Domain Service interfaces (`PlannerInterface`/
+`PlanExecutorInterface`/`ToolInvokerInterface` — the latter two are this
+codebase's one deliberate exception to taking `AuthContext` directly
+rather than plain scalars, §3 pattern #1, since their whole job is
+re-entering the same MCP capability boundary that rule protects — see
+`ToolInvokerInterface`'s own docblock), 1 Repository interface
+(`ExecutionMemoryRepositoryInterface`, owns `ExecutionStep` persistence
+too), 3 Application Actions (`ExecuteGoalAction`/`GetExecutionResultAction`/
+`ListExecutionsAction` — all 3 reused by both this module's own MCP
+capabilities and its `/api/agents/*` HTTP surface, HANDOFF §3 pattern
+#19), 3 Application Services (`DeterministicPlanner`/`PlanExecutor`/
+`CapabilityToolInvoker` — the one implementation each of the 3 Domain
+Service interfaces above), 1 Listener, 2 Eloquent models, 1 Eloquent
+repository, 2 migrations, backing 3 MCP capabilities
+(`agent.goal.execute`/`agent.execution.get`/`agent.execution.list`) plus
+its own `/api/agents/{agent_type}` and `/api/agents/executions[/{id}]`
+HTTP routes (`routes/agents.php`, loaded by
+`AgentOrchestratorServiceProvider::boot()`, the same "a module owns and
+loads its own routes" shape `routes/mcp.php` itself uses via
+`CoreServiceProvider`).
+
+`CapabilityToolInvoker` is the load-bearing piece: it invokes any
+capability through the exact same `GetCapabilityAction` ->
+`CheckPermissionAction` -> `CapabilityExecutionService` sequence
+`AbstractMCPGatewayController` itself uses, so a capability called through
+this Orchestrator is authorized, validated, and executed identically to
+one called directly over `/mcp/v1/execute` — this module never re-reads
+another Domain Module's Repository or Action directly, and never invents
+a second execution path. `DeterministicPlanner` is the one MVP `PlannerInterface`
+implementation — a small, hardcoded set of keyword rules over a Goal's
+own text, deliberately built to be replaced by an LLM-based planner behind
+the same Interface later, with nothing above it needing to change.
+
+Extended `MCPExceptionHandler::handles()` (Core) to also cover
+`api/agents/*`, not `mcp/*` alone — a genuinely additive, one-line change
+(not a rewrite) so this module's own HTTP surface gets the exact same
+exception -> envelope mapping `/mcp/*` already has, rather than
+duplicating that mapping a second time inside `AgentController`. Doing so
+surfaced and fixed one real, latent, pre-existing gap in that shared
+class: an unmatched route (Symfony's own `HttpExceptionInterface`, e.g.
+`NotFoundHttpException`) was always being flattened to `INTERNAL_ERROR`/500
+instead of its own real status code — never reachable before, since every
+`mcp/*` route was an exact string with nothing to mismatch; this module's
+own `{agentType}` route (constrained to `ceo|sales|support|finance`) is
+this codebase's first route under either prefix that a request can
+genuinely fail to match.
+
+`NotificationType` (Notifications module) gained one new, purely additive
+case, `PromotionAnnouncement` — the same shape `SubscriptionPaymentFailed`
+was added in (§7.25) — since `DeterministicPlanner`'s own sales-growth
+plan needs a real `notification.message.send` `type` for "a marketing
+message" and none of the other 5 existing cases fit.
 
 ### `app/Modules/Demo/` — unchanged since Phase 1
 
@@ -1748,6 +1835,117 @@ app/Modules/Analytics/             new in Phase 4, Stage 6 (§7.18) —
 │   └── Repositories/               EloquentKPIRepository, EloquentAnalyticsSnapshotRepository
 └── AnalyticsServiceProvider.php   binds 2 Repository interfaces,
                                    registers 5 capability handlers (§6)
+
+app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
+                                   orchestration layer, not a business
+                                   domain; depends on Core's
+                                   GetCapabilityAction/CheckPermissionAction/
+                                   CapabilityExecutionService directly
+                                   (the exact building blocks
+                                   AbstractMCPGatewayController itself
+                                   uses) rather than any other module's
+                                   Repository Interface
+├── Domain/
+│   ├── Entities/                 Goal, ExecutionPlan, ExecutionStep,
+│   │                             ExecutionResult
+│   ├── ValueObjects/             AgentType (ceo/sales/support/finance),
+│   │                             StepStatus (+ Skipped, modeled but
+│   │                             unreached this stage), Priority
+│   │                             (informational only, doesn't affect
+│   │                             execution order)
+│   ├── Events/                   GoalReceived, StepExecuted, GoalCompleted
+│   │                             (none has a registered Listener except
+│   │                             this module's own LogExecutionStepListener,
+│   │                             which only reacts to StepExecuted)
+│   ├── Services/                 PlannerInterface, PlanExecutorInterface,
+│   │                             ToolInvokerInterface (the latter two take
+│   │                             AuthContext directly — the one deliberate
+│   │                             exception to §3 pattern #1 in this
+│   │                             codebase, see ToolInvokerInterface's own
+│   │                             docblock)
+│   ├── Repositories/              ExecutionMemoryRepositoryInterface (owns
+│   │                             ExecutionStep persistence too)
+│   └── Exceptions/                GoalExecutionFailedException (neither
+│                                  marker interface, same reasoning
+│                                  WooCommerceApiException has),
+│                                  CapabilityNotFoundException (this
+│                                  module's own wrapper around Core's
+│                                  identically-named exception, §3 pattern
+│                                  #9), ExecutionNotFoundException (added
+│                                  unprompted, §3 pattern #12 — both
+│                                  NotFoundExceptionInterface)
+├── Application/
+│   ├── Actions/                  ExecuteGoalAction (the one Action every
+│   │                             Agent-facing surface calls into — the
+│   │                             other deliberate AuthContext exception,
+│   │                             kept as narrow as possible),
+│   │                             GetExecutionResultAction,
+│   │                             ListExecutionsAction (both plain
+│   │                             int $tenantId, no exception needed)
+│   ├── DTOs/                     GoalData, ExecutionStepData,
+│   │                             ExecutionPlanData (unused by anything
+│   │                             yet — a future "preview my plan" surface's
+│   │                             natural return shape), ExecutionResultData
+│   │                             (deliberately snake_case toArray(), this
+│   │                             module's own documented wire contract)
+│   ├── Services/                 DeterministicPlanner (the one MVP
+│   │                             PlannerInterface implementation —
+│   │                             hardcoded keyword rules, see its own
+│   │                             docblock for the full request-vs-real-
+│   │                             capability-name correction), PlanExecutor,
+│   │                             CapabilityToolInvoker
+│   └── Listeners/                LogExecutionStepListener (owns every
+│                                  "a step ran" log line — kept out of
+│                                  PlanExecutor itself)
+├── Infrastructure/
+│   ├── Models/                    Execution, ExecutionStep (2 Eloquent
+│   │                              models — agent_executions/
+│   │                              agent_execution_steps tables)
+│   ├── Repositories/               EloquentExecutionMemoryRepository
+│   │                              (ExecutionStep::reconstruct() rebuilds
+│   │                              a persisted step directly into its
+│   │                              terminal state, bypassing the Domain
+│   │                              entity's own transition guards — the
+│   │                              same "toEntity() reconstructs directly"
+│   │                              shape every other Eloquent Repository
+│   │                              in this codebase already has)
+│   └── Controllers/                AgentController (throws, never
+│                                   catches — every exception maps to the
+│                                   right HTTP status via MCPExceptionHandler,
+│                                   extended this stage to also cover
+│                                   api/agents/*)
+├── Interfaces/MCP/                AgentOrchestratorCapabilities.php (the
+│                                  manifest AgentOrchestratorCapabilitiesSeeder
+│                                  reads — not named in the original
+│                                  request, added unprompted so this
+│                                  module's own Actions are reachable both
+│                                  via /api/agents/* and via MCP, §3
+│                                  pattern #12)
+└── AgentOrchestratorServiceProvider.php   binds ExecutionMemoryRepositoryInterface/
+                                   PlannerInterface/ToolInvokerInterface/
+                                   PlanExecutorInterface, loads
+                                   routes/agents.php, Event::listen()s
+                                   LogExecutionStepListener, registers 3
+                                   capability handlers (§6)
+
+routes/agents.php                  new in Phase 6, Stage 1 (§7.26) —
+                                   loaded by
+                                   AgentOrchestratorServiceProvider::boot()
+                                   via loadRoutesFrom(), the same
+                                   "a module owns and loads its own
+                                   routes" shape routes/mcp.php itself
+                                   uses via CoreServiceProvider
+
+app/Core/Exceptions/MCPExceptionHandler.php   handles() extended to also
+                                   match api/agents/* (§7.26) — also fixed
+                                   a real, latent, pre-existing gap this
+                                   surfaced: an unmatched route's own
+                                   HttpExceptionInterface (404/405) was
+                                   always flattened to INTERNAL_ERROR/500
+                                   instead of its own real status code
+
+database/migrations/2026_08_11_000077-000078   agent_executions,
+                                   agent_execution_steps (§7.26)
 
 app/Modules/Demo/                  unchanged since Phase 1
 
@@ -2417,7 +2615,7 @@ end to end.
 
 ---
 
-## 6. The 113 MCP capabilities that exist right now
+## 6. The 116 MCP capabilities that exist right now
 
 | Capability | Phase/Stage | Permission | Notes |
 |---|---|---|---|
@@ -2534,6 +2732,9 @@ end to end.
 | `commerce.subscription.cancel` | P5.5 | `commerce.subscriptions.manage` | `immediate` optional, defaults to false (schedules `cancel_at_period_end` instead of transitioning now). |
 | `commerce.subscription.upgrade` | P5.5 | `commerce.subscriptions.manage` | In-place plan swap (`changePlan()`), not a new Subscription row — a documented scope simplification, §7.25. Prorated charge only if > 0 cents; a decline rolls back the whole plan change. |
 | `commerce.invoice.list` | P5.5 | `commerce.subscriptions.read` | Renamed from `commerce.subscription.invoice.list` — 4 segments, see §7.25. Name coincidentally echoes Finance's unrelated `finance.invoice.*` — never interchangeable, same as `TaxRate`'s own cross-module name coincidence (§7.8). |
+| `agent.goal.execute` | P6.1 | `agent.goals.execute` | Renamed/derived from the request's own `/api/agents/{agent_type}` HTTP-only surface — added unprompted so this module's own Actions are reachable via MCP too, §7.26/§3 pattern #12. Plans and executes a Goal via `DeterministicPlanner`. |
+| `agent.execution.get` | P6.1 | `agent.executions.read` | One past Execution by id, tenant-scoped by `findById()`, same shape as `crm.ticket.get`. |
+| `agent.execution.list` | P6.1 | `agent.executions.read` | Optional `agent_type`/`status`/`limit`. |
 
 **Deliberately NOT wired to MCP** despite the underlying Action existing and
 being fully tested (see §8.2 for why, and the same reasoning each time):
@@ -5292,6 +5493,218 @@ self-transition fix above end to end).
 885 tests total (810 + 75), 2295 assertions, zero known regressions.
 **Phase 5 (Advanced Commerce) is now fully complete — all 5 Stages.**
 
+### 7.26 Phase 6, Stage 1 — Agent Orchestrator
+
+**The first module scoped after Phase 5 finished, and the first that is
+an orchestration layer rather than a business domain.** Every prior
+module (Commerce through Analytics) owns real business state and real
+business rules; Agent Orchestrator owns neither — it turns a plain-text
+Goal into an ordered sequence of *other* modules' own MCP capabilities,
+executed through the exact same `CapabilityExecutionService`/
+`CapabilityHandlerRegistry` machinery `/mcp/v1/execute` itself uses, and
+persists the outcome. "No business logic" was the request's own explicit,
+first-listed rule — every design decision below was made to keep that
+true, not just stated.
+
+**Three real corrections from the request's own worked example, audited
+against the live codebase before writing any code — the same "audit
+before building" discipline Stage 8's own index-list/N+1 audit and every
+later stage's own request-vs-codebase check already established (§7.20
+onward):**
+
+1. **None of the request's own 3 illustrative capability names exist.**
+   `reporting.sales.summary`, `analytics.top_products`, and
+   `inventory.check` appear nowhere in this codebase's live Capability
+   Registry. `DeterministicPlanner`'s actual sales-growth plan uses 4 real
+   capabilities instead: `report.sales.generate` (Reporting),
+   `analytics.kpi.calculate` — called *twice*, once per `KPIType`
+   (`top_products`/`low_stock_products`, both of which already existed on
+   that enum, unused until now) rather than inventing two capabilities
+   Analytics never defined — `commerce.coupon.create`, and
+   `notification.message.send`. This is the same class of correction
+   Stage 8's own "the requested index list mostly already existed, two
+   entries referenced columns that don't exist at all" finding was
+   (§7.20) — a request's own worked example describing a capability that
+   sounds right isn't the same as one that's actually registered.
+2. **Every step's `input` had to be filled with concrete, deterministic
+   values — the request's own pseudocode left every step's `input` as an
+   empty array (`[]`).** `MCPRequestValidationService` (Core, unchanged)
+   rejects any capability call missing a field its `inputSchema`
+   declares; an empty `input` would have failed validation for every
+   single step in the request's own worked example before it ever reached
+   a Domain Module. `DeterministicPlanner` computes a 7-day (sales) or
+   30-day (finance) date range, parses a discount percentage out of the
+   Goal's own text (`/(\d{1,3})\s*%/`, defaulting to 10), and generates a
+   random `COUPON-XXXXX` code — all orchestration-level parameter-filling,
+   never a business decision about what a *good* discount or campaign is
+   (that remains entirely inside Commerce's/Notifications' own Actions,
+   untouched). Documented as a deliberate MVP limitation, not silently
+   patched over — a future LLM-based planner is the natural place for
+   genuinely reasoned parameters instead of these fixed defaults.
+3. **`notification.message.send` needs a real `NotificationType`, and none
+   of the 5 existing cases fit "a marketing/promotional message."**
+   `NotificationType` (Notifications module) gained one new, purely
+   additive case, `PromotionAnnouncement` — the identical shape
+   `SubscriptionPaymentFailed` was added in (§7.25, itself purely
+   additive, no existing case touched). `recipient` is a fixed placeholder
+   address (`marketing@opencommerce.local`), not a real customer/segment
+   list — a Goal's own free text carries none, and building a
+   segment/broadcast mechanism is out of scope for an orchestration layer
+   with no business logic of its own; documented on `DeterministicPlanner`
+   itself rather than silently faked as a real send to real customers.
+
+**The request's own literal file tree put `AuthContext` directly into
+`PlannerInterface`/`PlanExecutorInterface`/`ToolInvokerInterface`
+(Domain/Services) and into `ExecuteGoalAction`'s own signature — all four
+contradict HANDOFF §3 pattern #1 ("Domain Repository interfaces and
+Application Actions take plain `int $tenantId`/`$agentId` — never
+`AuthContext` itself... only `CommerceServiceProvider`'s handler closures
+unpack it").** Resolved by keeping the exception as narrow as the real
+need, not by mechanically enforcing the old rule where it would actually
+break the design: `PlannerInterface::createPlan(Goal $goal)` takes no
+identity at all (planning is tenant-independent — confirmed, not assumed,
+since a Planner's whole job is "what capabilities would satisfy this
+goal," never "which tenant's data"). `ToolInvokerInterface`/
+`PlanExecutorInterface` **do** take `AuthContext` directly — the one
+deliberate, documented exception — because they must forward a complete,
+valid `AuthContext` (including the already-resolved `Language`) into
+`CapabilityExecutionService::execute()`, the same object
+`AbstractMCPGatewayController` itself constructs and threads; there is no
+way to reconstruct an equivalent `AuthContext` from bare scalars without
+duplicating `LanguageDetector`'s own logic inside this module too. This is
+the *mirror* of pattern #1, not a violation of its intent: the rule exists
+to keep `AuthContext` from leaking into ordinary Domain Module Actions
+that only ever need `tenantId`/`agentId` scalars for their own
+persistence; `CapabilityToolInvoker`/`PlanExecutor` are not doing that —
+they are re-entering the exact MCP capability boundary the rule was
+written to keep `AuthContext` *at*, one call removed.
+`ExecuteGoalAction` takes `AuthContext` too, for the same forwarding
+reason — but `GetExecutionResultAction`/`ListExecutionsAction`, which
+only ever need `tenantId` to query `ExecutionMemoryRepositoryInterface`,
+correctly take a plain `int $tenantId`, keeping the exception as narrow as
+the actual need. See `ToolInvokerInterface`'s own docblock for the fullest
+version of this reasoning.
+
+**A real, latent, pre-existing gap in Core's own `MCPExceptionHandler`
+was found and fixed while wiring this module's own error handling, not
+introduced by it.** The request's own `AgentController` pseudocode
+hand-rolled try/catch blocks mapping specific exceptions to specific HTTP
+statuses — building that would have duplicated the exact
+exception-to-envelope table `MCPExceptionHandler` already maintains for
+`/mcp/*`, and every exception `AgentController` can actually raise
+(`InvalidAgentTokenException`/`RateLimitExceededException`/
+`PermissionDeniedException`/a plain `InvalidArgumentException`/this
+module's own `NotFoundExceptionInterface`-marked exceptions) is already
+mapped correctly there, since `AgentController` authenticates/rate-limits/
+authorizes through the exact same Core Actions `MCPGatewayController`
+itself calls. Extended `MCPExceptionHandler::handles()` to also match
+`api/agents/*` (one line) instead, and deleted `AgentController`'s own
+try/catch entirely — it now only ever throws. Doing this surfaced a real
+bug: an unmatched route (Symfony's own `HttpExceptionInterface`, e.g.
+`NotFoundHttpException` for `/api/agents/marketing`, which fails the
+route's own `{agentType}` `where('ceo|sales|support|finance')`
+constraint) was being flattened by `respondToUnexpected()` into
+`INTERNAL_ERROR`/500 instead of its own real 404 — this was always latent
+in `MCPExceptionHandler`, just never reachable, since every `mcp/*` route
+is an exact string (`mcp/v1/execute`) with nothing for a request to fail
+to match. `respondToUnexpected()` now checks for `HttpExceptionInterface`
+first and preserves its own status code/message, the same "found a real
+pre-existing bug while building the next thing" shape this codebase has
+hit repeatedly (§7.9/§7.10/§7.12/§7.14).
+
+**`ExecutionMemoryRepositoryInterface` is genuinely persisted — two real
+tables (`agent_executions`/`agent_execution_steps`), not a request-lifetime
+in-memory array**, despite the request's own text calling it "in-memory
+for MVP." `GET /api/agents/executions/{id}` working across separate HTTP
+requests (a stateless PHP-FPM/web-server process per request) requires
+real storage; a pure in-memory array would lose every Execution the
+instant the request ended. Read as a loose/imprecise phrase in the
+request rather than a literal requirement, since the request's own file
+list explicitly named `Infrastructure/Models/{Execution,ExecutionStep}.php`
++ `EloquentExecutionMemoryRepository.php` (Eloquent implies real tables)
+and its own Future Roadmap section separately listed "Persistent
+execution history" as unbuilt future work — a genuine inconsistency
+inside the request itself, resolved in favor of what the explicit file
+list and the explicit `GET` endpoints actually require. `ExecutionStep::reconstruct()`
+(a new, `EloquentExecutionMemoryRepository`-only static factory) rebuilds
+a persisted step directly into its already-terminal state rather than
+replaying it through `markAsRunning()`/`markAsCompleted()`'s own
+transition guards a second time — the same "toEntity() reconstructs
+directly, business methods are for actual transitions" split every other
+Eloquent Repository's own `toEntity()` in this codebase already relies on.
+
+**This module also exposes its own MCP capabilities
+(`agent.goal.execute`/`agent.execution.get`/`agent.execution.list`) —
+not named in the request, which only ever specified the `/api/agents/*`
+HTTP surface.** Added unprompted for the same reason every prior "add
+unprompted" precedent in this codebase gives (§3 pattern #12): every
+other module's own capabilities are reachable both directly over MCP
+*and* through whatever transport-specific surface it also has (the Admin
+Dashboard reuses the same Actions its own capabilities do, §3 pattern
+#19) — `AgentController`'s 3 HTTP endpoints reuse the exact same 3
+Actions these 3 capabilities call, so an external MCP client (another
+Agent, a future multi-agent orchestration one level up) can trigger a
+Goal the identical way a human-facing client hitting
+`/api/agents/{agent_type}` can, without a second implementation.
+
+**`ExecutionNotFoundException` wasn't in the request's own list of 2**
+(`GoalExecutionFailedException`/`CapabilityNotFoundException`) — added
+unprompted for the same reason every prior "add unprompted" precedent in
+this codebase gives: `GetExecutionResultAction` needs a real 404 for an
+unknown/cross-tenant execution id, the same gap CRM's own
+`TagNotFoundException`/Finance's own `OrderNotFoundException`/every
+similar addition already filled for their own modules.
+
+**`routes/agents.php` uses one parametrized route
+(`Route::post('/{agentType}', ...)->where('agentType', 'ceo|sales|support|finance')`)
+rather than the request's own 4 literal routes each pointing at the same
+controller method** — identical resulting URLs
+(`/api/agents/ceo`, `/api/agents/sales`, ...), without repeating one line
+four times; loaded via `AgentOrchestratorServiceProvider::boot()`'s own
+`loadRoutesFrom()` call, the same "a module owns and loads its own
+routes" shape `routes/mcp.php` itself uses via `CoreServiceProvider`,
+rather than adding a new `api:` parameter to `bootstrap/app.php`'s own
+`withRouting()` (which would have pulled in Laravel's default `api`
+middleware group/conventions this codebase doesn't otherwise use anywhere
+— `routes/mcp.php` itself deliberately bypasses that same default for the
+identical "stateless JSON endpoint for Agents, not a browser session"
+reason).
+
+**`AgentType` is recorded on every Goal/Execution but is not yet what
+`DeterministicPlanner` branches on** — it keys off the Goal's own text
+(`str_contains($text, 'sales')`, etc.), the identical dispatch shape the
+request's own pseudocode used. This is a real, honestly-scoped MVP gap,
+not an oversight: a CEO Agent and a Sales Agent stating the same goal text
+get the identical plan today. A future LLM-based planner is the natural
+place for `AgentType` to start actually shaping the plan (e.g. a Finance
+Agent's own goals never touching `commerce.coupon.*`).
+
+New tests: `tests/Unit/AgentOrchestrator/{GoalTest,ExecutionStepTest,
+ExecutionResultTest,DeterministicPlannerTest}.php` (framework-free,
+including a regression guard asserting every planned step's own `input`
+satisfies its real capability's schema — the exact bug class pattern #2
+above describes), `tests/Feature/AgentOrchestrator/{PlanExecutorTest,
+CapabilityToolInvokerTest,AgentControllerTest,GoalExecutionTest,
+ErrorHandlingTest}.php` — `PlanExecutorTest`/`CapabilityToolInvokerTest`
+are Laravel-booted Feature tests despite testing one class in relative
+isolation, purely because `PlanExecutor` dispatches real Domain Events
+through the `Event` facade and `CapabilityToolInvoker` needs the real
+Capability Registry/permission system, the same "needs a booted
+container/config, not because it's a full end-to-end scenario" reasoning
+`MCPRateLimitTest`/`DeprecationNotifierTest` already established.
+`GoalExecutionTest` is the literal end-to-end scenario from the request:
+`POST /api/agents/ceo` with "Increase sales by 15% this week" -> all 5
+real steps run -> every step `completed` -> a real summary -> retrievable
+afterward via `GET /api/agents/executions/{id}` -> `GET /api/agents/executions`
+lists it. `ErrorHandlingTest` proves a single failed step (an Agent
+missing `commerce.coupons.create`) never aborts the other 4, and that an
+Agent from one Tenant gets a 404/empty list for another Tenant's own
+Executions, never someone else's data.
+
+920 tests passing (885 + 35 new), 2393 assertions (2295 + 98 new), zero
+known regressions — confirmed by actually running the full suite. Phase 6,
+Stage 1 is complete. See §9 for what's next.
+
 ---
 
 ## 8. Known technical debt (ranked, carried over + Phase 2 additions)
@@ -5693,6 +6106,30 @@ self-transition fix above end to end).
     it meaningfully today (every charge just succeeds/declines based on
     `simulate_failure`), so this gap has no test-visible symptom yet, only
     a real one once a real gateway integration exists.
+67. **`DeterministicPlanner` keys off a Goal's own text, not `AgentType`**
+    (§7.26) — a CEO Agent and a Sales Agent stating the identical goal text
+    get the identical plan today; `AgentType` is recorded on every
+    Goal/Execution as metadata but not yet read by the planner itself.
+68. **`notification.message.send`'s `recipient` is a fixed placeholder
+    address, not a real customer/segment list** (§7.26) — a Goal's own
+    free text carries no real recipient list, and this module has no
+    business logic to build one from. The sales-growth plan's own
+    notification step demonstrates the *pattern* of triggering a
+    notification, not a real broadcast to real customers.
+69. **No Dashboard UI for Agent Orchestrator** (§7.26) — every Phase 4/5
+    resource with a Dashboard page got one; Executions/Goals didn't,
+    since no `/dashboard/agents` page was requested this stage.
+70. **`DeterministicPlanner` only has 3 keyword rules** (`sales`/
+    `support`+`ticket`/`finance`+`revenue`+`invoice`) — any other goal text
+    produces an empty plan (`status: empty`), a real, honestly-scoped MVP
+    limitation, not a bug — the request's own worked example only ever
+    specified the sales-growth rule in detail.
+71. **`ExecutionPlanData` (Application/DTOs) has no caller yet** (§7.26) —
+    built as the natural return shape for a future "preview my plan before
+    running it" capability (the same "preview vs. durable apply" split §3
+    pattern #4 already establishes elsewhere), but nothing requests a plan
+    preview this stage; `ExecuteGoalAction` always plans *and* executes in
+    one call.
 
 ---
 
@@ -5700,16 +6137,54 @@ self-transition fix above end to end).
 
 Phase 2 (Commerce, all 6 Stages), Phase 3 (CRM, Finance, Workflows,
 Loyalty, Reporting — all 5 Stages), Phase 4 (Shipping & Logistics, all 8
-Stages), and now **Phase 5 (Advanced Commerce, all 5 Stages)** are all
-fully complete: Product Variants (§7.21), Multi-warehouse Inventory
-(§7.22), Bulk Operations (§7.23 — this codebase's first background Jobs),
-Advanced Discount Rules (§7.24), and Subscription & Recurring Orders
-(§7.25 — this codebase's 2nd/3rd background Jobs, its first recurring
-billing engine). No Phase 6 is scoped yet — whoever drives scope next is
-choosing where the platform goes after Phase 5, not just picking the next
-item off this list (the same framing that applied after Phase 4 finished,
-one Phase earlier). Candidates specific to what Phase 5 has already
-built, roughly in order of how much they'd reuse what already exists:
+Stages), Phase 5 (Advanced Commerce, all 5 Stages), and now **Phase 6,
+Stage 1 (Agent Orchestrator, §7.26)** are all complete. Phase 6 itself is
+only one Stage in — whoever drives scope next is choosing where the
+platform goes from here, not just picking the next item off this list
+(the same framing that applied after Phase 4 and Phase 5 each finished).
+Candidates specific to what Phase 6 Stage 1 has already built, roughly in
+order of how much they'd reuse what already exists:
+
+- **Build the CEO/Sales/Support/Finance Agent personas themselves**
+  (§7.26) — the Orchestrator is explicitly the foundation, not the
+  product; `AgentType` already exists as a classification, `/api/agents/{agent_type}`
+  already routes by it, but nothing yet gives each persona its own
+  identity, memory, or specialized behavior beyond which keyword rules
+  `DeterministicPlanner` happens to match.
+- **Replace `DeterministicPlanner` with an LLM-based `PlannerInterface`
+  implementation** (§7.26) — the single swap the whole module was
+  designed around; nothing above `PlannerInterface` (`PlanExecutor`,
+  `ExecuteGoalAction`, either the HTTP or MCP surface) needs to change.
+  Would also be the natural place to finally use `AgentType` in planning
+  (§8.67) and to produce a domain-aware `summary` instead of a generic
+  completion report.
+- **Fold `AgentType` into `DeterministicPlanner`'s own rule matching**
+  (§8.67) — a smaller, non-LLM increment if the full planner swap isn't
+  ready yet: e.g. a Finance Agent's own goals never touching
+  `commerce.coupon.*`.
+- **A `/dashboard/agents` page** (§8.69) — every Phase 4/5 resource with a
+  Dashboard page reuses the same Actions its own capabilities do (§3
+  pattern #19); Agent Orchestrator's own `ExecuteGoalAction`/
+  `GetExecutionResultAction`/`ListExecutionsAction` are already shaped for
+  this, only the page itself is missing.
+- **A real recipient/segment source for `notification.message.send`**
+  (§8.68) — replacing the fixed placeholder address in the sales-growth
+  plan's own notification step with a real customer list, once this
+  module (or a future one) has a real concept of "which customers should
+  hear about this."
+- **A "preview my plan before running it" capability** (§8.71) —
+  `ExecutionPlanData` already exists for this; only a new Action/capability
+  that calls `PlannerInterface::createPlan()` alone (no `PlanExecutorInterface`
+  call) is missing, the same "preview vs. durable apply" split §3 pattern
+  #4 already establishes for `CalculatePricingAction`/`ApplyCouponAction`.
+- **More `DeterministicPlanner` keyword rules**, or recursive/self-
+  reflective planning (a step's own output feeding a later step's input,
+  or the Orchestrator revising a plan mid-run) — both explicitly named in
+  this module's own Future Roadmap (`docs/agent-orchestrator.md`) as
+  unstarted.
+
+Candidates specific to what Phase 5 had already built, roughly in order
+of how much they'd reuse what already exists:
 
 - **A Dashboard UI across every Phase 5 resource** (§7.21-§7.25) —
   Warehouses/Transfers, ProductVariants/Attributes, BulkOperations,

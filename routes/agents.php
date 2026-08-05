@@ -1,0 +1,35 @@
+<?php
+
+use App\Modules\AgentOrchestrator\Infrastructure\Controllers\AgentController;
+use Illuminate\Support\Facades\Route;
+
+/*
+|--------------------------------------------------------------------------
+| Agent Orchestrator Routes
+|--------------------------------------------------------------------------
+|
+| Loaded by AgentOrchestratorServiceProvider::boot() via loadRoutesFrom(),
+| the same "a module owns and loads its own routes" shape routes/mcp.php
+| itself uses (loaded by CoreServiceProvider::boot()) — independent of
+| bootstrap/app.php's web/api split. Stateless JSON endpoints for AI
+| Agents, not browser sessions, so they carry none of the 'web' middleware
+| group; Agent authentication/rate-limiting/permission checks all happen
+| per-request inside AgentController, mirroring how routes/mcp.php's own
+| controllers authenticate an Agent without a route middleware.
+|
+| One parametrized route (`{agentType}`, constrained to the 4 supported
+| values) rather than 4 literal routes each pointing at the same
+| controller method — same URLs (`/api/agents/ceo`, `/api/agents/sales`,
+| ...) the module's own request specified, without repeating one line
+| four times.
+|
+*/
+
+Route::prefix('api/agents')->group(function () {
+    Route::post('/{agentType}', [AgentController::class, 'execute'])
+        ->where('agentType', 'ceo|sales|support|finance');
+
+    Route::get('/executions', [AgentController::class, 'listExecutions']);
+    Route::get('/executions/{execution}', [AgentController::class, 'getExecution'])
+        ->where('execution', '[0-9]+');
+});

@@ -205,6 +205,38 @@ The Core Platform remains domain-independent, allowing new modules to be added w
 
 ---
 
+## Agent Orchestrator
+
+Phase 6's first module, and the platform's first step from "Agents can call
+one capability at a time" toward "Agents can pursue a whole business Goal."
+The Agent Orchestrator is an **orchestration layer with no business logic
+of its own** — it turns a plain-text Goal ("Increase sales by 15% this
+week") into an ordered sequence of *existing* OpenCommerce MCP
+capabilities, executes them on the calling Agent's behalf through the same
+`CapabilityExecutionService`/`CapabilityHandlerRegistry` machinery
+`/mcp/v1/execute` itself uses, and never aborts a plan just because one
+step failed.
+
+- `POST /api/agents/{ceo|sales|support|finance}` with `{"goal": "..."}` —
+  plus the identical `agent.goal.execute`/`agent.execution.get`/
+  `agent.execution.list` MCP capabilities for a caller that is itself an
+  Agent.
+- Today's planner (`DeterministicPlanner`) is a small, hardcoded set of
+  keyword rules — an explicit MVP, designed to be replaced by an
+  LLM-based planner behind the same `PlannerInterface` without changing
+  anything above it.
+- Built to be the foundation a CEO Agent, Sales Agent, Support Agent, and
+  Finance Agent can all be layered on top of next.
+
+See `docs/agent-orchestrator.md` for the full architecture and
+`HANDOFF.md` §7.26 for the build log, including every deliberate
+correction made from the original request (real capability names in
+place of illustrative ones, why `AuthContext` is threaded through this
+module's own Domain Service interfaces as a documented exception, and
+more).
+
+---
+
 ## Technology Stack
 
 OpenCommerce Platform is built using modern technologies and architectural principles.
@@ -265,6 +297,7 @@ phase/stage breakdown and `HANDOFF.md` for the detailed build log.
 - [x] Notifications domain (Email/SMS/Webhook/In-App)
 - [x] Analytics & KPIs domain
 - [x] Admin Dashboard (session-authenticated, bilingual EN/FA)
+- [x] Agent Orchestrator (Phase 6, Stage 1 — goal -> plan -> execute, deterministic MVP planner)
 - [ ] Additional SDKs (TypeScript, Node.js, Python, Go — PHP SDK is the
       only one built so far)
 - [ ] Real carrier (USPS/FedEx/DHL) and SMS gateway integrations (mock/stub today)
@@ -274,18 +307,21 @@ phase/stage breakdown and `HANDOFF.md` for the detailed build log.
 
 ## Project Status
 
-> ✅ **Phase 5 Complete — Advanced Commerce**
+> ✅ **Phase 5 Complete — Advanced Commerce** · 🚧 **Phase 6, Stage 1 — Agent Orchestrator**
 
 OpenCommerce Platform has moved past the foundation stage: Core, MCP
-Gateway, and UCP are stable, and 10 Domain Modules are built, tested, and
+Gateway, and UCP are stable, and 11 Domain Modules are built, tested, and
 MCP-reachable — Commerce (incl. multi-warehouse inventory, variants, bulk
 operations, and subscriptions), CRM, Finance, Workflows, Loyalty,
-Reporting, Shipping, Notifications, and Analytics, plus a bilingual Admin
-Dashboard for human operators. 885 automated tests pass across 113 MCP
-capabilities, with zero known regressions.
+Reporting, Shipping, Notifications, Analytics, and the new Agent
+Orchestrator, plus a bilingual Admin Dashboard for human operators. 920
+automated tests pass across 116 MCP capabilities, with zero known
+regressions.
 
-The current focus is Phase 6 scoping (not yet decided) alongside the
-ongoing infrastructure track — see `docs/roadmap.md` for both.
+The current focus is building real AI Agents (CEO/Sales/Support/Finance)
+on top of the Agent Orchestrator, and replacing its MVP deterministic
+planner with an LLM-based one — see `docs/agent-orchestrator.md` and
+`docs/roadmap.md`.
 
 ---
 

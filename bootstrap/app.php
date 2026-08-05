@@ -46,9 +46,9 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        // Scoped to mcp/* only (returning null falls through to Laravel's
-        // default handling) — every other route, present or future, is
-        // untouched by this.
+        // Scoped to mcp/* and api/agents/* only (see MCPExceptionHandler::handles(),
+        // §7.26) — returning null falls through to Laravel's default
+        // handling; every other route, present or future, is untouched.
         $exceptions->render(function (Throwable $e, Request $request) {
             if (MCPExceptionHandler::handles($request)) {
                 return app(MCPExceptionHandler::class)->render($e, $request);

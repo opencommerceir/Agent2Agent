@@ -9,6 +9,17 @@ namespace App\Modules\Notifications\Domain\ValueObjects;
  * Stage 5, §7.25 — `SubscriptionPaymentFailed`) are wired, the same
  * "enum case exists before its own Listener does" shape
  * `EventType::CartAbandoned` had before the Tech Debt Sprint wired it.
+ *
+ * `PromotionAnnouncement` (Agent Orchestrator, §7.26) is a purely
+ * additive new case, the same shape `SubscriptionPaymentFailed` itself
+ * was added in (nothing about the other cases changes) — added because
+ * `DeterministicPlanner`'s own sales-growth plan needs a real
+ * `notification.message.send` `type` for "a marketing/promotional
+ * message," and none of the other 5 cases fit that meaning. Like
+ * `TicketCreated`, it has no registered Listener of its own — sending one
+ * still requires an Agent (or, here, the Orchestrator on an Agent's
+ * behalf) to call `notification.message.send` directly with an active
+ * Template already configured for it.
  */
 enum NotificationType: string
 {
@@ -17,4 +28,5 @@ enum NotificationType: string
     case PointsEarned = 'points_earned';
     case TicketCreated = 'ticket_created';
     case SubscriptionPaymentFailed = 'subscription_payment_failed';
+    case PromotionAnnouncement = 'promotion_announcement';
 }

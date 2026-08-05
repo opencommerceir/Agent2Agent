@@ -33,5 +33,6 @@ class DatabaseSeeder extends Seeder
         $this->call(ShippingCapabilitiesSeeder::class);
         $this->call(NotificationsCapabilitiesSeeder::class);
         $this->call(AnalyticsCapabilitiesSeeder::class);
+        $this->call(AgentOrchestratorCapabilitiesSeeder::class);
     }
 }
