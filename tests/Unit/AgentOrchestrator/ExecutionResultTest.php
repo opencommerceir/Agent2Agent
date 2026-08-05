@@ -100,4 +100,21 @@ class ExecutionResultTest extends TestCase
         $this->assertSame(['report.sales.generate'], $result->successfulCapabilities());
         $this->assertSame(['commerce.coupon.create'], $result->failedCapabilities());
     }
+
+    public function test_successRate_isTheFractionOfStepsThatCompleted(): void
+    {
+        $goal = Goal::fromText('Increase sales', AgentType::Ceo);
+
+        $completed = new ExecutionStep('report.sales.generate', []);
+        $completed->markAsRunning();
+        $completed->markAsCompleted(['report' => []]);
+
+        $failed = new ExecutionStep('commerce.coupon.create', []);
+        $failed->markAsRunning();
+        $failed->markAsFailed('boom');
+
+        $this->assertSame(0.5, ExecutionResult::fromSteps($goal, [$completed, $failed], 2.0)->successRate());
+        $this->assertSame(1.0, ExecutionResult::fromSteps($goal, [$completed], 1.0)->successRate());
+        $this->assertSame(0.0, ExecutionResult::fromSteps($goal, [], 0.01)->successRate());
+    }
 }

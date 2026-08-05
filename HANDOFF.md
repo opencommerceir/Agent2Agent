@@ -1,6 +1,29 @@
 # OpenCommerce Platform — Session Handoff
 
-**Status: Phase 6, Stage 4 (Execution Memory & Learning, §7.29) is now
+**Status: Phase 6, Stage 5 (Multi-Agent Collaboration, §7.30) is now
+complete — `agent.collaboration.delegate`/`agent.collaboration.messages`
+let one Agent persona hand a sub-task to another's own planning rules and
+get back a real, executed `ExecutionResult`, backed by a durable
+communication log (`AgentMessage`) and a real work-tracking state machine
+(`DelegationRequest`). The single biggest correction of this whole
+session's Phase 6 work, confirmed with the user before writing any code:
+the request's own design (`ExecuteGoalAction` auto-detecting a missing
+permission mid-plan and rerouting to another persona) cannot work in this
+codebase's real identity model — `AgentType` (`ceo`/`sales`/`support`/
+`finance`) is a per-call *planning classification*, never a real,
+permission-bearing identity (Core's own `Agent.type` is a completely
+different, unrelated enum). Delegating to a different persona changes
+*whose planning rules produce the plan*, never *what the real,
+already-authenticated caller is actually allowed to do* — so a permission
+gap can never be fixed by delegating around it. Rebuilt as
+capability-based delegation instead: `agent.collaboration.delegate` is an
+ordinary MCP capability that re-invokes the *unmodified* `ExecuteGoalAction`
+under the caller's own real `AuthContext`, with no special execution
+branch inside that Action at all. 1031 tests passing (1000 + 31 new), 122
+MCP capabilities (120 + `agent.collaboration.delegate`/`.messages`), zero
+known regressions. See §7.30 for the full detail.**
+
+**Status: Phase 6, Stage 4 (Execution Memory & Learning, §7.29) is
 complete — `ExecuteGoalAction` now consults the tenant's own learned
 `ExecutionPattern`s (Pattern Extraction/Learning, new this stage) before
 either `PlannerInterface` implementation plans anything at all, and a
@@ -964,8 +987,12 @@ the full detail.**
 known regressions.
 
 **Phase 6, Stage 4 (Execution Memory & Learning, §7.29) ran immediately
-after — see the summary paragraph at the very top of this file.** 1000
-tests passing (966 + 34 new), 120 MCP capabilities, zero known
+after.** 1000 tests passing (966 + 34 new), 120 MCP capabilities, zero
+known regressions.
+
+**Phase 6, Stage 5 (Multi-Agent Collaboration, §7.30) ran immediately
+after — see the summary paragraph at the very top of this file.** 1031
+tests passing (1000 + 31 new), 122 MCP capabilities, zero known
 regressions. See §9 for what's next across the whole platform.
 
 This file is a working-state snapshot for picking up development in a new
@@ -1418,6 +1445,109 @@ writing any code. New `AgentMemoryController` (`/api/agents/memory/insights`,
 same "Gateway vs. Discovery vs. [this]" split `AgentController`/
 `AgentProfileController` already establish. See §7.29 for the full
 detail, including both scope corrections and the input-resolution bug.**
+
+**Stage 5 (Multi-Agent Collaboration, §7.30) added `AgentMessage` (Domain
+Entity — an append-only communication-log row) + `AgentMessageRepositoryInterface`
++ `EloquentAgentMessageRepository` (new `agent_messages` table),
+`DelegationRequest` (Domain Entity — a real state machine, `Pending` ->
+`InProgress` -> exactly one of `Completed`/`Failed`/`Timeout`) +
+`DelegationRequestRepositoryInterface` + `EloquentDelegationRequestRepository`
+(new `delegation_requests` table), `MessageType`/`MessageStatus`/
+`DelegationStatus`/`DelegationPriority` (4 new Value Objects).
+`AgentCommunicationInterface` (Domain Service — `send()`/`receive()`/
+`requestDelegation()`, the latter a third documented exception to "no
+`AuthContext`/Application DTOs below the MCP boundary," alongside
+`PlanExecutorInterface`/`ToolInvokerInterface`, §7.26) +
+`AgentCommunicationService` (the one implementation — `requestDelegation()`
+re-invokes the *unmodified* `ExecuteGoalAction` under the caller's own
+real `AuthContext`, Actions composing Actions, §3 pattern #3).
+`ResultAggregatorInterface`/`ResultAggregator` (Domain-pure, no caller yet
+— see below). `ExecutionResult` gained `successRate(): float` (the
+fraction of steps that completed, used to rank conflicting results).
+`DelegateToAgentAction`/`ListAgentMessagesAction` back the 2 new MCP
+capabilities, `agent.collaboration.delegate`/`agent.collaboration.messages`
+(permissions `agent.collaboration.delegate`/`agent.collaboration.read`,
+both already exactly 3 dot-separated segments) — MCP-only, no dedicated
+HTTP route this stage (unlike §7.29's own `/api/agents/memory/*`), tested
+via `/mcp/v1/execute` for the first time in this module's own test suite.
+
+**The single biggest correction of this whole session's Phase 6 work,
+confirmed with the user before writing any code — the request's own
+design cannot work in this codebase's real identity model.** The
+request's own `ExecuteGoalAction::requiresDelegation()`/`executeWithDelegation()`
+pseudocode detects a plan step whose required permission is missing from
+the calling `AgentProfile`'s own descriptive `permissions` list, and
+delegates to a different `AgentType` to "fix" it. Two independent problems
+make this impossible as specified: (1) `AgentProfile::$permissions` is
+already documented elsewhere in this codebase as descriptive metadata
+only, never a second enforcement layer (§7.27) — real enforcement always
+runs against the calling Agent's actual Role grants via
+`CheckPermissionAction`, inside `CapabilityToolInvoker`; (2) there is no
+separate, permission-bearing identity per `AgentType` to delegate *to* —
+Core's own `Agent.type` (`shopping`/`analytics`/`customer_service`/
+`custom`) is a completely different, unrelated enum from the
+Orchestrator's own `AgentType` (`ceo`/`sales`/`support`/`finance`), and
+the *same* real, bearer-token-authenticated Agent can call
+`POST /api/agents/ceo` for one Goal and `POST /api/agents/sales` for the
+next. Delegating to a different persona changes *whose planning rules
+produce the plan*, never *what the real caller is actually allowed to
+do* — so the request's own worked example (a missing `commerce.coupons.create`
+permission "fixed" by delegating to Sales) cannot succeed as described,
+and literally can't even trigger under the real, already-shipped
+`config/agents/ceo.php`, whose own `permissions` list already includes
+`commerce.coupons.create` (§7.27).
+
+**Resolution, confirmed with the user: capability-based delegation, not
+automatic mid-plan detection.** `agent.collaboration.delegate` is an
+ordinary MCP capability, reachable exactly like any other — no
+`requiresDelegation()`/`executeWithDelegation()` branch was added to
+`ExecuteGoalAction`, which is completely unmodified by this stage. A
+delegated sub-goal runs through the *same*, real `AuthContext` the caller
+already has; if that real Agent's Role doesn't grant a capability the
+delegated task needs, the delegated plan's own step fails exactly the way
+any other unauthorized step already does — `PlanExecutor` catches it,
+marks that one step Failed, and continues (unchanged since §7.26). This
+surfaced a second, related design decision, not asked about (documented
+rather than raised as a separate question, the same weight Stage 3's own
+slice-ownership call carried): `DelegationRequest.status` tracks whether
+the delegation *mechanism* completed a real attempt (`Completed`, even
+when the nested `ExecutionResultData.status` is `partial`/`failed`), never
+whether the delegated task's own business outcome succeeded — `Failed`/
+`Timeout` are reserved for the mechanism itself breaking (an unrecognized
+`agent_type`, exceeding `timeoutSeconds`), not an ordinary per-step
+failure `PlanExecutor` already handles.
+
+**Timeout is a real, wall-clock elapsed-time check, not true async
+interruption** — no `pcntl`-based interrupt mechanism exists in this
+codebase (nor would one be portable/safe), so `AgentCommunicationService::requestDelegation()`
+measures real elapsed time around the delegated `ExecuteGoalAction` call
+and, if it exceeds `DelegationRequest::$timeoutSeconds` (a fixed 30s
+default — the capability's own input schema takes no caller-supplied
+timeout), throws `DelegationTimeoutException` instead of returning the
+late result, marking the request `Timeout`. `DelegationRequest`/`AgentMessage`
+are each saved exactly once, already in their final terminal state — no
+intermediate `Pending`/`InProgress` row is separately persisted, since
+every delegation this stage runs synchronously start-to-finish within one
+call; a real future async flow (a queued delegation another process later
+picks up) is the natural trigger for `MessageStatus::Pending`/`Received`
+(both modeled, unreached this stage) and for `DelegationPriority` actually
+reordering multiple *pending* delegations rather than just being stored
+and validated. `DelegationRequest::create()` rejects delegating a persona
+to itself (a cheap, real guard against the most trivial infinite loop);
+a longer cycle (A delegates to B, B delegates to A) is not detected — none
+of the 4 shipped profiles declare a delegation step, so this is latent,
+not exercised, a documented gap for a future profile/LLM plan that does.
+
+`ResultAggregatorInterface`/`ResultAggregator` (`aggregate()` merges
+several `ExecutionResult`s' own steps via the real `ExecutionResult::fromSteps()`
+factory rather than a `new ExecutionResult(...)` call the Entity's own
+private constructor doesn't even allow; `resolveConflicts()` picks the
+highest `successRate()`) are real, tested, built exactly as requested —
+with no automatic caller yet, since `agent.collaboration.delegate` only
+ever targets one persona per call this stage, the same "built the
+mechanism, no caller yet" shape `ExecutionPlanData` carried between §7.26
+and §7.29. See §7.30 for the full detail, including every test that
+proves delegation never grants a new real permission.**
 
 ### `app/Modules/Demo/` — unchanged since Phase 1
 
@@ -2043,13 +2173,18 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │   ├── Entities/                 Goal, ExecutionPlan, ExecutionStep,
 │   │                             ExecutionResult (+ isSuccessful()/
 │   │                             successfulCapabilities()/failedCapabilities(),
-│   │                             §7.29), + AgentProfile (§7.27 —
+│   │                             §7.29, + successRate(), §7.30), + AgentProfile (§7.27 —
 │   │                             config-driven, built via fromConfig(),
 │   │                             framework-free like every other Entity),
 │   │                             + ExecutionPattern (§7.29 — learned,
 │   │                             tenant-scoped goal-keyword ->
 │   │                             capabilities shorthand, matches()/
-│   │                             recordOutcome() its only behavior)
+│   │                             recordOutcome() its only behavior), +
+│   │                             AgentMessage (§7.30 — append-only
+│   │                             communication log entry), +
+│   │                             DelegationRequest (§7.30 — a real state
+│   │                             machine, Pending -> InProgress -> exactly
+│   │                             one of Completed/Failed/Timeout)
 │   ├── ValueObjects/             AgentType (ceo/sales/support/finance),
 │   │                             StepStatus (+ Skipped, modeled but
 │   │                             unreached this stage), Priority
@@ -2057,7 +2192,9 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │   │                             execution order; every step
 │   │                             DeterministicPlanner now produces is
 │   │                             Priority::Medium since §7.27, see that
-│   │                             class's own docblock)
+│   │                             class's own docblock), + MessageType,
+│   │                             MessageStatus, DelegationStatus,
+│   │                             DelegationPriority (all §7.30)
 │   ├── Events/                   GoalReceived, StepExecuted, GoalCompleted
 │   │                             (none has a registered Listener except
 │   │                             this module's own LogExecutionStepListener,
@@ -2073,15 +2210,23 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │   │                             LLMClientInterface (§7.28 — a thin port
 │   │                             over one LLM provider's own API), +
 │   │                             PatternExtractorInterface,
-│   │                             LearningServiceInterface (both §7.29)
+│   │                             LearningServiceInterface (both §7.29), +
+│   │                             AgentCommunicationInterface (§7.30 — a
+│   │                             third documented AuthContext/Application-DTO
+│   │                             exception, alongside PlanExecutorInterface/
+│   │                             ToolInvokerInterface), ResultAggregatorInterface
+│   │                             (§7.30 — Domain-pure, no AuthContext)
 │   ├── Repositories/              ExecutionMemoryRepositoryInterface (owns
 │   │                             ExecutionStep persistence too), +
 │   │                             AgentProfileRepositoryInterface (§7.27),
 │   │                             + ExecutionPatternRepositoryInterface
-│   │                             (§7.29 — the *only* new Repository this
+│   │                             (§7.29 — the *only* new Repository that
 │   │                             stage; "Execution Memory Storage" itself
 │   │                             reuses ExecutionMemoryRepositoryInterface
-│   │                             above, not a second one)
+│   │                             above, not a second one), +
+│   │                             AgentMessageRepositoryInterface,
+│   │                             DelegationRequestRepositoryInterface
+│   │                             (§7.30)
 │   └── Exceptions/                GoalExecutionFailedException (neither
 │                                  marker interface, same reasoning
 │                                  WooCommerceApiException has),
@@ -2096,7 +2241,9 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │                                  + LLMRequestFailedException (§7.28 —
 │                                  implements neither marker interface,
 │                                  same reasoning WooCommerceApiException
-│                                  has)
+│                                  has), + DelegationTimeoutException
+│                                  (§7.30 — implements neither marker
+│                                  interface, same reasoning)
 ├── Application/
 │   ├── Actions/                  ExecuteGoalAction (the one Action every
 │   │                             Agent-facing surface calls into — the
@@ -2111,7 +2258,12 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │   │                             (§7.27), + GetExecutionInsightsAction,
 │   │                             SuggestExecutionPlanAction (§7.29 — both
 │   │                             plain int $tenantId/AgentType, no
-│   │                             AuthContext, §3 pattern #1)
+│   │                             AuthContext, §3 pattern #1), +
+│   │                             DelegateToAgentAction (§7.30 — takes
+│   │                             AuthContext, the other deliberate
+│   │                             exception this stage), ListAgentMessagesAction
+│   │                             (§7.30 — plain int $tenantId/AgentType,
+│   │                             §3 pattern #1)
 │   ├── DTOs/                     GoalData, ExecutionStepData,
 │   │                             ExecutionPlanData (unused by anything
 │   │                             until §7.29 — SuggestExecutionPlanAction
@@ -2120,7 +2272,8 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │   │                             ExecutionResultData
 │   │                             (deliberately snake_case toArray(), this
 │   │                             module's own documented wire contract), +
-│   │                             AgentProfileData (§7.27)
+│   │                             AgentProfileData (§7.27), + AgentMessageData
+│   │                             (§7.30)
 │   ├── Services/                 DeterministicPlanner (Stage 1's own
 │   │                             hardcoded per-agent-type keyword branches
 │   │                             — salesGrowthSteps()/supportSteps()/
@@ -2150,7 +2303,13 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │   │                             now, not two independently-drifting
 │   │                             copies), PatternExtractor, LearningService
 │   │                             (§7.29 — the one implementation each of
-│   │                             the two Domain Service interfaces above)
+│   │                             the two Domain Service interfaces above),
+│   │                             + AgentCommunicationService, ResultAggregator
+│   │                             (§7.30 — the one implementation each of
+│   │                             AgentCommunicationInterface/ResultAggregatorInterface;
+│   │                             AgentCommunicationService::requestDelegation()
+│   │                             re-invokes ExecuteGoalAction directly,
+│   │                             completely unmodified by this stage)
 │   ├── Prompts/                  PlanningPromptTemplate (§7.28 — pure
 │   │                             string formatting, no LLM-specific
 │   │                             concerns)
@@ -2167,7 +2326,9 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │   │                              models — agent_executions/
 │   │                              agent_execution_steps tables), +
 │   │                              ExecutionPattern (§7.29 —
-│   │                              execution_patterns table)
+│   │                              execution_patterns table), +
+│   │                              AgentMessage, DelegationRequest (§7.30 —
+│   │                              agent_messages/delegation_requests tables)
 │   ├── Repositories/               EloquentExecutionMemoryRepository
 │   │                              (ExecutionStep::reconstruct() rebuilds
 │   │                              a persisted step directly into its
@@ -2185,7 +2346,10 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │   │                              own id(); a new pattern's real id is
 │   │                              assigned back onto the given Entity via
 │   │                              ExecutionPattern::assignId(), a one-time
-│   │                              mutator)
+│   │                              mutator), + EloquentAgentMessageRepository,
+│   │                              EloquentDelegationRequestRepository
+│   │                              (§7.30 — same upsert-by-id/assignId()
+│   │                              shape)
 │   └── Controllers/                AgentController (throws, never
 │                                   catches — every exception maps to the
 │                                   right HTTP status via MCPExceptionHandler,
@@ -2196,7 +2360,9 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │                                   MCPGatewayController/MCPDiscoveryController
 │                                   already establish), + AgentMemoryController
 │                                   (§7.29 — a third Controller for a third
-│                                   distinct concern, same reasoning)
+│                                   distinct concern, same reasoning) — no
+│                                   4th Controller this stage (§7.30 adds
+│                                   no dedicated HTTP route, MCP-only)
 ├── Interfaces/MCP/                AgentOrchestratorCapabilities.php (the
 │                                  manifest AgentOrchestratorCapabilitiesSeeder
 │                                  reads — not named in the original
@@ -2207,13 +2373,18 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │                                  agent.profile.get/.list; +2 more in
 │                                  §7.29 — agent.memory.insights/.suggest;
 │                                  agent.memory.history deliberately not
-│                                  added, see §7.29)
+│                                  added, see §7.29; +2 more in §7.30 —
+│                                  agent.collaboration.delegate/.messages)
 └── AgentOrchestratorServiceProvider.php   binds ExecutionMemoryRepositoryInterface/
                                    ToolInvokerInterface/PlanExecutorInterface/
                                    AgentProfileRepositoryInterface (§7.27),
                                    + ExecutionPatternRepositoryInterface/
                                    PatternExtractorInterface/
                                    LearningServiceInterface (§7.29),
+                                   + AgentMessageRepositoryInterface/
+                                   DelegationRequestRepositoryInterface/
+                                   AgentCommunicationInterface/
+                                   ResultAggregatorInterface (§7.30),
                                    + LLMClientInterface (by llm.provider)
                                    and PlannerInterface (by planner.type)
                                    as closures re-evaluated on every
@@ -2223,9 +2394,9 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
                                    routes/agents.php, Event::listen()s
                                    LogExecutionStepListener +
                                    LearnFromExecutionListener (§7.29),
-                                   registers 7 capability handlers (§6,
-                                   3+2+2 — the 2 §7.29 handlers are
-                                   agent.memory.insights/.suggest)
+                                   registers 9 capability handlers (§6,
+                                   3+2+2+2 — the 2 §7.30 handlers are
+                                   agent.collaboration.delegate/.messages)
 
 routes/agents.php                  new in Phase 6, Stage 1 (§7.26) —
                                    loaded by
@@ -2275,6 +2446,9 @@ database/migrations/2026_08_11_000077-000078   agent_executions,
 database/migrations/2026_08_12_000079   execution_patterns (§7.29 — the
                                    *only* new table this stage; no
                                    execution_memories table, see §7.29)
+
+database/migrations/2026_08_13_000080-000081   agent_messages,
+                                   delegation_requests (§7.30)
 
 app/Modules/Demo/                  unchanged since Phase 1
 
@@ -2944,7 +3118,7 @@ end to end.
 
 ---
 
-## 6. The 120 MCP capabilities that exist right now
+## 6. The 122 MCP capabilities that exist right now
 
 | Capability | Phase/Stage | Permission | Notes |
 |---|---|---|---|
@@ -3068,6 +3242,8 @@ end to end.
 | `agent.profile.list` | P6.2 | `agent.profiles.read` | Every configured Agent persona profile (`config/agents/*.php`). |
 | `agent.memory.insights` | P6.4 | `agent.memory.read` | Aggregate stats (total/success rate/avg duration/most-used capabilities) over the tenant's own most recent 50 Executions for one Agent persona. |
 | `agent.memory.suggest` | P6.4 | `agent.memory.read` | Preview the learned plan `ExecuteGoalAction` would silently prefer for this goal, or `null`. No `agent.memory.history` — functionally identical to `agent.execution.list`, see §7.29. |
+| `agent.collaboration.delegate` | P6.5 | `agent.collaboration.delegate` | Re-invokes the *unmodified* `ExecuteGoalAction` for a different persona, under the caller's own real `AuthContext` — delegating never grants a new real permission, see §7.30. `DelegationRequest.status` tracks the mechanism, not the nested result's own business outcome. |
+| `agent.collaboration.messages` | P6.5 | `agent.collaboration.read` | This tenant's own persona-to-persona `AgentMessage` log for one Agent persona, most recent first. |
 
 **Deliberately NOT wired to MCP** despite the underlying Action existing and
 being fully tested (see §8.2 for why, and the same reasoning each time):
@@ -6504,6 +6680,173 @@ response can only have come from the learned pattern, never a fresh
 known regressions — confirmed by actually running the full suite. Phase 6,
 Stage 4 is complete. See §9 for what's next.
 
+### 7.30 Phase 6, Stage 5 — Multi-Agent Collaboration
+
+**The single biggest correction of this whole session's Phase 6 work,
+confirmed with the user before writing any code — the request's own
+design cannot work in this codebase's real identity model.** The
+request's own three-part split (Agent Communication Protocol / Delegation
+System / Result Aggregation) mostly translated cleanly, but its own
+`ExecuteGoalAction::requiresDelegation()`/`executeWithDelegation()`
+pseudocode — detect a plan step whose required permission is missing from
+the calling `AgentProfile`'s own descriptive `permissions` list, delegate
+to a different `AgentType` to "fix" it — rests on an assumption this
+codebase's own identity model doesn't support, audited and caught before
+any code was written, the same discipline every prior stage's own
+request-vs-codebase mismatch got:
+
+1. `AgentProfile::$permissions` is already documented elsewhere in this
+   codebase as descriptive metadata only, never a second enforcement
+   layer (§7.27's own "What `permissions` does NOT do") — real
+   enforcement always runs against the calling Agent's actual Role grants
+   via `CheckPermissionAction`, inside `CapabilityToolInvoker`. Using it
+   as a real runtime gate would have contradicted that already-established
+   rule.
+2. There is no separate, permission-bearing identity per `AgentType` to
+   delegate *to*. Core's own `Agent` entity does carry a `type` field, but
+   from a completely different, unrelated enum
+   (`App\Core\Domain\ValueObjects\AgentType`: `shopping`/`analytics`/
+   `customer_service`/`custom`) with no mapping at all to the
+   Orchestrator's own `AgentType` (`ceo`/`sales`/`support`/`finance`) — the
+   *same* real, bearer-token-authenticated Agent can call
+   `POST /api/agents/ceo` for one Goal and `POST /api/agents/sales` for
+   the next, with identical real Role/Permission grants both times.
+   `AgentType` is a per-call planning classification, never an identity.
+
+**Consequence: delegating to a different persona changes *whose planning
+rules produce the plan*, never *what the real, already-authenticated
+caller is actually allowed to do*.** A permission gap can never be fixed
+by delegating around it — the request's own worked example (a missing
+`commerce.coupons.create` permission "fixed" by delegating to Sales)
+cannot succeed as described. It also can't even *trigger* under the real,
+already-shipped `config/agents/ceo.php`: that profile's own `permissions`
+list already includes `commerce.coupons.create` (§7.27), so the literal
+scenario's own premise is false against this codebase's real state, the
+same kind of request-vs-codebase mismatch Stage 1's own illustrative
+capability names (§7.26) and Stage 6's own Analytics/Reporting
+duplication (§7.18) already exemplify at a smaller scale.
+
+**Resolution, confirmed with the user: capability-based delegation.**
+`agent.collaboration.delegate` is an ordinary MCP capability — reachable
+exactly like `commerce.coupon.create` or any other, directly over MCP
+today and (once a future stage wires it into a `planning_rules` list or
+an LLM plan) as an equally ordinary plan step `PlanExecutor` invokes
+through `CapabilityToolInvoker`. **`ExecuteGoalAction` is completely
+unmodified by this stage** — no `requiresDelegation()`/
+`executeWithDelegation()` branch was added, and the existing
+`GoalExecutionTest`/`CEOAgentTest` assertions needed no changes. A
+delegated sub-goal runs through this *same*, unmodified `ExecuteGoalAction`
+under the caller's own real `AuthContext` (Actions composing Actions, §3
+pattern #3) — if that real Agent's Role doesn't grant a capability the
+delegated task needs, the delegated plan's own step fails exactly the way
+any other unauthorized step already does: `PlanExecutor` catches it,
+marks that one step `Failed`, and continues (unchanged since §7.26) —
+`agent.collaboration.delegate` never throws for an ordinary nested-step
+failure, it returns 200 with a real, honest `result.status: "failed"`.
+
+**A second design decision this surfaced, documented rather than asked
+about (the same weight Stage 3's own slice-ownership call carried, not a
+full architecture-fork question): `DelegationRequest.status` tracks
+whether the delegation *mechanism* completed a real attempt, never
+whether the delegated task's own business outcome succeeded.**
+`Completed` is reached even when the nested `ExecutionResultData.status`
+is `partial`/`failed` — `Failed`/`Timeout` are reserved for the mechanism
+itself breaking (an unrecognized `agent_type`, exceeding
+`timeoutSeconds`), not an ordinary per-step failure `PlanExecutor` already
+handles and reports honestly inside the nested result. A caller that only
+checks `DelegationRequest.status`/`delegation_requests.status` without
+also reading `result.status` inside the returned `ExecutionResultData`
+would miss a real, ordinary task failure — documented explicitly in
+`docs/multi-agent-collaboration.md`'s own "Known scope decisions" so this
+doesn't read as a silent gap.
+
+**New this stage**: `AgentMessage` (Domain Entity — append-only
+communication log, `MessageType` request/response/delegation, `MessageStatus`
+pending/sent/received/processed — the latter two modeled, unreached this
+stage since every delegation runs synchronously) + `AgentMessageRepositoryInterface`
++ `EloquentAgentMessageRepository` (new `agent_messages` table).
+`DelegationRequest` (Domain Entity — a real state machine, `DelegationStatus`
+pending/in_progress/completed/failed/timeout, every case reachable this
+stage unlike several other enums in this codebase; `create()` rejects
+delegating a persona to itself) + `DelegationRequestRepositoryInterface`
++ `EloquentDelegationRequestRepository` (new `delegation_requests` table).
+`DelegationPriority` (1-10 VO, stored/validated, not yet load-bearing —
+see below). `AgentCommunicationInterface` (`send()`/`receive()`/
+`requestDelegation()` — the latter a third documented exception to "no
+`AuthContext`/Application DTOs below the MCP boundary," alongside
+`PlanExecutorInterface`/`ToolInvokerInterface` from Stage 1, §7.26; see
+that Interface's own docblock for why returning the Application-layer
+`ExecutionResultData` rather than reconstructing a separate Domain
+`ExecutionResult` is the pragmatic, precedented choice here — nothing
+downstream needs the latter) + `AgentCommunicationService` (the one
+implementation). `ResultAggregatorInterface`/`ResultAggregator`
+(Domain-pure, no `AuthContext` — `aggregate()` merges several
+`ExecutionResult`s' own steps through the real `ExecutionResult::fromSteps()`
+factory, never a `new ExecutionResult(...)` call the Entity's own private
+constructor doesn't even allow since the request's own pseudocode assembled
+a `summary` by hand; `resolveConflicts()` picks the highest `successRate()`,
+a new `ExecutionResult` method this stage added). `DelegateToAgentAction`/
+`ListAgentMessagesAction` back the 2 new MCP capabilities
+(`agent.collaboration.delegate`/`agent.collaboration.messages`, permissions
+`agent.collaboration.delegate`/`agent.collaboration.read`, both already
+exactly 3 dot-separated segments — no HANDOFF gotcha #2 rename needed)
+— MCP-only, no dedicated HTTP route this stage (unlike §7.29's own
+`/api/agents/memory/*`, not requested), tested via `/mcp/v1/execute` for
+the first time in this module's own test suite (every prior test used
+this module's own `/api/agents/*` HTTP surface instead).
+
+**Timeout is a real, wall-clock elapsed-time check, not true async
+interruption.** No `pcntl`-based interrupt mechanism exists in this
+codebase (nor would one be portable/safe to add) — `AgentCommunicationService::requestDelegation()`
+measures real elapsed time around the delegated `ExecuteGoalAction` call
+and, if it exceeds `DelegationRequest::$timeoutSeconds` (a fixed 30s
+default — the capability's own input schema takes no caller-supplied
+timeout, matching this stage's own worked example), throws
+`DelegationTimeoutException` instead of returning the late result,
+marking the request `Timeout`. Both `DelegationRequest`/`AgentMessage` are
+saved exactly once per delegation, already in their final terminal state
+— no intermediate `Pending`/`InProgress` row is separately persisted,
+since every delegation this stage runs synchronously start-to-finish
+within one call; a real future async flow (a queued delegation another
+process later picks up) is the natural trigger for `MessageStatus::Pending`/
+`Received` (both modeled, unreached this stage) and for `DelegationPriority`
+actually reordering multiple *pending* delegations rather than just being
+stored and validated, satisfying this stage's own "Asynchronous Ready"
+rule structurally without pretending it's implemented.
+
+`ResultAggregatorInterface`/`ResultAggregator` are built and tested with
+no automatic caller yet — `agent.collaboration.delegate` only ever
+targets one persona per call this stage, so `PlanExecutor`'s own existing
+per-step result handling already covers the one-delegation case (nested
+output, no aggregation needed); the same "built the mechanism, no caller
+yet" shape `ExecutionPlanData` carried between §7.26 and §7.29. No cycle
+detection beyond "can't delegate to yourself" exists — a longer cycle (A
+delegates to B, B delegates to A) is not caught, but none of the 4 shipped
+profiles declare a delegation step, so this is latent, not exercised — a
+documented gap, not a silent one.
+
+New tests: `tests/Unit/AgentOrchestrator/{DelegationPriorityTest,
+DelegationRequestTest,AgentMessageTest,ResultAggregatorTest}.php`
+(3+9+4+4, framework-free) + 1 new case in `ExecutionResultTest.php`
+(`successRate()`), `tests/Feature/AgentOrchestrator/{AgentCommunicationServiceTest,
+MultiAgentCollaborationTest}.php` (6+4 — the former exercises
+`AgentCommunicationService` directly against real Repositories and the
+real `ExecuteGoalAction` (send/receive, a full success path recording 2
+real `AgentMessage`s, the "delegating grants no new real permission"
+scenario proving the identity-model correction end to end, a real
+timeout via `timeoutSeconds: 0`, tenant isolation); the latter is the
+literal end-to-end scenario reshaped around the confirmed design, entirely
+through `/mcp/v1/execute` — a CEO-authenticated caller delegates a coupon
+task to `sales`, the real `commerce.coupon.create`/`notification.message.send`
+steps run and complete, `agent.collaboration.messages` shows both the
+delegation and response log entries, a caller missing the delegated
+task's own real permission gets back a real `result.status: "failed"`
+(200, not 403), and cross-tenant message isolation).
+
+1031 tests passing (1000 + 31 new), 2656 assertions (2579 + 77 new), zero
+known regressions — confirmed by actually running the full suite. Phase 6,
+Stage 5 is complete. See §9 for what's next.
+
 ---
 
 ## 8. Known technical debt (ranked, carried over + Phase 2 additions)
@@ -6970,7 +7313,7 @@ Stage 4 is complete. See §9 for what's next.
     deterministic path; only the log lines capture the real per-call
     outcome, nothing on `ExecutionResult`/the persisted `Execution` row
     does.
-78. **`LLMPlanner` sends the full, uncached capability list (120 today)
+78. **`LLMPlanner` sends the full, uncached capability list (122 today)
     on every single planning call** (§7.28) — no pruning by relevance to
     the goal, no caching of the formatted capability text between calls;
     a real, non-trivial prompt-size cost this stage's own request
@@ -7011,6 +7354,28 @@ Stage 4 is complete. See §9 for what's next.
     item 69/75 already flag for Executions/Goals and Agent Profiles, now
     also true for `/api/agents/memory/*`'s own data (insights, and which
     patterns a tenant has learned).
+85. **No automatic mid-plan delegation** (§7.30) — the request's own
+    `ExecuteGoalAction::requiresDelegation()` design can't work in this
+    codebase's real identity model (see §7.30's own full reasoning);
+    `agent.collaboration.delegate` is reachable explicitly today, never
+    triggered by a plan's own step automatically. None of the 4 shipped
+    `config/agents/*.php` profiles declare a delegation step yet either.
+86. **No cycle detection beyond "can't delegate to yourself"** (§7.30) — a
+    longer delegation cycle (A delegates to B, B delegates to A) is not
+    caught; latent, since no shipped profile delegates at all yet, but a
+    real gap for a future one (or an LLM plan) that does.
+87. **`ResultAggregatorInterface`/`ResultAggregator` have no automatic
+    caller** (§7.30) — built and tested; `agent.collaboration.delegate`
+    only ever targets one persona per call, so nothing combines multiple
+    delegated results into one yet.
+88. **`MessageStatus::Pending`/`Received` and `DelegationPriority`'s own
+    ordering are structurally ready but not load-bearing** (§7.30) — every
+    delegation runs synchronously today, so a message never sits in an
+    intermediate state and there is no real queue of multiple *pending*
+    delegations for priority to reorder.
+89. **No Dashboard UI for Multi-Agent Collaboration** (§7.30) — same gap
+    item 69/75/84 already flag, now also true for delegation history and
+    the `AgentMessage` communication log.
 
 ---
 
@@ -7020,14 +7385,37 @@ Phase 2 (Commerce, all 6 Stages), Phase 3 (CRM, Finance, Workflows,
 Loyalty, Reporting — all 5 Stages), Phase 4 (Shipping & Logistics, all 8
 Stages), Phase 5 (Advanced Commerce, all 5 Stages), Phase 6 Stage 1
 (Agent Orchestrator, §7.26), Phase 6 Stage 2 (Agent Profiles + CEO Agent,
-§7.27), Phase 6 Stage 3 (LLM-based Planner, §7.28), and now **Phase 6,
-Stage 4 (Execution Memory & Learning, §7.29)** are all complete. Phase 6
-itself is only four Stages in — whoever drives scope next is choosing
-where the platform goes from here, not just picking the next item off
-this list (the same framing that applied after Phase 4 and Phase 5 each
-finished). Candidates specific to what Phase 6 has already built, roughly
-in order of how much they'd reuse what already exists:
+§7.27), Phase 6 Stage 3 (LLM-based Planner, §7.28), Phase 6 Stage 4
+(Execution Memory & Learning, §7.29), and now **Phase 6, Stage 5
+(Multi-Agent Collaboration, §7.30)** are all complete. Phase 6 itself is
+only five Stages in — whoever drives scope next is choosing where the
+platform goes from here, not just picking the next item off this list
+(the same framing that applied after Phase 4 and Phase 5 each finished).
+Candidates specific to what Phase 6 has already built, roughly in order
+of how much they'd reuse what already exists:
 
+- **Wire an explicit delegation step into a real `planning_rules` entry**
+  (§8.85) — `agent.collaboration.delegate` is real and MCP-reachable, but
+  no shipped profile's own config includes it yet; the cheapest possible
+  next increment is one profile (e.g. `ceo.php`) naming it in a rule the
+  same way it names any other capability, proving a real plan-driven
+  delegation rather than only an explicitly-called one.
+- **A queued, genuinely async delegation flow** (§8.88) — the natural
+  trigger for `MessageStatus::Pending`/`Received` and for
+  `DelegationPriority` actually reordering multiple pending delegations;
+  today's synchronous `AgentCommunicationService::requestDelegation()`
+  already has the right state machine, just not a queue behind it.
+- **Cycle detection beyond "can't delegate to yourself"** (§8.86) — a
+  longer delegation cycle (A -> B -> A) isn't caught yet; latent today
+  since nothing delegates automatically, but worth closing before the
+  item above makes it reachable.
+- **A `ResultAggregatorInterface` caller** (§8.87) — delegating to
+  *multiple* personas at once and combining their results is the natural
+  one; the mechanism is already built and tested.
+- **A `/dashboard/agents` page covering Collaboration too** (§8.89) —
+  `DelegateToAgentAction`/`ListAgentMessagesAction` are already shaped for
+  a Dashboard page the same way every other resource's own Controller
+  reuses its Actions (§3 pattern #19).
 - **Semantic/vector-based `ExecutionPattern` matching** (§8.80) — today's
   plain keyword substring check is a documented MVP simplification;
   `ExecutionPatternRepositoryInterface` was deliberately shaped not to
@@ -7065,7 +7453,7 @@ in order of how much they'd reuse what already exists:
   (versus silently falling back); would need a new field on
   `ExecutionResult`/the persisted `Execution` row.
 - **Capability-list caching/pruning for `LLMPlanner`'s own prompt**
-  (§8.78) — today sends all 120 capabilities, uncached, on every planning
+  (§8.78) — today sends all 122 capabilities, uncached, on every planning
   call; a real cost at platform scale.
 - **A domain-aware `summary` from the LLM itself, and recursive/
   self-reflective planning** — both named in this module's own Future

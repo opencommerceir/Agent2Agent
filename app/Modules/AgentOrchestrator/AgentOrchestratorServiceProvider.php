@@ -5,15 +5,18 @@ namespace App\Modules\AgentOrchestrator;
 use App\Core\Application\Actions\DiscoverCapabilitiesAction;
 use App\Core\Application\DTOs\AuthContext;
 use App\Core\Application\Services\CapabilityHandlerRegistry;
+use App\Modules\AgentOrchestrator\Application\Actions\DelegateToAgentAction;
 use App\Modules\AgentOrchestrator\Application\Actions\ExecuteGoalAction;
 use App\Modules\AgentOrchestrator\Application\Actions\GetAgentProfileAction;
 use App\Modules\AgentOrchestrator\Application\Actions\GetExecutionInsightsAction;
 use App\Modules\AgentOrchestrator\Application\Actions\GetExecutionResultAction;
+use App\Modules\AgentOrchestrator\Application\Actions\ListAgentMessagesAction;
 use App\Modules\AgentOrchestrator\Application\Actions\ListAgentProfilesAction;
 use App\Modules\AgentOrchestrator\Application\Actions\ListExecutionsAction;
 use App\Modules\AgentOrchestrator\Application\Actions\SuggestExecutionPlanAction;
 use App\Modules\AgentOrchestrator\Application\Listeners\LearnFromExecutionListener;
 use App\Modules\AgentOrchestrator\Application\Listeners\LogExecutionStepListener;
+use App\Modules\AgentOrchestrator\Application\Services\AgentCommunicationService;
 use App\Modules\AgentOrchestrator\Application\Services\CapabilityToolInvoker;
 use App\Modules\AgentOrchestrator\Application\Services\ClaudeClient;
 use App\Modules\AgentOrchestrator\Application\Services\DeterministicPlanner;
@@ -22,19 +25,26 @@ use App\Modules\AgentOrchestrator\Application\Services\LLMPlanner;
 use App\Modules\AgentOrchestrator\Application\Services\OpenAIClient;
 use App\Modules\AgentOrchestrator\Application\Services\PatternExtractor;
 use App\Modules\AgentOrchestrator\Application\Services\PlanExecutor;
+use App\Modules\AgentOrchestrator\Application\Services\ResultAggregator;
 use App\Modules\AgentOrchestrator\Domain\Events\GoalCompleted;
 use App\Modules\AgentOrchestrator\Domain\Events\StepExecuted;
+use App\Modules\AgentOrchestrator\Domain\Repositories\AgentMessageRepositoryInterface;
 use App\Modules\AgentOrchestrator\Domain\Repositories\AgentProfileRepositoryInterface;
+use App\Modules\AgentOrchestrator\Domain\Repositories\DelegationRequestRepositoryInterface;
 use App\Modules\AgentOrchestrator\Domain\Repositories\ExecutionMemoryRepositoryInterface;
 use App\Modules\AgentOrchestrator\Domain\Repositories\ExecutionPatternRepositoryInterface;
+use App\Modules\AgentOrchestrator\Domain\Services\AgentCommunicationInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\LearningServiceInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\LLMClientInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\PatternExtractorInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\PlanExecutorInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\PlannerInterface;
+use App\Modules\AgentOrchestrator\Domain\Services\ResultAggregatorInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\ToolInvokerInterface;
 use App\Modules\AgentOrchestrator\Domain\ValueObjects\AgentType;
 use App\Modules\AgentOrchestrator\Infrastructure\Repositories\ConfigBasedAgentProfileRepository;
+use App\Modules\AgentOrchestrator\Infrastructure\Repositories\EloquentAgentMessageRepository;
+use App\Modules\AgentOrchestrator\Infrastructure\Repositories\EloquentDelegationRequestRepository;
 use App\Modules\AgentOrchestrator\Infrastructure\Repositories\EloquentExecutionMemoryRepository;
 use App\Modules\AgentOrchestrator\Infrastructure\Repositories\EloquentExecutionPatternRepository;
 use Illuminate\Support\Facades\Event;
@@ -72,6 +82,10 @@ class AgentOrchestratorServiceProvider extends ServiceProvider
         $this->app->bind(PlanExecutorInterface::class, PlanExecutor::class);
         $this->app->bind(PatternExtractorInterface::class, PatternExtractor::class);
         $this->app->bind(LearningServiceInterface::class, LearningService::class);
+        $this->app->bind(AgentMessageRepositoryInterface::class, EloquentAgentMessageRepository::class);
+        $this->app->bind(DelegationRequestRepositoryInterface::class, EloquentDelegationRequestRepository::class);
+        $this->app->bind(AgentCommunicationInterface::class, AgentCommunicationService::class);
+        $this->app->bind(ResultAggregatorInterface::class, ResultAggregator::class);
 
         $this->app->bind(LLMClientInterface::class, function ($app) {
             $provider = config('agent-orchestrator.llm.provider');
@@ -159,6 +173,31 @@ class AgentOrchestratorServiceProvider extends ServiceProvider
             );
 
             return ['suggested_plan' => $plan?->toArray()];
+        });
+
+        $handlers->register('agent.collaboration.delegate', function (array $input, AuthContext $context) {
+            $delegation = $this->app->make(DelegateToAgentAction::class)->execute(
+                fromAgentType: AgentType::from($input['from_agent']),
+                toAgentType: AgentType::from($input['to_agent']),
+                task: $input['task'],
+                priority: isset($input['priority']) ? (int) $input['priority'] : null,
+                tenantId: $context->tenantId,
+                context: $context,
+            );
+
+            return [
+                'delegation_id' => $delegation['delegation_id'],
+                'result' => $delegation['result']->toArray(),
+            ];
+        });
+
+        $handlers->register('agent.collaboration.messages', function (array $input, AuthContext $context) {
+            $messages = $this->app->make(ListAgentMessagesAction::class)->execute(
+                $context->tenantId,
+                AgentType::from($input['agent_type']),
+            );
+
+            return ['messages' => array_map(fn ($message) => $message->toArray(), $messages)];
         });
     }
 }

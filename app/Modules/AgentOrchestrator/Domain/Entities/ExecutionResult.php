@@ -85,6 +85,29 @@ final class ExecutionResult
     }
 
     /**
+     * The fraction of planned steps that actually completed (0.0-1.0),
+     * `0.0` for an empty plan — used by `ResultAggregator::resolveConflicts()`
+     * (Phase 6, Stage 5, §7.30) to rank several candidate results by real,
+     * graded outcome quality rather than `isSuccessful()`'s own strict
+     * all-or-nothing boolean.
+     */
+    public function successRate(): float
+    {
+        $total = count($this->steps);
+
+        if ($total === 0) {
+            return 0.0;
+        }
+
+        $completed = count(array_filter(
+            $this->steps,
+            fn (ExecutionStep $step) => $step->status() === StepStatus::Completed,
+        ));
+
+        return $completed / $total;
+    }
+
+    /**
      * Capability names for every step that actually completed, in plan
      * order, duplicates included (order/repetition matters for a future
      * pattern's own "these ran together" signal — HANDOFF §7.29). Never

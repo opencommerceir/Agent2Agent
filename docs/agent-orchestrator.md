@@ -2,13 +2,18 @@
 
 > Added in Phase 6, Stage 1 (§7.26 in `HANDOFF.md`), extended in Stage 2
 > — Agent Profiles + the CEO Agent (§7.27) — Stage 3 — an LLM-based
-> Planner (§7.28) — and Stage 4 — Execution Memory & Learning (§7.29).
-> This document is the module's own reference; `HANDOFF.md`
-> §7.26/§7.27/§7.28/§7.29 carry the full narrative of what was built, what
-> was corrected from the original requests, and why. See
-> `docs/agent-profiles.md` for the how-to-add-a-new-Agent guide,
-> `docs/llm-planner.md` for the how-to-use-the-LLM-planner guide, and
-> `docs/execution-memory.md` for the how-learning-works guide.
+> Planner (§7.28) — Stage 4 — Execution Memory & Learning (§7.29) — and
+> Stage 5 — Multi-Agent Collaboration (§7.30). This document is the
+> module's own reference; `HANDOFF.md` §7.26/§7.27/§7.28/§7.29/§7.30 carry
+> the full narrative of what was built, what was corrected from the
+> original requests, and why. See `docs/agent-profiles.md` for the
+> how-to-add-a-new-Agent guide, `docs/llm-planner.md` for the
+> how-to-use-the-LLM-planner guide, `docs/execution-memory.md` for the
+> how-learning-works guide, and `docs/multi-agent-collaboration.md` for
+> the how-delegation-works guide (**read that one before assuming
+> "delegate to another Agent" means what it sounds like** — personas are
+> not identities in this codebase, a real architectural correction from
+> Stage 5's own request).
 
 ## Overview
 
@@ -42,6 +47,10 @@ one of them fails.
 | ExecutionPattern | `Domain\Entities\ExecutionPattern` | A learned, tenant-scoped "goals mentioning these keywords tend to need these capabilities" shorthand (Stage 4, §7.29) — `Domain\Repositories\ExecutionPatternRepositoryInterface` persists it (`execution_patterns` table); `EloquentExecutionPatternRepository` is the one implementation. |
 | PatternExtractor | `Domain\Services\PatternExtractorInterface` | Classifies a Goal's own text into a keyword pattern and turns a successful `ExecutionResult` into a fresh `ExecutionPattern`. `PatternExtractor` is the one implementation — a pure Domain calculation, no Repository dependency. |
 | LearningService | `Domain\Services\LearningServiceInterface` | Reads learned patterns back into a real `ExecutionPlan` (`suggestPlan()`) and aggregates recent execution history (`getInsights()`). `LearningService` is the one implementation. See `docs/execution-memory.md`. |
+| AgentMessage | `Domain\Entities\AgentMessage` | A durable, append-only log entry of one persona-to-persona communication (Stage 5, §7.30) — `Domain\Repositories\AgentMessageRepositoryInterface` persists it (`agent_messages` table). |
+| DelegationRequest | `Domain\Entities\DelegationRequest` | One `agent.collaboration.delegate` call's own work-tracking state machine (Stage 5, §7.30) — `Pending` -> `InProgress` -> exactly one of `Completed`/`Failed`/`Timeout`. `Domain\Repositories\DelegationRequestRepositoryInterface` persists it (`delegation_requests` table). |
+| AgentCommunication | `Domain\Services\AgentCommunicationInterface` | Sends/reads `AgentMessage`s and runs a delegation by re-invoking the *unmodified* `ExecuteGoalAction` under the caller's own real `AuthContext`. `AgentCommunicationService` is the one implementation — see `docs/multi-agent-collaboration.md`. |
+| ResultAggregator | `Domain\Services\ResultAggregatorInterface` | Combines several `ExecutionResult`s into one, or picks the best of several conflicting ones by `successRate()`. `ResultAggregator` is the one implementation — built and tested, no automatic caller yet. |
 
 ## Execution flow
 
@@ -175,6 +184,23 @@ deliberately no `agent.memory.history` — it would be functionally
 identical to `agent.execution.list`/`GET /api/agents/executions` above.
 See `docs/execution-memory.md`.
 
+```
+POST /mcp/v1/execute { "capability": "agent.collaboration.delegate",
+  "input": { "from_agent": "ceo", "to_agent": "sales", "task": "...", "priority": 8 } }
+POST /mcp/v1/execute { "capability": "agent.collaboration.messages",
+  "input": { "agent_type": "sales" } }
+```
+
+MCP-only this stage (Stage 5, §7.30) — no dedicated `/api/agents/collaboration/*`
+HTTP route was requested. `agent.collaboration.delegate` (permission
+`agent.collaboration.delegate`) re-invokes the *unmodified* `ExecuteGoalAction`
+for a different persona, under the *same* real `AuthContext` the caller
+already has — delegating does not grant a new real permission, see
+`docs/multi-agent-collaboration.md`'s own "Personas are not identities"
+section before assuming otherwise. `agent.collaboration.messages`
+(permission `agent.collaboration.read`) lists the tenant's own
+persona-to-persona communication log.
+
 Every exception either surface can raise — a missing/invalid bearer token,
 a missing permission, an empty goal, an unknown execution id, an unknown
 agent/profile type (`AgentProfileNotFoundException`) — is mapped to the
@@ -290,14 +316,38 @@ for the full reasoning behind each:
   descriptive metadata only, never a second enforcement layer (see
   `docs/agent-profiles.md`'s own "What `permissions` does NOT do"), so
   omitting it doesn't block anything; it's simply not yet reflected there.
+- **"Delegate to another Agent" does not mean "run as a different
+  identity with different permissions"** — a real, load-bearing
+  correction from Stage 5's own request (§7.30), confirmed with the user
+  before writing any code: there is no separate, permission-bearing
+  identity per persona in this codebase (`AgentType` is a per-call
+  planning classification, not an Agent identity). See
+  `docs/multi-agent-collaboration.md`'s own "Personas are not identities"
+  section for the full reasoning — read it before touching this feature.
+- **No automatic mid-plan delegation** — the request's own
+  `ExecuteGoalAction::requiresDelegation()`/`executeWithDelegation()`
+  design relied on the identity assumption above and cannot work as
+  specified; `agent.collaboration.delegate` is an ordinary MCP capability
+  instead, reachable explicitly, never a special execution branch inside
+  `ExecuteGoalAction` (which is completely unmodified by Stage 5). See
+  `docs/multi-agent-collaboration.md`.
+- **`DelegationRequest.status` tracks the delegation mechanism, not the
+  delegated task's own business outcome** — `Completed` even when the
+  nested `ExecutionResultData.status` is `partial`/`failed`. See
+  `docs/multi-agent-collaboration.md`'s own "Known scope decisions."
 
 ## Future Roadmap
 
 - Recursive planning (a step's own output feeding a later step's input)
 - Self-reflection (the Orchestrator revising a plan mid-run based on a
   step's result)
-- Multi-agent collaboration (one Agent's Goal spawning sub-Goals for
-  another)
+- ~~Multi-agent collaboration (one Agent's Goal spawning sub-Goals for
+  another)~~ **Superseded in Phase 6, Stage 5 (§7.30)** — reshaped around
+  this codebase's real identity model (see "Known scope decisions"
+  above); `agent.collaboration.delegate` is real and MCP-reachable today.
+  A genuinely automatic version (a plan step that decides *for itself* to
+  delegate, or true multi-persona parallel delegation) is still open —
+  see `docs/multi-agent-collaboration.md`'s own "Known scope decisions."
 - A vector database for long-term, semantic execution memory — today's
   `ExecutionMemoryRepositoryInterface` is a simple relational log, chosen
   to already fit this future without implying it exists yet.
@@ -324,4 +374,12 @@ for the full reasoning behind each:
 - A third `LLMClientInterface` provider (see `docs/llm-planner.md`'s own
   "Adding a third provider")
 - Capability-list caching/pruning for `LLMPlanner`'s own prompt (today
-  sends all 118, uncached, on every planning call)
+  sends all 122, uncached, on every planning call)
+- Real async delegation — a queued Job another process later picks up,
+  the natural trigger for `MessageStatus::Pending`/`Received` (both
+  modeled, unreached this stage, §7.30) and for `DelegationPriority`
+  actually reordering multiple pending delegations
+- Cycle detection beyond "can't delegate to yourself" (§7.30) — a longer
+  delegation cycle (A -> B -> A) is not detected yet
+- A `ResultAggregatorInterface` caller — today built and tested with none;
+  the natural one is delegating to *multiple* personas at once (§7.30)

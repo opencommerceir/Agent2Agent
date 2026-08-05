@@ -84,6 +84,20 @@ final class AgentOrchestratorCapabilities
                 'outputSchema' => ['suggested_plan' => 'object'],
                 'requiredPermissions' => ['agent.memory.read'],
             ],
+            [
+                'name' => 'agent.collaboration.delegate',
+                'description' => "Delegate a sub-task to a different Agent persona and run it synchronously under the caller's own real permissions (§7.30) — reachable from any plan step exactly like any other capability, not a special execution mode",
+                'inputSchema' => ['from_agent' => 'string', 'to_agent' => 'string', 'task' => 'string'],
+                'outputSchema' => ['delegation_id' => 'integer', 'result' => 'object'],
+                'requiredPermissions' => ['agent.collaboration.delegate'],
+            ],
+            [
+                'name' => 'agent.collaboration.messages',
+                'description' => "List this tenant's own persona-to-persona communication log for one Agent persona, most recent first (§7.30)",
+                'inputSchema' => ['agent_type' => 'string'],
+                'outputSchema' => ['messages' => 'array'],
+                'requiredPermissions' => ['agent.collaboration.read'],
+            ],
         ];
     }
 }
