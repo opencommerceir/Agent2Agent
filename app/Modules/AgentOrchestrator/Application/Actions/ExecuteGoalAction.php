@@ -4,15 +4,19 @@ namespace App\Modules\AgentOrchestrator\Application\Actions;
 
 use App\Core\Application\DTOs\AuthContext;
 use App\Modules\AgentOrchestrator\Application\DTOs\ExecutionResultData;
+use App\Modules\AgentOrchestrator\Application\DTOs\ReasoningTraceData;
 use App\Modules\AgentOrchestrator\Domain\Entities\Goal;
 use App\Modules\AgentOrchestrator\Domain\Events\GoalCompleted;
 use App\Modules\AgentOrchestrator\Domain\Events\GoalReceived;
 use App\Modules\AgentOrchestrator\Domain\Exceptions\GoalExecutionFailedException;
 use App\Modules\AgentOrchestrator\Domain\Repositories\AgentProfileRepositoryInterface;
 use App\Modules\AgentOrchestrator\Domain\Repositories\ExecutionMemoryRepositoryInterface;
+use App\Modules\AgentOrchestrator\Domain\Repositories\ReasoningTraceRepositoryInterface;
+use App\Modules\AgentOrchestrator\Domain\Services\ExplanationGeneratorInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\LearningServiceInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\PlanExecutorInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\PlannerInterface;
+use App\Modules\AgentOrchestrator\Domain\Services\ReasoningEngineInterface;
 use App\Modules\AgentOrchestrator\Domain\ValueObjects\AgentType;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
@@ -54,6 +58,22 @@ use Throwable;
  * both Planners completely unaware learning exists, and applies it
  * uniformly regardless of which one `PlannerInterface` is currently bound
  * to (`config('agent-orchestrator.planner.type')`).
+ *
+ * **Reasons before planning, reflects after executing (Phase 6, Stage 6,
+ * §7.31).** `AgentProfile` is now loaded unconditionally, before the
+ * learned-plan check — a real, deliberate widening from Stage 4's own
+ * "only load it on the non-learned-plan branch" shape, since `think()`
+ * needs a profile regardless of which planning path eventually runs (one
+ * extra `AgentProfileRepositoryInterface::findByType()` call on the
+ * learned-plan path, where none happened before). Reasoning is
+ * **explanatory, never plan-changing** — neither `preReasoning`'s own
+ * `decision` nor its `alternatives` are read by `PlannerInterface`/
+ * `PlanExecutorInterface`; the capability sequence that actually runs is
+ * decided exactly the same way it always was. The `PreExecution` trace is
+ * held in memory (never persisted with a null `executionId`) until
+ * `ExecutionMemoryRepositoryInterface::save()` returns a real id — see
+ * `ReasoningTrace`'s own docblock for why — then both traces are persisted
+ * together, right before the `GoalCompleted` event.
  */
 final class ExecuteGoalAction
 {
@@ -63,6 +83,9 @@ final class ExecuteGoalAction
         private readonly PlanExecutorInterface $executor,
         private readonly ExecutionMemoryRepositoryInterface $memory,
         private readonly LearningServiceInterface $learning,
+        private readonly ReasoningEngineInterface $reasoning,
+        private readonly ReasoningTraceRepositoryInterface $reasoningTraces,
+        private readonly ExplanationGeneratorInterface $explanationGenerator,
     ) {
     }
 
@@ -78,13 +101,15 @@ final class ExecuteGoalAction
         ]);
         Event::dispatch(new GoalReceived($goal, $context->tenantId, $context->agentId));
 
+        $profile = $this->profiles->findByType($agentType->value);
+
+        $preReasoning = $this->reasoning->think($goal, $profile, $context->tenantId);
+
         $plan = $this->learning->suggestPlan($goal, $context->tenantId);
 
         if ($plan !== null) {
             Log::info('Using learned plan from history', ['goal' => $goal->text, 'tenant_id' => $context->tenantId]);
         } else {
-            $profile = $this->profiles->findByType($agentType->value);
-
             try {
                 $plan = $this->planner->createPlan($goal, $profile);
             } catch (Throwable $e) {
@@ -101,6 +126,12 @@ final class ExecuteGoalAction
 
         $saved = $this->memory->save($result, $context->tenantId, $context->agentId, $agentType);
 
+        $preReasoning->assignExecutionId($saved['id']);
+        $postReasoning = $this->reasoning->reflect($result, $preReasoning, $context->tenantId, $saved['id']);
+
+        $this->reasoningTraces->save($preReasoning);
+        $this->reasoningTraces->save($postReasoning);
+
         Event::dispatch(new GoalCompleted($result, $context->tenantId, $context->agentId));
         Log::info('Goal execution finished', [
             'goal' => $goal->text,
@@ -108,6 +139,12 @@ final class ExecuteGoalAction
             'execution_time' => $result->executionTimeSeconds,
         ]);
 
-        return ExecutionResultData::fromEntity($result, $saved['id']);
+        return ExecutionResultData::fromEntity(
+            $result,
+            $saved['id'],
+            ReasoningTraceData::fromEntity($preReasoning)->toArray(),
+            ReasoningTraceData::fromEntity($postReasoning)->toArray(),
+            $this->explanationGenerator->generate($preReasoning),
+        );
     }
 }

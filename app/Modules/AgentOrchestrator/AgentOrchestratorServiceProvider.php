@@ -12,6 +12,8 @@ use App\Modules\AgentOrchestrator\Application\Actions\GetExecutionInsightsAction
 use App\Modules\AgentOrchestrator\Application\Actions\GetExecutionResultAction;
 use App\Modules\AgentOrchestrator\Application\Actions\ListAgentMessagesAction;
 use App\Modules\AgentOrchestrator\Application\Actions\ListAgentProfilesAction;
+use App\Modules\AgentOrchestrator\Application\Actions\ExplainReasoningAction;
+use App\Modules\AgentOrchestrator\Application\Actions\GetReasoningTraceAction;
 use App\Modules\AgentOrchestrator\Application\Actions\ListExecutionsAction;
 use App\Modules\AgentOrchestrator\Application\Actions\SuggestExecutionPlanAction;
 use App\Modules\AgentOrchestrator\Application\Listeners\LearnFromExecutionListener;
@@ -20,12 +22,15 @@ use App\Modules\AgentOrchestrator\Application\Services\AgentCommunicationService
 use App\Modules\AgentOrchestrator\Application\Services\CapabilityToolInvoker;
 use App\Modules\AgentOrchestrator\Application\Services\ClaudeClient;
 use App\Modules\AgentOrchestrator\Application\Services\DeterministicPlanner;
+use App\Modules\AgentOrchestrator\Application\Services\ExplanationGenerator;
 use App\Modules\AgentOrchestrator\Application\Services\LearningService;
 use App\Modules\AgentOrchestrator\Application\Services\LLMPlanner;
+use App\Modules\AgentOrchestrator\Application\Services\LLMReasoningEngine;
 use App\Modules\AgentOrchestrator\Application\Services\OpenAIClient;
 use App\Modules\AgentOrchestrator\Application\Services\PatternExtractor;
 use App\Modules\AgentOrchestrator\Application\Services\PlanExecutor;
 use App\Modules\AgentOrchestrator\Application\Services\ResultAggregator;
+use App\Modules\AgentOrchestrator\Application\Services\SimpleReasoningEngine;
 use App\Modules\AgentOrchestrator\Domain\Events\GoalCompleted;
 use App\Modules\AgentOrchestrator\Domain\Events\StepExecuted;
 use App\Modules\AgentOrchestrator\Domain\Repositories\AgentMessageRepositoryInterface;
@@ -33,12 +38,15 @@ use App\Modules\AgentOrchestrator\Domain\Repositories\AgentProfileRepositoryInte
 use App\Modules\AgentOrchestrator\Domain\Repositories\DelegationRequestRepositoryInterface;
 use App\Modules\AgentOrchestrator\Domain\Repositories\ExecutionMemoryRepositoryInterface;
 use App\Modules\AgentOrchestrator\Domain\Repositories\ExecutionPatternRepositoryInterface;
+use App\Modules\AgentOrchestrator\Domain\Repositories\ReasoningTraceRepositoryInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\AgentCommunicationInterface;
+use App\Modules\AgentOrchestrator\Domain\Services\ExplanationGeneratorInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\LearningServiceInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\LLMClientInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\PatternExtractorInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\PlanExecutorInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\PlannerInterface;
+use App\Modules\AgentOrchestrator\Domain\Services\ReasoningEngineInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\ResultAggregatorInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\ToolInvokerInterface;
 use App\Modules\AgentOrchestrator\Domain\ValueObjects\AgentType;
@@ -47,6 +55,7 @@ use App\Modules\AgentOrchestrator\Infrastructure\Repositories\EloquentAgentMessa
 use App\Modules\AgentOrchestrator\Infrastructure\Repositories\EloquentDelegationRequestRepository;
 use App\Modules\AgentOrchestrator\Infrastructure\Repositories\EloquentExecutionMemoryRepository;
 use App\Modules\AgentOrchestrator\Infrastructure\Repositories\EloquentExecutionPatternRepository;
+use App\Modules\AgentOrchestrator\Infrastructure\Repositories\EloquentReasoningTraceRepository;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use InvalidArgumentException;
@@ -86,6 +95,8 @@ class AgentOrchestratorServiceProvider extends ServiceProvider
         $this->app->bind(DelegationRequestRepositoryInterface::class, EloquentDelegationRequestRepository::class);
         $this->app->bind(AgentCommunicationInterface::class, AgentCommunicationService::class);
         $this->app->bind(ResultAggregatorInterface::class, ResultAggregator::class);
+        $this->app->bind(ReasoningTraceRepositoryInterface::class, EloquentReasoningTraceRepository::class);
+        $this->app->bind(ExplanationGeneratorInterface::class, ExplanationGenerator::class);
 
         $this->app->bind(LLMClientInterface::class, function ($app) {
             $provider = config('agent-orchestrator.llm.provider');
@@ -113,6 +124,19 @@ class AgentOrchestratorServiceProvider extends ServiceProvider
                 $app->make(DiscoverCapabilitiesAction::class),
                 $app->make(DeterministicPlanner::class),
                 (bool) config('agent-orchestrator.planner.fallback_to_deterministic', true),
+            );
+        });
+
+        $this->app->bind(ReasoningEngineInterface::class, function ($app) {
+            if (config('agent-orchestrator.reasoning.type') !== 'llm') {
+                return $app->make(SimpleReasoningEngine::class);
+            }
+
+            return new LLMReasoningEngine(
+                $app->make(LLMClientInterface::class),
+                $app->make(ExecutionPatternRepositoryInterface::class),
+                $app->make(SimpleReasoningEngine::class),
+                (bool) config('agent-orchestrator.reasoning.fallback_to_simple', true),
             );
         });
     }
@@ -199,5 +223,24 @@ class AgentOrchestratorServiceProvider extends ServiceProvider
 
             return ['messages' => array_map(fn ($message) => $message->toArray(), $messages)];
         });
+
+        $handlers->register('agent.reasoning.trace', function (array $input, AuthContext $context) {
+            $traces = $this->app->make(GetReasoningTraceAction::class)->execute(
+                $context->tenantId,
+                (int) $input['execution_id'],
+            );
+
+            return [
+                'pre_reasoning' => $traces['pre_execution']?->toArray(),
+                'post_reasoning' => $traces['post_execution']?->toArray(),
+            ];
+        });
+
+        $handlers->register('agent.reasoning.explain', fn (array $input, AuthContext $context) => [
+            'explanation' => $this->app->make(ExplainReasoningAction::class)->execute(
+                $context->tenantId,
+                (int) $input['execution_id'],
+            ),
+        ]);
     }
 }

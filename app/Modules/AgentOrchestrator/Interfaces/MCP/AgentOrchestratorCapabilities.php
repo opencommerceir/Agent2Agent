@@ -98,6 +98,20 @@ final class AgentOrchestratorCapabilities
                 'outputSchema' => ['messages' => 'array'],
                 'requiredPermissions' => ['agent.collaboration.read'],
             ],
+            [
+                'name' => 'agent.reasoning.trace',
+                'description' => "Retrieve the pre-execution reasoning and post-execution reflection recorded for one past goal Execution (§7.31) — either may be null if reflection never ran",
+                'inputSchema' => ['execution_id' => 'integer'],
+                'outputSchema' => ['pre_reasoning' => 'object', 'post_reasoning' => 'object'],
+                'requiredPermissions' => ['agent.reasoning.read'],
+            ],
+            [
+                'name' => 'agent.reasoning.explain',
+                'description' => 'Render one past goal Execution\'s own recorded reasoning trace(s) as a human-readable explanation (§7.31)',
+                'inputSchema' => ['execution_id' => 'integer'],
+                'outputSchema' => ['explanation' => 'string'],
+                'requiredPermissions' => ['agent.reasoning.read'],
+            ],
         ];
     }
 }

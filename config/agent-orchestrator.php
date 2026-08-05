@@ -43,4 +43,16 @@ return [
         'fallback_to_deterministic' => env('PLANNER_FALLBACK_TO_DETERMINISTIC', true),
     ],
 
+    // Phase 6, Stage 6 (Self-Reflection & Reasoning, §7.31). `reasoning.type`
+    // deliberately defaults to `simple`, not `llm` — the identical
+    // "safe default, explicit opt-in for real network calls" reasoning
+    // `planner.type` already established above; `LLMClientInterface` is
+    // bound unconditionally regardless of this setting (it's shared with
+    // the planner), so leaving this at `llm` by default would make every
+    // single goal execution attempt a real, keyless network call.
+    'reasoning' => [
+        'type' => env('REASONING_TYPE', 'simple'), // llm, simple
+        'fallback_to_simple' => env('REASONING_FALLBACK_TO_SIMPLE', true),
+    ],
+
 ];

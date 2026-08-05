@@ -42,6 +42,14 @@
              config(['agent-orchestrator.planner.type' => 'llm']) after
              also rebinding LLMClientInterface to a fake. -->
         <env name="PLANNER_TYPE" value="deterministic"/>
+        <!-- Phase 6, Stage 6 (§7.31) — same reasoning as PLANNER_TYPE above:
+             explicit, not just relying on config/agent-orchestrator.php's
+             own default, so the whole suite never attempts a real LLM
+             network call for reasoning either. Tests that specifically
+             exercise LLMReasoningEngine override this per-test via
+             config(['agent-orchestrator.reasoning.type' => 'llm']) after
+             also rebinding LLMClientInterface to a fake. -->
+        <env name="REASONING_TYPE" value="simple"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>

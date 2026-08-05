@@ -264,15 +264,30 @@ step failed.
   its own permission set (`AgentType` is a per-call planning persona, not
   an identity), a real correction from the original request confirmed
   before writing any code — see `docs/multi-agent-collaboration.md`.
+- **Self-Reflection & Reasoning (Phase 6, Stage 6 — the last Stage of
+  Phase 6)** — every Goal execution now thinks before acting and reflects
+  after acting: `think()` produces a real, confidence-scored `ReasoningTrace`
+  (what the goal needs, what's worked before, alternatives considered)
+  before a plan is even created, and `reflect()` produces a second one
+  from the real outcome once execution finishes. Both are LLM-backed
+  (`REASONING_TYPE=llm`) with an automatic, honest deterministic fallback
+  on any failure — never a hard failure for the caller — and both are
+  persisted and retrievable afterward:
+  `GET /api/agents/reasoning/trace`/`GET /api/agents/reasoning/explain`
+  (+ the identical `agent.reasoning.trace`/`agent.reasoning.explain` MCP
+  capabilities). Reasoning is deliberately explanatory, never
+  plan-changing — nothing it produces is read back into planning or
+  execution, the same restraint already applied to delegation above — see
+  `docs/self-reflection.md`.
 
-See `docs/agent-orchestrator.md`/`docs/agent-profiles.md`/`docs/llm-planner.md`/`docs/execution-memory.md`/`docs/multi-agent-collaboration.md`
+See `docs/agent-orchestrator.md`/`docs/agent-profiles.md`/`docs/llm-planner.md`/`docs/execution-memory.md`/`docs/multi-agent-collaboration.md`/`docs/self-reflection.md`
 for the full architecture, how to add a new Agent persona, how to enable
-the LLM planner, how learning works, and how delegation works, and
-`HANDOFF.md` §7.26/§7.27/§7.28/§7.29/§7.30 for the build log, including
-every deliberate correction made from the original requests (real
-capability names in place of illustrative ones, why `AuthContext` is
-threaded through this module's own Domain Service interfaces as a
-documented exception, and more).
+the LLM planner, how learning works, how delegation works, and how
+reasoning works, and `HANDOFF.md` §7.26/§7.27/§7.28/§7.29/§7.30/§7.31 for
+the build log, including every deliberate correction made from the
+original requests (real capability names in place of illustrative ones,
+why `AuthContext` is threaded through this module's own Domain Service
+interfaces as a documented exception, and more).
 
 ---
 
@@ -341,6 +356,7 @@ phase/stage breakdown and `HANDOFF.md` for the detailed build log.
 - [x] LLM-based Planner (Phase 6, Stage 3 — real OpenAI/Claude planning with automatic fallback, `PLANNER_TYPE=llm`)
 - [x] Execution Memory & Learning (Phase 6, Stage 4 — pattern extraction from real execution history, learned-plan suggestions ahead of both Planners)
 - [x] Multi-Agent Collaboration (Phase 6, Stage 5 — persona-to-persona delegation under the caller's own real permissions, `agent.collaboration.delegate`/`.messages`)
+- [x] Self-Reflection & Reasoning (Phase 6, Stage 6 — the last Stage of Phase 6 — pre-execution `think()` and post-execution `reflect()`, LLM-backed with automatic deterministic fallback, `agent.reasoning.trace`/`.explain`)
 - [ ] Additional SDKs (TypeScript, Node.js, Python, Go — PHP SDK is the
       only one built so far)
 - [ ] Real carrier (USPS/FedEx/DHL) and SMS gateway integrations (mock/stub today)
@@ -350,27 +366,30 @@ phase/stage breakdown and `HANDOFF.md` for the detailed build log.
 
 ## Project Status
 
-> ✅ **Phase 5 Complete — Advanced Commerce** · 🚧 **Phase 6, Stage 5 — Multi-Agent Collaboration**
+> ✅ **Phase 5 Complete — Advanced Commerce** · ✅ **Phase 6 Complete — AI Agent Orchestration**
 
 OpenCommerce Platform has moved past the foundation stage: Core, MCP
 Gateway, and UCP are stable, and 11 Domain Modules are built, tested, and
 MCP-reachable — Commerce (incl. multi-warehouse inventory, variants, bulk
 operations, and subscriptions), CRM, Finance, Workflows, Loyalty,
-Reporting, Shipping, Notifications, Analytics, and the new Agent
+Reporting, Shipping, Notifications, Analytics, and the now-complete Agent
 Orchestrator (config-driven Agent Profiles, a real CEO Agent persona, a
 real LLM-based planner with automatic deterministic fallback, execution
-memory & learning, and now persona-to-persona delegation under the
-caller's own real permissions), plus a bilingual Admin Dashboard for human
-operators. 1031 automated tests pass across 122 MCP capabilities, with
-zero known regressions.
+memory & learning, persona-to-persona delegation under the caller's own
+real permissions, and now pre/post-execution reasoning with the same
+LLM-backed-with-automatic-fallback shape), plus a bilingual Admin
+Dashboard for human operators. 1067 automated tests pass across 124 MCP
+capabilities, with zero known regressions.
 
-The current focus is building out the remaining AI Agent personas beyond
-CEO, extending the LLM planner (recursive planning, self-reflection),
-deepening learning (semantic/vector pattern matching, pattern pruning),
-and moving collaboration toward real async delegation — see
-`docs/agent-orchestrator.md`, `docs/agent-profiles.md`,
-`docs/llm-planner.md`, `docs/execution-memory.md`,
-`docs/multi-agent-collaboration.md`, and `docs/roadmap.md`.
+Phase 6 (AI Agent Orchestration) is now fully complete, all 6 Stages.
+Whoever drives scope next is choosing where the platform goes from here —
+candidates include feeding reasoning back into planning (today it's
+explanatory only), real async delegation, semantic/vector pattern
+matching, additional Agent personas beyond CEO, and a Dashboard page
+covering everything Phase 6 built — see `docs/agent-orchestrator.md`,
+`docs/agent-profiles.md`, `docs/llm-planner.md`, `docs/execution-memory.md`,
+`docs/multi-agent-collaboration.md`, `docs/self-reflection.md`, and
+`docs/roadmap.md`.
 
 ---
 

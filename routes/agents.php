@@ -3,6 +3,7 @@
 use App\Modules\AgentOrchestrator\Infrastructure\Controllers\AgentController;
 use App\Modules\AgentOrchestrator\Infrastructure\Controllers\AgentMemoryController;
 use App\Modules\AgentOrchestrator\Infrastructure\Controllers\AgentProfileController;
+use App\Modules\AgentOrchestrator\Infrastructure\Controllers\AgentReasoningController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -51,4 +52,9 @@ Route::prefix('api/agents')->group(function () {
     // already-existing GET /executions above).
     Route::get('/memory/insights', [AgentMemoryController::class, 'insights']);
     Route::post('/memory/suggest', [AgentMemoryController::class, 'suggest']);
+
+    // Self-Reflection & Reasoning (§7.31) — both read-only, execution_id
+    // as a query param on GET, the same shape /memory/insights already uses.
+    Route::get('/reasoning/trace', [AgentReasoningController::class, 'trace']);
+    Route::get('/reasoning/explain', [AgentReasoningController::class, 'explain']);
 });

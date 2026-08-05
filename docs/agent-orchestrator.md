@@ -2,18 +2,22 @@
 
 > Added in Phase 6, Stage 1 (§7.26 in `HANDOFF.md`), extended in Stage 2
 > — Agent Profiles + the CEO Agent (§7.27) — Stage 3 — an LLM-based
-> Planner (§7.28) — Stage 4 — Execution Memory & Learning (§7.29) — and
-> Stage 5 — Multi-Agent Collaboration (§7.30). This document is the
-> module's own reference; `HANDOFF.md` §7.26/§7.27/§7.28/§7.29/§7.30 carry
-> the full narrative of what was built, what was corrected from the
+> Planner (§7.28) — Stage 4 — Execution Memory & Learning (§7.29) — Stage
+> 5 — Multi-Agent Collaboration (§7.30) — and Stage 6, the last Stage of
+> Phase 6 — Self-Reflection & Reasoning (§7.31). This document is the
+> module's own reference; `HANDOFF.md` §7.26/§7.27/§7.28/§7.29/§7.30/§7.31
+> carry the full narrative of what was built, what was corrected from the
 > original requests, and why. See `docs/agent-profiles.md` for the
 > how-to-add-a-new-Agent guide, `docs/llm-planner.md` for the
 > how-to-use-the-LLM-planner guide, `docs/execution-memory.md` for the
-> how-learning-works guide, and `docs/multi-agent-collaboration.md` for
-> the how-delegation-works guide (**read that one before assuming
-> "delegate to another Agent" means what it sounds like** — personas are
-> not identities in this codebase, a real architectural correction from
-> Stage 5's own request).
+> how-learning-works guide, `docs/multi-agent-collaboration.md` for the
+> how-delegation-works guide (**read that one before assuming "delegate to
+> another Agent" means what it sounds like** — personas are not identities
+> in this codebase, a real architectural correction from Stage 5's own
+> request), and `docs/self-reflection.md` for the how-reasoning-works guide
+> (**read that one before assuming reasoning changes which plan runs** —
+> it's explanatory only, the same restraint Stage 5's own delegation
+> mechanism already established).
 
 ## Overview
 
@@ -51,6 +55,9 @@ one of them fails.
 | DelegationRequest | `Domain\Entities\DelegationRequest` | One `agent.collaboration.delegate` call's own work-tracking state machine (Stage 5, §7.30) — `Pending` -> `InProgress` -> exactly one of `Completed`/`Failed`/`Timeout`. `Domain\Repositories\DelegationRequestRepositoryInterface` persists it (`delegation_requests` table). |
 | AgentCommunication | `Domain\Services\AgentCommunicationInterface` | Sends/reads `AgentMessage`s and runs a delegation by re-invoking the *unmodified* `ExecuteGoalAction` under the caller's own real `AuthContext`. `AgentCommunicationService` is the one implementation — see `docs/multi-agent-collaboration.md`. |
 | ResultAggregator | `Domain\Services\ResultAggregatorInterface` | Combines several `ExecutionResult`s into one, or picks the best of several conflicting ones by `successRate()`. `ResultAggregator` is the one implementation — built and tested, no automatic caller yet. |
+| ReasoningTrace | `Domain\Entities\ReasoningTrace` | One "thought" produced before (`pre_execution`) or after (`post_execution`) a Goal executes (Stage 6, §7.31) — `thoughts`, `alternatives`, a `ConfidenceScore`, a `decision`, and a human-readable `explanation`. `Domain\Repositories\ReasoningTraceRepositoryInterface` persists it, append-only (`reasoning_traces` table). |
+| ReasoningEngine | `Domain\Services\ReasoningEngineInterface` | `think()`s before planning, `reflect()`s after execution. Two implementations, mirroring Planner: `SimpleReasoningEngine` (no LLM — derives confidence from real `ExecutionPattern`/`ExecutionResult` numbers) and `LLMReasoningEngine` (asks a real LLM provider, falls back to `SimpleReasoningEngine` on any failure) — chosen by `config('agent-orchestrator.reasoning.type')`. See `docs/self-reflection.md`. |
+| ExplanationGenerator | `Domain\Services\ExplanationGeneratorInterface` | Renders one `ReasoningTrace` into a human-readable explanation string — pure formatting, no LLM call. `ExplanationGenerator` is the one implementation. |
 
 ## Execution flow
 
@@ -58,27 +65,39 @@ one of them fails.
    or system-facing HTTP client) or the `agent.goal.execute` MCP capability
    (another Agent, or a future multi-agent orchestration one level up) —
    both reuse the exact same `ExecuteGoalAction`.
-2. `ExecuteGoalAction` builds a `Goal`, dispatches `GoalReceived`, and asks
-   `LearningServiceInterface::suggestPlan()` (Stage 4, §7.29) whether this
-   tenant has already solved a similar goal successfully before. If so,
-   that learned plan is used and **neither Planner nor `AgentProfile` is
-   ever consulted**. Otherwise it loads the calling `AgentType`'s own
-   `AgentProfile` (`AgentProfileNotFoundException` — 404 — if no
-   `config/agents/{type}.php` exists for it) and asks the bound
+2. `ExecuteGoalAction` builds a `Goal`, dispatches `GoalReceived`, and loads
+   the calling `AgentType`'s own `AgentProfile` (`AgentProfileNotFoundException`
+   — 404 — if no `config/agents/{type}.php` exists for it) —
+   **unconditionally, since Stage 6 (§7.31), even on a path that ends up
+   using a learned plan**, because the next step needs one.
+3. `ReasoningEngineInterface::think()` (Stage 6, §7.31) produces a
+   `ReasoningTrace` — what this goal needs, what's worked before, how
+   confident the Agent is, held in memory (no execution id exists yet).
+   **This is explanatory only — nothing below reads it back.**
+4. `ExecuteGoalAction` asks `LearningServiceInterface::suggestPlan()`
+   (Stage 4, §7.29) whether this tenant has already solved a similar goal
+   successfully before. If so, that learned plan is used and **the
+   Planner is never consulted**. Otherwise it asks the bound
    `PlannerInterface` for an `ExecutionPlan`.
-3. `PlanExecutor` runs each `ExecutionStep` through `CapabilityToolInvoker`,
+5. `PlanExecutor` runs each `ExecutionStep` through `CapabilityToolInvoker`,
    in order. Each step is authenticated as the calling Agent, permission-
    checked against the target capability's own `requiredPermissions`, input-
    validated, and executed — identically to a direct `/mcp/v1/execute`
    call. **A failed step is recorded and execution continues** — it never
    aborts the rest of the plan.
-4. The finished `ExecutionResult` is persisted via
-   `ExecutionMemoryRepositoryInterface` and `GoalCompleted` is dispatched —
-   `LearnFromExecutionListener` (Stage 4, §7.29) reacts to it, creating or
-   reinforcing an `ExecutionPattern` for next time. See
-   `docs/execution-memory.md`.
-5. The caller gets back the full step-by-step result, a derived `status`,
-   and a plain-language `summary`.
+6. The finished `ExecutionResult` is persisted via
+   `ExecutionMemoryRepositoryInterface` (this is where a real execution id
+   first exists) and `GoalCompleted` is dispatched — `LearnFromExecutionListener`
+   (Stage 4, §7.29) reacts to it, creating or reinforcing an `ExecutionPattern`
+   for next time. See `docs/execution-memory.md`.
+7. `ReasoningEngineInterface::reflect()` (Stage 6, §7.31) produces a second
+   `ReasoningTrace` from the real outcome. Both traces are persisted
+   together (the pre-execution one now has its execution id assigned) and
+   an `ExplanationGeneratorInterface::generate()` call renders a
+   human-readable explanation. See `docs/self-reflection.md`.
+8. The caller gets back the full step-by-step result, a derived `status`,
+   a plain-language `summary`, and both reasoning traces + the rendered
+   explanation.
 
 ## Planner
 
@@ -200,6 +219,18 @@ already has — delegating does not grant a new real permission, see
 section before assuming otherwise. `agent.collaboration.messages`
 (permission `agent.collaboration.read`) lists the tenant's own
 persona-to-persona communication log.
+
+```
+GET /api/agents/reasoning/trace?execution_id=123     # both traces' full structured data
+GET /api/agents/reasoning/explain?execution_id=123   # a rendered, human-readable explanation
+```
+
+Also reachable over MCP: `agent.reasoning.trace`/`agent.reasoning.explain`
+(permission `agent.reasoning.read` for both, Stage 6, §7.31). Every
+`agent.goal.execute`/`POST /api/agents/{agent_type}` response also now
+carries `pre_reasoning`/`post_reasoning`/`explanation` inline — these two
+endpoints are for reading them back *afterward*, by execution id. See
+`docs/self-reflection.md`.
 
 Every exception either surface can raise — a missing/invalid bearer token,
 a missing permission, an empty goal, an unknown execution id, an unknown
@@ -335,12 +366,38 @@ for the full reasoning behind each:
   delegated task's own business outcome** — `Completed` even when the
   nested `ExecutionResultData.status` is `partial`/`failed`. See
   `docs/multi-agent-collaboration.md`'s own "Known scope decisions."
+- **Reasoning is explanatory, never plan-changing** (Stage 6, §7.31) —
+  neither `PlannerInterface` nor `PlanExecutorInterface` reads anything a
+  `ReasoningTrace` produces; the capability sequence that runs is decided
+  exactly the same way it always was. The same restraint this module
+  already applied to delegation (no automatic mid-plan rerouting) applied
+  a second time, to reasoning. See `docs/self-reflection.md`.
+- **`config('agent-orchestrator.reasoning.type')` defaults to `simple`,
+  not `llm`** — the identical safe-default reasoning `planner.type`
+  already established (§7.28), more load-bearing here since
+  `LLMClientInterface` is shared/unconditional: leaving reasoning at `llm`
+  by default would make *every* goal execution attempt a real network
+  call, not just the ones that opt into an LLM planner. See
+  `docs/self-reflection.md`.
+- **`AgentProfile` is now loaded unconditionally in `ExecuteGoalAction`**,
+  even on the learned-plan path where it previously wasn't needed —
+  `think()` needs one regardless of which planning path eventually runs.
+  A small, deliberate, additive widening (one extra
+  `AgentProfileRepositoryInterface::findByType()` call on that path). See
+  `docs/self-reflection.md`.
 
 ## Future Roadmap
 
 - Recursive planning (a step's own output feeding a later step's input)
-- Self-reflection (the Orchestrator revising a plan mid-run based on a
-  step's result)
+- ~~Self-reflection (recording what an Agent thought before/after
+  executing a Goal)~~ **Delivered in Phase 6, Stage 6 (§7.31)** —
+  `think()`/`reflect()` are real, LLM-backed (with a real deterministic
+  fallback), and persisted. What's still genuinely open, narrower than
+  the original roadmap line: the Orchestrator *revising a plan mid-run*
+  based on a step's own result — today's reasoning is recorded and
+  explanatory, never fed back into `PlanExecutor`. See
+  `docs/self-reflection.md`'s own "Reasoning is explanatory, not
+  plan-changing."
 - ~~Multi-agent collaboration (one Agent's Goal spawning sub-Goals for
   another)~~ **Superseded in Phase 6, Stage 5 (§7.30)** — reshaped around
   this codebase's real identity model (see "Known scope decisions"
@@ -383,3 +440,10 @@ for the full reasoning behind each:
   delegation cycle (A -> B -> A) is not detected yet
 - A `ResultAggregatorInterface` caller — today built and tested with none;
   the natural one is delegating to *multiple* personas at once (§7.30)
+- Feeding `ReasoningTrace.alternatives` back into planning — e.g. letting
+  a caller ask "run with alternative #2 instead" (§7.31, today purely
+  recorded/rendered)
+- A Dashboard page under `/dashboard/agents` covering reasoning traces too
+  (§7.31, same gap every Phase 6 Stage's own new surface has flagged)
+- Semantic/embedding-based confidence instead of `SimpleReasoningEngine`'s
+  own plain average of matched patterns' success rates (§7.31)

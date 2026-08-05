@@ -1,5 +1,40 @@
 # OpenCommerce Platform — Session Handoff
 
+**Status: Phase 6, Stage 6 (Self-Reflection & Reasoning, §7.31 — the last
+Stage of Phase 6) is now complete — every `agent.goal.execute` call now
+`think()`s before a Plan is created and `reflect()`s once a real
+`ExecutionResult` exists, producing two persisted `ReasoningTrace` rows
+(a real, validated `ConfidenceScore` and a human-readable `explanation`
+each) surfaced both inline on the execution response and, afterward,
+through `agent.reasoning.trace`/`.explain` (+ the identical
+`GET /api/agents/reasoning/trace`/`/explain` HTTP routes). Two real
+corrections from the request's own pseudocode, both audited before
+writing any code, the same discipline every prior stage's own
+request-vs-codebase mismatch got: (1) reasoning is **explanatory, never
+plan-changing** — neither `PlannerInterface` nor `PlanExecutorInterface`
+reads anything a `ReasoningTrace` produces, the identical restraint §7.30
+already established for delegation (no automatic mid-plan rerouting),
+since the request's own worked example never actually had the "decision"
+steer which capabilities ran either; (2) `LLMClientInterface` is bound
+**unconditionally** in this module, independent of which planner is
+configured — wiring `LLMReasoningEngine` in as the default would have made
+*every single goal execution* attempt a real, keyless network call, not
+just calls that opt into an LLM planner. Resolved the same way §7.28
+resolved the identical risk for planning: `config('agent-orchestrator.reasoning.type')`
+defaults to `simple` (`SimpleReasoningEngine`, no LLM call — derives an
+honest confidence from this tenant's own real `ExecutionPattern`/
+`ExecutionResult` numbers), `LLMReasoningEngine` falls back to it
+automatically on any failure, and `phpunit.xml` pins `REASONING_TYPE=simple`
+explicitly, mirroring `PLANNER_TYPE=deterministic` line for line. A
+smaller, deliberate, additive widening: `AgentProfile` is now loaded
+unconditionally at the top of `ExecuteGoalAction::execute()` (previously
+skipped whenever a learned plan short-circuited planning), since `think()`
+needs one regardless of which planning path eventually runs. 1067 tests
+passing (1031 + 36 new), 124 MCP capabilities (122 +
+`agent.reasoning.trace`/`.explain`), zero known regressions. **Phase 6
+(AI Agent Orchestration) is now fully complete, all 6 Stages.** See §7.31
+for the full detail.**
+
 **Status: Phase 6, Stage 5 (Multi-Agent Collaboration, §7.30) is now
 complete — `agent.collaboration.delegate`/`agent.collaboration.messages`
 let one Agent persona hand a sub-task to another's own planning rules and
@@ -991,9 +1026,14 @@ after.** 1000 tests passing (966 + 34 new), 120 MCP capabilities, zero
 known regressions.
 
 **Phase 6, Stage 5 (Multi-Agent Collaboration, §7.30) ran immediately
-after — see the summary paragraph at the very top of this file.** 1031
-tests passing (1000 + 31 new), 122 MCP capabilities, zero known
-regressions. See §9 for what's next across the whole platform.
+after.** 1031 tests passing (1000 + 31 new), 122 MCP capabilities, zero
+known regressions.
+
+**Phase 6, Stage 6 (Self-Reflection & Reasoning, §7.31 — the last Stage of
+Phase 6) ran immediately after — see the summary paragraph at the very top
+of this file.** 1067 tests passing (1031 + 36 new), 124 MCP capabilities,
+zero known regressions. Phase 6 (AI Agent Orchestration) is now fully
+complete — all 6 Stages. See §9 for what's next across the whole platform.
 
 This file is a working-state snapshot for picking up development in a new
 session. It assumes you've already read `CLAUDE.md` and `docs/*.md` (the
@@ -1279,7 +1319,7 @@ Controllers Rule: no business logic in Controllers). Gated by the `auth`
 - **Seeded default admin**: `admin@opencommerce.test` / `password`
   (`DatabaseSeeder`) — change or remove before any real deployment.
 
-### `app/Modules/AgentOrchestrator/` — **new in Phase 6, Stage 1 (§7.26), extended in Stage 2 (Agent Profiles + CEO Agent, §7.27) and Stage 3 (LLM-based Planner, §7.28). Goal -> Plan -> Execute — an orchestration layer over every other module's own MCP capabilities, with no business logic of its own.**
+### `app/Modules/AgentOrchestrator/` — **new in Phase 6, Stage 1 (§7.26), extended in Stage 2 (Agent Profiles + CEO Agent, §7.27), Stage 3 (LLM-based Planner, §7.28), Stage 4 (Execution Memory & Learning, §7.29), Stage 5 (Multi-Agent Collaboration, §7.30), and Stage 6 (Self-Reflection & Reasoning, §7.31 — the last Stage of Phase 6). Goal -> Plan -> Execute -> Reason — an orchestration layer over every other module's own MCP capabilities, with no business logic of its own.**
 
 See §7.26 for the full detail. 4 Domain Entities (`Goal`, `ExecutionPlan`,
 `ExecutionStep`, `ExecutionResult`), 3 Value Objects (`AgentType`,
@@ -1548,6 +1588,126 @@ ever targets one persona per call this stage, the same "built the
 mechanism, no caller yet" shape `ExecutionPlanData` carried between §7.26
 and §7.29. See §7.30 for the full detail, including every test that
 proves delegation never grants a new real permission.**
+
+**Stage 6 (Self-Reflection & Reasoning, §7.31 — the last Stage of Phase 6)
+added `ReasoningTrace` (Domain Entity — a `pre_execution`/`post_execution`
+row per finished `think()`/`reflect()` call, append-only, the same
+`id()`/`assignId()` one-time-mutator shape `AgentMessage` establishes,
+plus a second, identical `executionId()`/`assignExecutionId()` pair —
+`ExecutionResult` carries no id of its own at all, so a `PreExecution`
+trace is built and held in memory until `ExecutionMemoryRepositoryInterface::save()`
+returns one) + `ReasoningTraceRepositoryInterface` + `EloquentReasoningTraceRepository`
+(new `reasoning_traces` table, insert-only — `save()` refuses a trace with
+no `executionId()` assigned yet, a real class invariant, not a
+suggestion). `ConfidenceScore` (0.0-1.0 VO, the same "validated float
+wrapper" shape `DelegationPriority`'s own 1-10 int wrapper establishes,
+one level narrower) + `AlternativePlan` (VO — `plan`/`confidence`/`reason`,
+only ever populated on a `PreExecution` trace) + `ReasoningType` (enum,
+`pre_execution`/`post_execution`). `ReasoningEngineInterface`
+(`think(Goal, AgentProfile, int $tenantId): ReasoningTrace` /
+`reflect(ExecutionResult, ReasoningTrace $preReasoning, int $tenantId, int
+$executionId): ReasoningTrace`) + `ExplanationGeneratorInterface`
+(`generate(ReasoningTrace): string`, pure formatting, no LLM call — every
+fact it renders already lives on the trace it's given).
+
+**Two implementations of `ReasoningEngineInterface`, mirroring
+`PlannerInterface`/`LLMPlanner`/`DeterministicPlanner` (§7.28) field for
+field.** `SimpleReasoningEngine` (Application/Services) — no LLM call,
+reads this tenant's own `ExecutionPattern` history via
+`ExecutionPatternRepositoryInterface::findSimilarPatterns()` (the *exact*
+method `LearningService::suggestPlan()` itself already calls — not a new,
+duplicate lookup added to `LearningServiceInterface`, which has no
+`getSimilarExecutions()` method and never gained one) and derives an
+honest confidence from real numbers: a matched pattern's own
+`successRate()` when thinking, the real `ExecutionResult::successRate()`
+when reflecting. `LLMReasoningEngine` (Application/Services) — asks a
+configured LLM provider for structured JSON
+(`LLMClientInterface::completeStructured()`, the same port `LLMPlanner`
+uses) via a new `ReasoningPromptTemplate` (`Application/Prompts`, mirrors
+`PlanningPromptTemplate`'s own static-heredoc-builder shape exactly, one
+builder per `ReasoningEngineInterface` method) and **falls back to
+`SimpleReasoningEngine` automatically** on any failure (network error,
+malformed response, a response missing a required field) — never a hard
+failure for the caller, unless `config('agent-orchestrator.reasoning.fallback_to_simple')`
+is `false`.
+
+**The single biggest correction of this stage, confirmed sound rather than
+asked about (the same weight §7.30's own "capability-based delegation, not
+automatic mid-plan detection" correction carried, not a full
+architecture-fork question): reasoning is explanatory, never
+plan-changing.** Neither `PlannerInterface::createPlan()` nor
+`PlanExecutorInterface::execute()` reads anything a `ReasoningTrace`
+produces — the capability sequence that actually runs is decided exactly
+the same way it always was (a learned `ExecutionPattern` first, then
+whichever `PlannerInterface` is configured). The request's own worked
+example never actually had its "decision" steer which capabilities ran
+either, so this reading costs nothing the request asked for while keeping
+`PlannerInterface`/`PlanExecutorInterface` — two of the most
+heavily-depended-on Interfaces in this module — completely untouched.
+
+**A second, purely technical correction, load-bearing rather than
+architectural: `config('agent-orchestrator.reasoning.type')` needed the
+identical safe-default treatment `planner.type` already has (§7.28), for a
+sharper reason than planning's own version.** `LLMClientInterface` is
+bound once, unconditionally, in `AgentOrchestratorServiceProvider::register()`
+— independent of which planner is configured, since `LLMPlanner` and any
+future reasoning engine both share it. Defaulting `reasoning.type` to
+`llm` would not just risk one opt-in code path attempting a real network
+call (planning's own risk) — it would make **every single
+`agent.goal.execute` call**, the module's own most central operation,
+attempt one, the instant reasoning was wired into `ExecuteGoalAction` at
+all. `reasoning.type` defaults to `simple`; `phpunit.xml` pins
+`REASONING_TYPE=simple` explicitly, mirroring `PLANNER_TYPE=deterministic`
+line for line, confirmed by re-running the *entire* pre-existing 1031-test
+suite unchanged immediately after wiring (zero regressions, zero new
+network attempts).
+
+**`ExecuteGoalAction` gained 3 new constructor dependencies**
+(`ReasoningEngineInterface`, `ReasoningTraceRepositoryInterface`,
+`ExplanationGeneratorInterface`) **and one small, deliberate behavior
+widening**: `AgentProfile` is now loaded unconditionally, before the
+learned-plan check, rather than only on the non-learned-plan branch —
+`think()` needs a profile regardless of which planning path eventually
+runs, one extra `AgentProfileRepositoryInterface::findByType()` call on
+the learned-plan path where there was previously none. The new sequence:
+`think()` (in-memory, no execution id yet) -> learned-plan-or-Planner ->
+`PlanExecutor` -> `ExecutionMemoryRepositoryInterface::save()` (the real
+execution id first exists here) -> `preReasoning.assignExecutionId(id)`
+-> `reflect()` (execution id already known) -> both traces persisted
+together -> `GoalCompleted` dispatched -> `ExplanationGeneratorInterface::generate()`.
+`ExecutionResultData` gained 3 new, optional, trailing constructor
+parameters (`preReasoning`/`postReasoning`/`explanation`, all default
+`null` — HANDOFF §3 pattern #6) and `fromEntity()` was widened to match;
+every pre-existing caller that doesn't pass them is unaffected.
+
+Two new MCP capabilities, `agent.reasoning.trace`/`agent.reasoning.explain`
+(permission `agent.reasoning.read` for both, already exactly 3
+dot-separated segments — no gotcha #2 rename needed) — `GetReasoningTraceAction`/
+`ExplainReasoningAction` back both, and also back a new
+`AgentReasoningController` (`GET /api/agents/reasoning/trace`/`/explain`,
+the same "Gateway vs. Discovery vs. Memory vs. [this]" split
+`AgentController`/`AgentProfileController`/`AgentMemoryController` already
+establish, one more Controller for one more distinct concern).
+`ExplainReasoningAction` throws `ExecutionNotFoundException` (reused, not
+a new type) when no trace exists at all for the given execution id — a
+real 404, not an empty string.
+
+New tests: `tests/Unit/AgentOrchestrator/{ConfidenceScoreTest,
+AlternativePlanTest,ReasoningTraceTest,SimpleReasoningEngineTest,
+ExplanationGeneratorTest}.php` (4+3+5+4+3, framework-free),
+`tests/Feature/AgentOrchestrator/{LLMReasoningEngineTest,ReasoningConfigTest,
+SelfReflectionTest}.php` (6+3+8 — the last one is the literal end-to-end
+scenario: a CEO sales goal produces and persists both traces ->
+`GET /api/agents/reasoning/trace`/`/explain` return them afterward -> the
+identical MCP capabilities reach the same data -> a missing-permission
+403 -> tenant isolation (a trace from tenant A is invisible to tenant B,
+even by guessing the real execution id) -> an unknown execution id 404s ->
+a real LLM failure (`LLMClientInterface` rebound to a fake that throws,
+`REASONING_TYPE=llm`) still returns a complete, valid response using
+`SimpleReasoningEngine`'s own deterministic fallback, never a crash). 1067
+tests total (1031 + 36 new), zero known regressions. Phase 6 (AI Agent
+Orchestration) is now fully complete — all 6 Stages. See §9 for what's
+next across the whole platform.**
 
 ### `app/Modules/Demo/` — unchanged since Phase 1
 
@@ -2184,7 +2344,15 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │   │                             communication log entry), +
 │   │                             DelegationRequest (§7.30 — a real state
 │   │                             machine, Pending -> InProgress -> exactly
-│   │                             one of Completed/Failed/Timeout)
+│   │                             one of Completed/Failed/Timeout), +
+│   │                             ReasoningTrace (§7.31 — a pre_execution/
+│   │                             post_execution row per think()/reflect()
+│   │                             call, append-only; the *only* Entity in
+│   │                             this module with two independent
+│   │                             one-time-mutators, id()/assignId() and
+│   │                             executionId()/assignExecutionId(), since
+│   │                             ExecutionResult itself carries no id at
+│   │                             all)
 │   ├── ValueObjects/             AgentType (ceo/sales/support/finance),
 │   │                             StepStatus (+ Skipped, modeled but
 │   │                             unreached this stage), Priority
@@ -2194,7 +2362,12 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │   │                             Priority::Medium since §7.27, see that
 │   │                             class's own docblock), + MessageType,
 │   │                             MessageStatus, DelegationStatus,
-│   │                             DelegationPriority (all §7.30)
+│   │                             DelegationPriority (all §7.30), +
+│   │                             ConfidenceScore (§7.31 — 0.0-1.0 VO),
+│   │                             AlternativePlan (§7.31 — plan/confidence/
+│   │                             reason, only ever populated pre-execution),
+│   │                             ReasoningType (§7.31 — pre_execution/
+│   │                             post_execution)
 │   ├── Events/                   GoalReceived, StepExecuted, GoalCompleted
 │   │                             (none has a registered Listener except
 │   │                             this module's own LogExecutionStepListener,
@@ -2215,7 +2388,12 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │   │                             third documented AuthContext/Application-DTO
 │   │                             exception, alongside PlanExecutorInterface/
 │   │                             ToolInvokerInterface), ResultAggregatorInterface
-│   │                             (§7.30 — Domain-pure, no AuthContext)
+│   │                             (§7.30 — Domain-pure, no AuthContext), +
+│   │                             ReasoningEngineInterface (§7.31 — think()/
+│   │                             reflect(), plain int $tenantId per §3
+│   │                             pattern #1, not AuthContext),
+│   │                             ExplanationGeneratorInterface (§7.31 —
+│   │                             pure formatting, no Repository)
 │   ├── Repositories/              ExecutionMemoryRepositoryInterface (owns
 │   │                             ExecutionStep persistence too), +
 │   │                             AgentProfileRepositoryInterface (§7.27),
@@ -2226,7 +2404,9 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │   │                             above, not a second one), +
 │   │                             AgentMessageRepositoryInterface,
 │   │                             DelegationRequestRepositoryInterface
-│   │                             (§7.30)
+│   │                             (§7.30), + ReasoningTraceRepositoryInterface
+│   │                             (§7.31 — insert-only; save() refuses a
+│   │                             trace with no executionId() assigned yet)
 │   └── Exceptions/                GoalExecutionFailedException (neither
 │                                  marker interface, same reasoning
 │                                  WooCommerceApiException has),
@@ -2243,7 +2423,11 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │                                  same reasoning WooCommerceApiException
 │                                  has), + DelegationTimeoutException
 │                                  (§7.30 — implements neither marker
-│                                  interface, same reasoning)
+│                                  interface, same reasoning) — no new
+│                                  exception type in §7.31;
+│                                  ExplainReasoningAction reuses the
+│                                  existing ExecutionNotFoundException for
+│                                  "no trace recorded for this execution id"
 ├── Application/
 │   ├── Actions/                  ExecuteGoalAction (the one Action every
 │   │                             Agent-facing surface calls into — the
@@ -2263,7 +2447,12 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │   │                             AuthContext, the other deliberate
 │   │                             exception this stage), ListAgentMessagesAction
 │   │                             (§7.30 — plain int $tenantId/AgentType,
-│   │                             §3 pattern #1)
+│   │                             §3 pattern #1), + GetReasoningTraceAction,
+│   │                             ExplainReasoningAction (§7.31 — both
+│   │                             plain int $tenantId, §3 pattern #1;
+│   │                             ExecuteGoalAction itself gained 3 new
+│   │                             constructor dependencies + an
+│   │                             unconditional AgentProfile load, §7.31)
 │   ├── DTOs/                     GoalData, ExecutionStepData,
 │   │                             ExecutionPlanData (unused by anything
 │   │                             until §7.29 — SuggestExecutionPlanAction
@@ -2271,9 +2460,15 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │   │                             plan" shape it was always built for),
 │   │                             ExecutionResultData
 │   │                             (deliberately snake_case toArray(), this
-│   │                             module's own documented wire contract), +
+│   │                             module's own documented wire contract —
+│   │                             widened again in §7.31 with 3 new,
+│   │                             optional, trailing constructor params:
+│   │                             preReasoning/postReasoning/explanation,
+│   │                             all default null per §3 pattern #6), +
 │   │                             AgentProfileData (§7.27), + AgentMessageData
-│   │                             (§7.30)
+│   │                             (§7.30), + ReasoningTraceData (§7.31 —
+│   │                             also snake_case toArray(), matching this
+│   │                             module's own established DTO convention)
 │   ├── Services/                 DeterministicPlanner (Stage 1's own
 │   │                             hardcoded per-agent-type keyword branches
 │   │                             — salesGrowthSteps()/supportSteps()/
@@ -2309,10 +2504,21 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │   │                             AgentCommunicationInterface/ResultAggregatorInterface;
 │   │                             AgentCommunicationService::requestDelegation()
 │   │                             re-invokes ExecuteGoalAction directly,
-│   │                             completely unmodified by this stage)
+│   │                             completely unmodified by this stage), +
+│   │                             SimpleReasoningEngine, LLMReasoningEngine,
+│   │                             ExplanationGenerator (§7.31 — the one
+│   │                             implementation each of
+│   │                             ReasoningEngineInterface (x2, mirroring
+│   │                             LLMPlanner/DeterministicPlanner exactly —
+│   │                             LLMReasoningEngine falls back to
+│   │                             SimpleReasoningEngine automatically) and
+│   │                             ExplanationGeneratorInterface)
 │   ├── Prompts/                  PlanningPromptTemplate (§7.28 — pure
 │   │                             string formatting, no LLM-specific
-│   │                             concerns)
+│   │                             concerns), + ReasoningPromptTemplate
+│   │                             (§7.31 — same static-heredoc-builder
+│   │                             shape, one method each for think()/
+│   │                             reflect())
 │   └── Listeners/                LogExecutionStepListener (owns every
 │                                  "a step ran" log line — kept out of
 │                                  PlanExecutor itself), + LearnFromExecutionListener
@@ -2328,7 +2534,9 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │   │                              ExecutionPattern (§7.29 —
 │   │                              execution_patterns table), +
 │   │                              AgentMessage, DelegationRequest (§7.30 —
-│   │                              agent_messages/delegation_requests tables)
+│   │                              agent_messages/delegation_requests tables), +
+│   │                              ReasoningTrace (§7.31 — reasoning_traces
+│   │                              table, no updated_at — insert-only)
 │   ├── Repositories/               EloquentExecutionMemoryRepository
 │   │                              (ExecutionStep::reconstruct() rebuilds
 │   │                              a persisted step directly into its
@@ -2349,7 +2557,11 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │   │                              mutator), + EloquentAgentMessageRepository,
 │   │                              EloquentDelegationRequestRepository
 │   │                              (§7.30 — same upsert-by-id/assignId()
-│   │                              shape)
+│   │                              shape), + EloquentReasoningTraceRepository
+│   │                              (§7.31 — insert-only, no update branch
+│   │                              at all — the one simplification over
+│   │                              AgentMessage's own repository, since
+│   │                              nothing ever re-saves a persisted trace)
 │   └── Controllers/                AgentController (throws, never
 │                                   catches — every exception maps to the
 │                                   right HTTP status via MCPExceptionHandler,
@@ -2361,8 +2573,13 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │                                   already establish), + AgentMemoryController
 │                                   (§7.29 — a third Controller for a third
 │                                   distinct concern, same reasoning) — no
-│                                   4th Controller this stage (§7.30 adds
-│                                   no dedicated HTTP route, MCP-only)
+│                                   4th Controller in §7.30 (MCP-only, no
+│                                   dedicated HTTP route requested) — a 4th,
+│                                   AgentReasoningController, arrives in
+│                                   §7.31 (GET /reasoning/trace and
+│                                   /explain), the identical 3-dependency-
+│                                   constructor shape the other 3 already
+│                                   establish
 ├── Interfaces/MCP/                AgentOrchestratorCapabilities.php (the
 │                                  manifest AgentOrchestratorCapabilitiesSeeder
 │                                  reads — not named in the original
@@ -2374,7 +2591,10 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │                                  §7.29 — agent.memory.insights/.suggest;
 │                                  agent.memory.history deliberately not
 │                                  added, see §7.29; +2 more in §7.30 —
-│                                  agent.collaboration.delegate/.messages)
+│                                  agent.collaboration.delegate/.messages;
+│                                  +2 more in §7.31 — agent.reasoning.trace/
+│                                  .explain, already exactly 3 dot-separated
+│                                  segments, no gotcha #2 rename needed)
 └── AgentOrchestratorServiceProvider.php   binds ExecutionMemoryRepositoryInterface/
                                    ToolInvokerInterface/PlanExecutorInterface/
                                    AgentProfileRepositoryInterface (§7.27),
@@ -2385,18 +2605,25 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
                                    DelegationRequestRepositoryInterface/
                                    AgentCommunicationInterface/
                                    ResultAggregatorInterface (§7.30),
-                                   + LLMClientInterface (by llm.provider)
-                                   and PlannerInterface (by planner.type)
-                                   as closures re-evaluated on every
+                                   + ReasoningTraceRepositoryInterface/
+                                   ExplanationGeneratorInterface (§7.31,
+                                   plain bind()s),
+                                   + LLMClientInterface (by llm.provider),
+                                   PlannerInterface (by planner.type), and
+                                   ReasoningEngineInterface (by
+                                   reasoning.type, §7.31) all bound as
+                                   closures re-evaluated on every
                                    resolution, never singleton() — a test
                                    flips config() and immediately gets the
-                                   other implementation (§7.28); loads
+                                   other implementation (§7.28/§7.31); loads
                                    routes/agents.php, Event::listen()s
                                    LogExecutionStepListener +
                                    LearnFromExecutionListener (§7.29),
-                                   registers 9 capability handlers (§6,
-                                   3+2+2+2 — the 2 §7.30 handlers are
-                                   agent.collaboration.delegate/.messages)
+                                   registers 11 capability handlers (§6,
+                                   3+2+2+2+2 — the 2 §7.30 handlers are
+                                   agent.collaboration.delegate/.messages,
+                                   the 2 §7.31 handlers are
+                                   agent.reasoning.trace/.explain)
 
 routes/agents.php                  new in Phase 6, Stage 1 (§7.26) —
                                    loaded by
@@ -2409,7 +2636,8 @@ routes/agents.php                  new in Phase 6, Stage 1 (§7.26) —
                                    /profiles/{agentType}); +2 routes in
                                    §7.29 (GET /memory/insights, POST
                                    /memory/suggest) — no /memory/history,
-                                   see §7.29
+                                   see §7.29; +2 GET routes in §7.31
+                                   (/reasoning/trace, /reasoning/explain)
 
 config/agents/{ceo,sales,support,finance}.php   new in Phase 6, Stage 2
                                    (§7.27) — one file per Agent persona;
@@ -2423,14 +2651,23 @@ config/agent-orchestrator.php      new in Phase 6, Stage 3 (§7.28) —
                                    planner.type defaults to
                                    `deterministic`, a real correction from
                                    the request's own `.env.example`
-                                   default of `llm` (see docs/llm-planner.md)
+                                   default of `llm` (see docs/llm-planner.md);
+                                   + reasoning.type/fallback_to_simple
+                                   (§7.31) — reasoning.type defaults to
+                                   `simple`, the identical safe-default
+                                   reasoning, more load-bearing here since
+                                   LLMClientInterface is bound
+                                   unconditionally, shared with the
+                                   planner (see docs/self-reflection.md)
 
 phpunit.xml                        + PLANNER_TYPE=deterministic (§7.28) —
                                    explicit, not just relying on the
                                    config file's own default, so the whole
                                    suite never attempts a real LLM network
                                    call; LLM-specific tests override this
-                                   per-test via config()
+                                   per-test via config(); +
+                                   REASONING_TYPE=simple (§7.31, identical
+                                   reasoning, one level over)
 
 app/Core/Exceptions/MCPExceptionHandler.php   handles() extended to also
                                    match api/agents/* (§7.26) — also fixed
@@ -2449,6 +2686,9 @@ database/migrations/2026_08_12_000079   execution_patterns (§7.29 — the
 
 database/migrations/2026_08_13_000080-000081   agent_messages,
                                    delegation_requests (§7.30)
+
+database/migrations/2026_08_14_000082   reasoning_traces (§7.31 — the
+                                   *only* new table this stage)
 
 app/Modules/Demo/                  unchanged since Phase 1
 
@@ -3118,7 +3358,7 @@ end to end.
 
 ---
 
-## 6. The 122 MCP capabilities that exist right now
+## 6. The 124 MCP capabilities that exist right now
 
 | Capability | Phase/Stage | Permission | Notes |
 |---|---|---|---|
@@ -3244,6 +3484,8 @@ end to end.
 | `agent.memory.suggest` | P6.4 | `agent.memory.read` | Preview the learned plan `ExecuteGoalAction` would silently prefer for this goal, or `null`. No `agent.memory.history` — functionally identical to `agent.execution.list`, see §7.29. |
 | `agent.collaboration.delegate` | P6.5 | `agent.collaboration.delegate` | Re-invokes the *unmodified* `ExecuteGoalAction` for a different persona, under the caller's own real `AuthContext` — delegating never grants a new real permission, see §7.30. `DelegationRequest.status` tracks the mechanism, not the nested result's own business outcome. |
 | `agent.collaboration.messages` | P6.5 | `agent.collaboration.read` | This tenant's own persona-to-persona `AgentMessage` log for one Agent persona, most recent first. |
+| `agent.reasoning.trace` | P6.6 | `agent.reasoning.read` | The pre-execution/post-execution `ReasoningTrace`s recorded for one past goal Execution — either may be `null` if reflection never ran (a genuinely uncaught failure before `reflect()`). |
+| `agent.reasoning.explain` | P6.6 | `agent.reasoning.read` | Renders one past Execution's own recorded reasoning trace(s) as a human-readable explanation via `ExplanationGeneratorInterface`. |
 
 **Deliberately NOT wired to MCP** despite the underlying Action existing and
 being fully tested (see §8.2 for why, and the same reasoning each time):
@@ -6849,6 +7091,187 @@ Stage 5 is complete. See §9 for what's next.
 
 ---
 
+### 7.31 Phase 6, Stage 6 — Self-Reflection & Reasoning (last Stage of Phase 6)
+
+**Every `agent.goal.execute` call now `think()`s before a Plan is created
+and `reflect()`s once a real `ExecutionResult` exists, mirroring Stage 3's
+own `LLMPlanner`/`DeterministicPlanner` shape (§7.28) one level over: a
+real, LLM-backed `ReasoningEngineInterface` implementation
+(`LLMReasoningEngine`) that falls back automatically, on any failure, to a
+deterministic sibling (`SimpleReasoningEngine`).** Both produce a
+`ReasoningTrace` — `thoughts` (a list of short sentences), 0-3
+`alternatives` (only pre-execution), a `ConfidenceScore` (0.0-1.0), a
+`decision`, and a human-readable `explanation` — persisted append-only
+(`reasoning_traces`, the only new table this stage) and surfaced both
+inline on the execution response and, afterward, through
+`agent.reasoning.trace`/`.explain` (+ the identical
+`GET /api/agents/reasoning/trace`/`/explain` HTTP routes, backed by a 4th
+Controller, `AgentReasoningController`, the same 3-dependency-constructor
+shape `AgentMemoryController` already establishes).
+
+**Audited the request's own pseudocode against the real codebase before
+writing any code, the same discipline every prior stage's own
+request-vs-codebase mismatch got — and found more real mismatches than
+usual for one stage, none requiring a user confirmation (all resolved the
+same way already-precedented corrections were), summarized here and
+detailed below:**
+
+1. `ExecuteGoalAction`'s real constructor never had `ExecutionMemoryService`/
+   `AgentCommunicationInterface` — the request's own pseudocode invented
+   both. Its real dependencies (`AgentProfileRepositoryInterface`/
+   `PlannerInterface`/`PlanExecutorInterface`/`ExecutionMemoryRepositoryInterface`/
+   `LearningServiceInterface`) gained exactly 3 new ones
+   (`ReasoningEngineInterface`/`ReasoningTraceRepositoryInterface`/
+   `ExplanationGeneratorInterface`), never a rewrite of what already
+   existed.
+2. `ExecutionResult` (the Domain Entity) carries no id at all — the real
+   int execution id only exists once `ExecutionMemoryRepositoryInterface::save()`
+   returns it. The request's own pseudocode acknowledged this gap
+   (`executionId: 0, // Will be set after execution`) but never solved it
+   correctly — a free-standing `setExecutionId()` on an otherwise-`readonly`-styled
+   Entity would have broken every other id-like field's own
+   one-time-mutator convention in this module. Resolved instead: the
+   pre-execution trace stays in memory (no persistence, no id patch)
+   until the real execution id is known, then `ReasoningTrace::assignExecutionId()`
+   (a one-time mutator, the identical shape `AgentMessage`/
+   `DelegationRequest`'s own `assignId()` already establish — this Entity
+   is simply the first in this module to need two independent instances
+   of that same pattern) is called once, and both traces are persisted
+   together, right before `GoalCompleted`.
+3. `LearningServiceInterface::getSimilarExecutions()` does not exist —
+   the request's own pseudocode invented it. The real, already-existing
+   equivalent for "similar past goals" is
+   `ExecutionPatternRepositoryInterface::findSimilarPatterns()` — the
+   *exact* method `LearningService::suggestPlan()` itself already calls.
+   `LLMReasoningEngine`/`SimpleReasoningEngine` both inject that
+   Repository Interface directly (the same "Domain Service depends on a
+   Repository Interface directly, no Application-layer indirection needed"
+   shape `LearningService` itself already has) rather than a new,
+   duplicate method added to `LearningServiceInterface`.
+4. `ExecutionResultData` is a fully `readonly`-per-property DTO — the
+   request's own pseudocode assigned `$resultData->preReasoning = ...`
+   *after* construction, which throws (`Error: Cannot modify readonly
+   property`). Resolved with HANDOFF §3 pattern #6: 3 new, optional,
+   trailing constructor parameters (`preReasoning`/`postReasoning`/
+   `explanation`, all default `null`), `fromEntity()` widened to match —
+   every pre-existing caller/test of either is unaffected.
+5. **The load-bearing one, purely technical rather than a data-model
+   mismatch**: `LLMClientInterface` is bound *unconditionally* in
+   `AgentOrchestratorServiceProvider::register()`, independent of which
+   planner is configured. Following the request's own implication that
+   reasoning should simply always use the LLM would have meant every
+   single `agent.goal.execute` call — not just the ones that opt into an
+   LLM planner — attempting a real, keyless network call the instant this
+   stage's own code was wired in, breaking the "no real network calls in
+   the default test/dev environment" invariant `PLANNER_TYPE=deterministic`
+   (§7.28) exists specifically to protect. Resolved with the identical
+   fix, one level over: `config('agent-orchestrator.reasoning.type')`
+   defaults to `simple` (`SimpleReasoningEngine`), `phpunit.xml` pins
+   `REASONING_TYPE=simple` explicitly, and `LLMReasoningEngine` still
+   falls back to `SimpleReasoningEngine` automatically on any failure —
+   confirmed safe by re-running the complete pre-existing 1031-test suite
+   immediately after wiring, unchanged, zero regressions, zero new network
+   attempts.
+
+**The single biggest correction, confirmed sound rather than asked about
+(the same weight §7.30's own "capability-based delegation, not automatic
+mid-plan detection" correction carried): reasoning is explanatory, never
+plan-changing.** Neither `PlannerInterface::createPlan()` nor
+`PlanExecutorInterface::execute()` reads anything a `ReasoningTrace`
+produces — the capability sequence that actually runs is decided exactly
+the same way it always was (a learned `ExecutionPattern` first, then
+whichever `PlannerInterface` is configured). The request's own worked
+example never actually had its `decision`/`alternatives` steer which
+capabilities ran either, so reading it this way costs nothing the request
+asked for while keeping two of this module's most heavily-depended-on
+Interfaces completely untouched — the identical restraint this module
+already applied to delegation (§7.30: no automatic mid-plan rerouting),
+now applied a second time.
+
+**`AgentProfile` is now loaded unconditionally at the top of
+`ExecuteGoalAction::execute()`, before the learned-plan check** — a small,
+deliberate, additive behavior widening, not a bug. Before this stage, a
+learned-plan hit skipped loading the profile entirely (nothing needed it
+once a plan was already known); `think()` needs one regardless of which
+planning path eventually runs, so this is one extra
+`AgentProfileRepositoryInterface::findByType()` call on the learned-plan
+path where there was previously none.
+
+**New this stage**: `ReasoningTrace` (Domain Entity — `pre_execution`/
+`post_execution`, append-only, two independent one-time mutators —
+`id()`/`assignId()` and `executionId()`/`assignExecutionId()` — since
+`ExecutionResult` carries no id of its own at all) + `ReasoningTraceRepositoryInterface`
++ `EloquentReasoningTraceRepository` (new `reasoning_traces` table,
+insert-only — `save()` refuses a trace with no `executionId()` assigned
+yet, a real class invariant). `ConfidenceScore` (0.0-1.0 VO, the same
+"validated float wrapper" shape `DelegationPriority`'s own 1-10 int
+wrapper establishes) + `AlternativePlan` (VO — `plan`/`confidence`/
+`reason`, only ever populated on a `PreExecution` trace) + `ReasoningType`
+(enum). `ReasoningEngineInterface` (`think(Goal, AgentProfile, int
+$tenantId): ReasoningTrace` / `reflect(ExecutionResult, ReasoningTrace
+$preReasoning, int $tenantId, int $executionId): ReasoningTrace` — plain
+scalars, §3 pattern #1, this module's own "Domain Service interfaces
+never take AuthContext unless they re-enter the MCP boundary" rule holds
+here too, since reasoning never invokes a capability) +
+`ExplanationGeneratorInterface` (`generate(ReasoningTrace): string`, pure
+formatting). `SimpleReasoningEngine` (Application/Services — no LLM call,
+reads this tenant's own `ExecutionPattern` history via
+`ExecutionPatternRepositoryInterface::findSimilarPatterns()`, derives an
+honest confidence from real numbers) + `LLMReasoningEngine` (Application/
+Services — asks a configured LLM provider for structured JSON via
+`LLMClientInterface::completeStructured()`, built from a new
+`ReasoningPromptTemplate`, `Application/Prompts`, mirroring
+`PlanningPromptTemplate`'s own static-heredoc-builder shape exactly;
+falls back to `SimpleReasoningEngine` on any failure unless
+`config('agent-orchestrator.reasoning.fallback_to_simple')` is `false`) +
+`ExplanationGenerator` (the one `ExplanationGeneratorInterface`
+implementation). `ReasoningTraceData` (Application/DTOs — snake_case
+`toArray()`, matching this module's own established DTO convention).
+`GetReasoningTraceAction`/`ExplainReasoningAction` back the 2 new MCP
+capabilities (`agent.reasoning.trace`/`agent.reasoning.explain`,
+permission `agent.reasoning.read` for both, already exactly 3
+dot-separated segments — no gotcha #2 rename needed) and the 2 new
+`AgentReasoningController` HTTP routes alike (HANDOFF §3 pattern #19).
+`ExplainReasoningAction` reuses the existing `ExecutionNotFoundException`
+(not a new type) for "no trace recorded for this execution id at all" —
+a real 404.
+
+**No new Domain Event, no new Listener.** Reflection happens synchronously
+inline inside `ExecuteGoalAction::execute()` itself, not via a
+`GoalCompleted` Listener the way `LearnFromExecutionListener` (§7.29)
+reacts to that same event — a Domain Event "carries only identifiers" by
+this module's own convention (§3 pattern #11), and a full `ReasoningTrace`
+object has no natural identifier-only shape to carry through one; keeping
+it inline also means `reflect()` can be handed the real, in-memory
+`preReasoning` object directly, no repository re-fetch needed.
+
+New tests: `tests/Unit/AgentOrchestrator/{ConfidenceScoreTest,
+AlternativePlanTest,ReasoningTraceTest,SimpleReasoningEngineTest,
+ExplanationGeneratorTest}.php` (4+3+5+4+3, framework-free —
+`SimpleReasoningEngineTest` fakes `ExecutionPatternRepositoryInterface`
+inline, the same shape `DeterministicPlannerTest` already establishes for
+a framework-free Unit test), `tests/Feature/AgentOrchestrator/{LLMReasoningEngineTest,
+ReasoningConfigTest,SelfReflectionTest}.php` (6+3+8 —
+`LLMReasoningEngineTest` mirrors `LLMPlannerTest`'s own fake-`LLMClientInterface`
+style exactly, including a rethrows-when-fallback-disabled case;
+`ReasoningConfigTest` mirrors `PlannerConfigTest`'s own config-flip
+assertions one level over; `SelfReflectionTest` is the literal end-to-end
+scenario — a CEO sales goal produces and persists both traces ->
+`GET /api/agents/reasoning/trace`/`/explain` return them afterward -> the
+identical MCP capabilities reach the same data -> a missing-permission
+403 -> tenant isolation (a trace from tenant A is invisible to tenant B,
+even by guessing the real execution id) -> an unknown execution id 404s ->
+a real LLM failure, `LLMClientInterface` rebound to a fake that throws
+under `REASONING_TYPE=llm`, still returns a complete, valid response using
+`SimpleReasoningEngine`'s own deterministic fallback, never a crash).
+
+1067 tests passing (1031 + 36 new), 2757 assertions (2656 + 101 new), zero
+known regressions — confirmed by actually running the full suite. **Phase
+6 (AI Agent Orchestration) is now fully complete — all 6 Stages.** See §9
+for what's next.
+
+---
+
 ## 8. Known technical debt (ranked, carried over + Phase 2 additions)
 
 1. ~~**No per-tenant tax-rate configuration exists.**~~ **Resolved in
@@ -7376,6 +7799,35 @@ Stage 5 is complete. See §9 for what's next.
 89. **No Dashboard UI for Multi-Agent Collaboration** (§7.30) — same gap
     item 69/75/84 already flag, now also true for delegation history and
     the `AgentMessage` communication log.
+90. **Reasoning never feeds back into planning** (§7.31) — a
+    `ReasoningTrace`'s own `decision`/`alternatives` are recorded and
+    rendered, but nothing reads them back; the capability sequence that
+    runs is decided exactly the same way it always was. A deliberate
+    scope boundary this stage (see that section's own "reasoning is
+    explanatory, never plan-changing"), not a silently missing feature —
+    but a real future increment if a caller ever wants to act on an
+    `alternatives` entry.
+91. **`SimpleReasoningEngine`'s own confidence is a real number from real
+    history, but an unweighted one** (§7.31) — a plain average of matched
+    `ExecutionPattern`s' own `successRate()`s (thinking) or the plan's own
+    `successRate()` (reflecting), never a calibrated probability. The
+    reasoning-side equivalent of `PatternExtractor`'s own "plain keyword
+    substring check, not semantic similarity" documented MVP
+    simplification (§7.29/§8.80).
+92. **An execution that fails before `reflect()` ever runs leaves only a
+    `PreExecution` trace behind** (§7.31) — narrow (`PlanExecutor` catches
+    every ordinary per-step failure internally and always returns a real
+    `ExecutionResult`), but real: only a genuinely uncaught failure
+    between `think()` and `reflect()` (e.g. planning itself throwing)
+    triggers it. Documented, not silently handled.
+93. **No cross-check between a `ReasoningTrace`'s own `decision` and what
+    the plan actually contains** (§7.31) — `think()` and the Planner run
+    independently; nothing flags it if an LLM's own stated `decision` text
+    describes an approach that doesn't match the capabilities the Planner
+    (or a learned pattern) actually chose. A real gap only once reasoning
+    is ever fed back into planning (item 90 above) would make it matter.
+94. **No Dashboard UI for Self-Reflection & Reasoning** (§7.31) — same gap
+    item 69/75/84/89 already flag, now also true for reasoning traces.
 
 ---
 
@@ -7383,17 +7835,34 @@ Stage 5 is complete. See §9 for what's next.
 
 Phase 2 (Commerce, all 6 Stages), Phase 3 (CRM, Finance, Workflows,
 Loyalty, Reporting — all 5 Stages), Phase 4 (Shipping & Logistics, all 8
-Stages), Phase 5 (Advanced Commerce, all 5 Stages), Phase 6 Stage 1
-(Agent Orchestrator, §7.26), Phase 6 Stage 2 (Agent Profiles + CEO Agent,
-§7.27), Phase 6 Stage 3 (LLM-based Planner, §7.28), Phase 6 Stage 4
-(Execution Memory & Learning, §7.29), and now **Phase 6, Stage 5
-(Multi-Agent Collaboration, §7.30)** are all complete. Phase 6 itself is
-only five Stages in — whoever drives scope next is choosing where the
-platform goes from here, not just picking the next item off this list
-(the same framing that applied after Phase 4 and Phase 5 each finished).
-Candidates specific to what Phase 6 has already built, roughly in order
-of how much they'd reuse what already exists:
+Stages), Phase 5 (Advanced Commerce, all 5 Stages), and now **Phase 6 (AI
+Agent Orchestration, all 6 Stages: Agent Orchestrator §7.26, Agent
+Profiles + CEO Agent §7.27, LLM-based Planner §7.28, Execution Memory &
+Learning §7.29, Multi-Agent Collaboration §7.30, and Self-Reflection &
+Reasoning §7.31)** are all complete. Whoever drives scope next is choosing
+where the platform goes from here, not just picking the next item off
+this list (the same framing that applied after Phase 4 and Phase 5 each
+finished — this is now the third time). Candidates specific to what Phase
+6 has already built, roughly in order of how much they'd reuse what
+already exists:
 
+- **Feed `ReasoningTrace.alternatives` back into planning** (§8.90) —
+  today purely recorded/rendered; the natural next increment is letting a
+  caller ask "run with alternative #2 instead," or letting
+  `ExecuteGoalAction` itself weigh a low-confidence `decision` before
+  committing to it.
+- **Semantic/embedding-based confidence for `SimpleReasoningEngine`**
+  (§8.91) — today a plain, unweighted average of matched patterns' own
+  success rates; the reasoning-side sibling of the `ExecutionPattern`
+  matching item below, and a natural pairing with it once a vector
+  database exists.
+- **A `/dashboard/agents` page covering Self-Reflection & Reasoning too**
+  (§8.94) — `GetReasoningTraceAction`/`ExplainReasoningAction` are already
+  shaped for a Dashboard page the same way every other resource's own
+  Controller reuses its Actions (§3 pattern #19) — the 5th Phase 6 surface
+  in a row with this exact gap (§8.69/§8.75/§8.84/§8.89/§8.94); a single
+  `/dashboard/agents` page covering all five at once is now the more
+  valuable increment than five separate small ones.
 - **Wire an explicit delegation step into a real `planning_rules` entry**
   (§8.85) — `agent.collaboration.delegate` is real and MCP-reachable, but
   no shipped profile's own config includes it yet; the cheapest possible
@@ -7453,7 +7922,7 @@ of how much they'd reuse what already exists:
   (versus silently falling back); would need a new field on
   `ExecutionResult`/the persisted `Execution` row.
 - **Capability-list caching/pruning for `LLMPlanner`'s own prompt**
-  (§8.78) — today sends all 122 capabilities, uncached, on every planning
+  (§8.78) — today sends all 124 capabilities, uncached, on every planning
   call; a real cost at platform scale.
 - **A domain-aware `summary` from the LLM itself, and recursive/
   self-reflective planning** — both named in this module's own Future

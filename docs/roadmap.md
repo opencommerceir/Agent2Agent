@@ -55,20 +55,57 @@ limiting, the platform's first real scheduler, CI coverage reporting).
 - Stage 5: Subscription & Recurring Orders (billing cycles, trials,
   pause/resume/cancel/upgrade, automated retry + past-due handling)
 
-**Current state**: 885 automated tests passing, 113 MCP capabilities
+## Phase 6 — AI Agent Orchestration (6 Stages) ✅ Complete
+
+- Stage 1: Agent Orchestrator (Goal -> Plan -> Execute over *existing* MCP
+  capabilities, no business logic of its own; `DeterministicPlanner` MVP)
+- Stage 2: Agent Profiles + CEO Agent (config-driven personas,
+  `config/agents/{type}.php` — adding a new Agent is one new file)
+- Stage 3: LLM-based Planner (real OpenAI/Claude planning, `PLANNER_TYPE=llm`,
+  automatic fallback to the deterministic planner on any failure)
+- Stage 4: Execution Memory & Learning (pattern extraction from real
+  execution history; a repeat goal skips planning and reuses what worked)
+- Stage 5: Multi-Agent Collaboration (persona-to-persona delegation under
+  the caller's own real permissions — personas are planning
+  classifications, not separate identities, a real correction from the
+  original request confirmed before writing any code)
+- Stage 6: Self-Reflection & Reasoning (pre-execution `think()` and
+  post-execution `reflect()`, LLM-backed with the identical automatic
+  deterministic fallback shape Stage 3 established; explanatory only —
+  nothing it produces is read back into planning or execution)
+
+See `docs/agent-orchestrator.md` and its sibling how-to guides
+(`docs/agent-profiles.md`, `docs/llm-planner.md`, `docs/execution-memory.md`,
+`docs/multi-agent-collaboration.md`, `docs/self-reflection.md`) for the
+full architecture, and `HANDOFF.md` §7.26-§7.31 for the complete build
+narrative, including every deliberate correction made from each stage's
+own original request.
+
+**Current state**: 1067 automated tests passing, 124 MCP capabilities
 across 10 Domain Modules (Commerce, CRM, Finance, Workflows, Loyalty,
-Reporting, Shipping, Notifications, Analytics) plus the Core platform and
-a session-authenticated Admin Dashboard. See `README.md`'s Project Status
-section and `HANDOFF.md` for the authoritative, up-to-date snapshot.
+Reporting, Shipping, Notifications, Analytics) plus the Core platform,
+the now-complete Agent Orchestrator, and a session-authenticated Admin
+Dashboard. See `README.md`'s Project Status section and `HANDOFF.md` for
+the authoritative, up-to-date snapshot.
 
-## Phase 6 — Not Yet Scoped
+## Phase 7 — Not Yet Scoped
 
-No Phase 6 has been decided. Candidates carried over from Phase 5's own
-retrospective (`HANDOFF.md` §9) include: a Dashboard UI for every Phase 5
-resource, folding Cart-level automatic discounts into the real checkout
-total, a real file-upload endpoint for Bulk Operations imports, a
+No Phase 7 has been decided. Whoever drives scope next is choosing where
+the platform goes from here, not just picking the next item off a list —
+Phase 6 was only 6 Stages in. Candidates carried over from Phase 6's own
+retrospective (`HANDOFF.md` §9) include: feeding `ReasoningTrace`
+alternatives back into planning (today purely explanatory), a real,
+genuinely async delegation flow (a queued Job another process later picks
+up), semantic/embedding-based `ExecutionPattern` matching in place of
+today's plain keyword substring check, cycle detection for delegation
+beyond "can't delegate to yourself," additional Agent personas beyond
+CEO, a `/dashboard/agents` page covering every Phase 6 surface (Goals,
+Executions, Profiles, Memory, Collaboration, and now Reasoning — none has
+one yet), plus the still-open Phase 5 items (a Dashboard UI for every
+Phase 5 resource, folding Cart-level automatic discounts into the real
+checkout total, a real file-upload endpoint for Bulk Operations imports, a
 "subscription expiring soon" notification, real carrier/SMS-gateway
-integrations replacing their current mock/stub implementations, and the
+integrations replacing their current mock/stub implementations) and the
 longer-standing infrastructure items below.
 
 ## Cross-cutting / Infrastructure Track (ongoing, not phase-bound)
