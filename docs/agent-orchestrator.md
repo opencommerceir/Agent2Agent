@@ -17,7 +17,10 @@
 > request), and `docs/self-reflection.md` for the how-reasoning-works guide
 > (**read that one before assuming reasoning changes which plan runs** —
 > it's explanatory only, the same restraint Stage 5's own delegation
-> mechanism already established).
+> mechanism already established). Phase 6 itself finished at Stage 6;
+> `docs/openrouter-integration.md` (Showcase prep, §7.32 — after Phase 6)
+> documents a third `LLMClientInterface` provider added afterward, not a
+> new Stage.
 
 ## Overview
 
@@ -42,7 +45,7 @@ one of them fails.
 | AgentProfile | `Domain\Entities\AgentProfile` | The config-driven definition of one Agent persona — `planning_rules` (goal-keyword → capabilities) + `default_inputs` (capability → raw input), read from `config/agents/{type}.php`. See `docs/agent-profiles.md`. |
 | Profile repository | `Domain\Repositories\AgentProfileRepositoryInterface` | Loads an `AgentProfile` by type. `ConfigBasedAgentProfileRepository` is the one implementation — reads via Laravel's own `config()`, never the filesystem directly. |
 | Planner | `Domain\Services\PlannerInterface` | Turns a Goal + the calling Agent's own `AgentProfile` into an `ExecutionPlan`. Two implementations: `DeterministicPlanner` (config-driven rule lookups, resolves a small set of template tokens) and `LLMPlanner` (asks a real LLM provider, falls back to `DeterministicPlanner` on any failure) — chosen by `config('agent-orchestrator.planner.type')`. See `docs/llm-planner.md`. |
-| LLM client | `Domain\Services\LLMClientInterface` | A thin port over one LLM provider's own API. `OpenAIClient`/`ClaudeClient` are the two real implementations, chosen by `config('agent-orchestrator.llm.provider')`. |
+| LLM client | `Domain\Services\LLMClientInterface` | A thin port over one LLM provider's own API. `OpenAIClient`/`ClaudeClient`/`OpenRouterClient` (the last one added in Showcase prep, §7.32 — 100+ models, several free) are the three real implementations, chosen by `config('agent-orchestrator.llm.provider')`. See `docs/openrouter-integration.md`. |
 | ExecutionPlan / ExecutionStep | `Domain\Entities\{ExecutionPlan,ExecutionStep}` | The plan itself, and each individual planned capability call (`capability` + `input` + `priority`), with mutable `status`/`output`/`error` as it runs. |
 | Executor | `Domain\Services\PlanExecutorInterface` | Runs every step of a plan, in order, never aborting on a single step's failure. `PlanExecutor` is the one implementation. |
 | ToolInvoker | `Domain\Services\ToolInvokerInterface` | Invokes exactly one capability by name. `CapabilityToolInvoker` is the one implementation — backed entirely by Core's own `GetCapabilityAction` / `CheckPermissionAction` / `CapabilityExecutionService`, the same three building blocks `AbstractMCPGatewayController` itself uses. |

@@ -17,7 +17,7 @@
 return [
 
     'llm' => [
-        'provider' => env('LLM_PROVIDER', 'openai'), // openai, claude
+        'provider' => env('LLM_PROVIDER', 'openai'), // openai, claude, openrouter
 
         'openai' => [
             // Empty string, not null, by default — same "WOOCOMMERCE_*
@@ -35,6 +35,21 @@ return [
         'claude' => [
             'api_key' => env('CLAUDE_API_KEY', ''),
             'model' => env('CLAUDE_MODEL', 'claude-3-opus-20240229'),
+        ],
+
+        // Showcase prep (§7.32) — OpenRouter, a single API in front of
+        // 100+ models, several genuinely free (the default model below).
+        // Same "empty string, still constructs, fails loud only when
+        // actually called" shape openai/claude above already establish —
+        // no separate "no API key" fallback client exists in this
+        // codebase; LLMPlanner/LLMReasoningEngine's own existing fallback
+        // to DeterministicPlanner/SimpleReasoningEngine already covers a
+        // broken/keyless LLM client one layer up, so a second, redundant
+        // safety net inside LLMClientInterface itself was not built.
+        'openrouter' => [
+            'api_key' => env('OPENROUTER_API_KEY', ''),
+            'model' => env('OPENROUTER_MODEL', 'meta-llama/llama-3.1-405b-instruct:free'),
+            'base_url' => env('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1'),
         ],
     ],
 

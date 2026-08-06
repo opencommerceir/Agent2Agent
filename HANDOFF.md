@@ -1,5 +1,28 @@
 # OpenCommerce Platform — Session Handoff
 
+**Status: OpenRouter Integration (§7.32 — Showcase prep, after Phase 6
+finished, not a Phase 6 Stage) is now complete — `LLMClientInterface` has
+a third real implementation, `OpenRouterClient`, alongside `OpenAIClient`/
+`ClaudeClient` (§7.28), giving `LLMPlanner`/`LLMReasoningEngine` access to
+100+ models through one API, several genuinely free
+(`OPENROUTER_MODEL` defaults to `meta-llama/llama-3.1-405b-instruct:free`).
+OpenRouter's own Chat Completions endpoint is OpenAI-compatible, so
+`OpenRouterClient` mirrors `OpenAIClient`'s real internal shape almost
+exactly — the two genuine differences are a real, configurable `$baseUrl`
+constructor parameter and two OpenRouter-recommended attribution headers.
+One real correction from the request's own pseudocode, confirmed sound
+rather than asked about: **no new `SimpleLLMClient` "fallback for a
+missing API key" class was built.** `OpenAIClient`/`ClaudeClient` already
+establish the actual convention — an empty/invalid API key still
+constructs a real client, which fails, correctly, only the moment it's
+actually called — and that failure is already caught one layer up
+(`LLMPlanner` → `DeterministicPlanner`, `LLMReasoningEngine` →
+`SimpleReasoningEngine`, §7.28/§7.31). A second, redundant safety net
+inside `LLMClientInterface` itself would have duplicated a guarantee this
+codebase already has. 1078 tests passing (1067 + 11 new), 124 MCP
+capabilities (unchanged — no new capability, this stage adds a provider,
+not a code path), zero known regressions. See §7.32 for the full detail.**
+
 **Status: Phase 6, Stage 6 (Self-Reflection & Reasoning, §7.31 — the last
 Stage of Phase 6) is now complete — every `agent.goal.execute` call now
 `think()`s before a Plan is created and `reflect()`s once a real
@@ -1030,10 +1053,15 @@ after.** 1031 tests passing (1000 + 31 new), 122 MCP capabilities, zero
 known regressions.
 
 **Phase 6, Stage 6 (Self-Reflection & Reasoning, §7.31 — the last Stage of
-Phase 6) ran immediately after — see the summary paragraph at the very top
-of this file.** 1067 tests passing (1031 + 36 new), 124 MCP capabilities,
-zero known regressions. Phase 6 (AI Agent Orchestration) is now fully
-complete — all 6 Stages. See §9 for what's next across the whole platform.
+Phase 6) ran immediately after.** 1067 tests passing (1031 + 36 new), 124
+MCP capabilities, zero known regressions. Phase 6 (AI Agent Orchestration)
+is now fully complete — all 6 Stages.
+
+**OpenRouter Integration (§7.32) ran immediately after Phase 6 finished —
+Showcase prep, not a Phase 6 Stage; see the summary paragraph at the very
+top of this file.** 1078 tests passing (1067 + 11 new), 124 MCP
+capabilities (unchanged), zero known regressions. See §9 for what's next
+across the whole platform.
 
 This file is a working-state snapshot for picking up development in a new
 session. It assumes you've already read `CLAUDE.md` and `docs/*.md` (the
@@ -1708,6 +1736,24 @@ a real LLM failure (`LLMClientInterface` rebound to a fake that throws,
 tests total (1031 + 36 new), zero known regressions. Phase 6 (AI Agent
 Orchestration) is now fully complete — all 6 Stages. See §9 for what's
 next across the whole platform.**
+
+**OpenRouter Integration (§7.32 — Showcase prep, after Phase 6 finished,
+not a Phase 6 Stage) added a third `LLMClientInterface` implementation,
+`OpenRouterClient`, mirroring `OpenAIClient`'s real internal shape almost
+exactly (OpenRouter's own Chat Completions endpoint is OpenAI-compatible)
+— a real, configurable `$baseUrl` constructor parameter and two
+OpenRouter-recommended attribution headers (`HTTP-Referer`/`X-Title`) are
+the only genuine differences. `LLM_PROVIDER=openrouter` (+
+`OPENROUTER_API_KEY`/`OPENROUTER_MODEL`/`OPENROUTER_BASE_URL`) plugs into
+both `LLMPlanner`/`LLMReasoningEngine` exactly the way `openai`/`claude`
+already did — no change to either consumer. `OPENROUTER_MODEL` defaults
+to a free model (`meta-llama/llama-3.1-405b-instruct:free`), so a
+zero-balance key still works. No `SimpleLLMClient` "no API key" fallback
+was built — a real, confirmed-sound correction from the request's own
+pseudocode; see §7.32 for the full reasoning. No new MCP capability, no
+change to `PlannerInterface`/`ReasoningEngineInterface`/anything above
+`LLMClientInterface`. 1078 tests total (1067 + 11 new), zero known
+regressions.**
 
 ### `app/Modules/Demo/` — unchanged since Phase 1
 
@@ -2488,6 +2534,10 @@ app/Modules/AgentOrchestrator/     new in Phase 6, Stage 1 (§7.26) — an
 │   │                             LLMClientInterface implementations,
 │   │                             mirroring WooCommerceClient's own
 │   │                             injectable-ClientInterface shape), +
+│   │                             OpenRouterClient (§7.32 — a 3rd
+│   │                             LLMClientInterface implementation, same
+│   │                             shape, added after Phase 6 finished as
+│   │                             Showcase prep, not a Phase 6 Stage), +
 │   │                             AgentProfileInputResolver (§7.29 —
 │   │                             extracted out of DeterministicPlanner the
 │   │                             moment LearningService needed the exact
@@ -2658,7 +2708,11 @@ config/agent-orchestrator.php      new in Phase 6, Stage 3 (§7.28) —
                                    reasoning, more load-bearing here since
                                    LLMClientInterface is bound
                                    unconditionally, shared with the
-                                   planner (see docs/self-reflection.md)
+                                   planner (see docs/self-reflection.md);
+                                   + llm.openrouter (§7.32 — api_key/
+                                   model/base_url, model defaults to a
+                                   free one, see
+                                   docs/openrouter-integration.md)
 
 phpunit.xml                        + PLANNER_TYPE=deterministic (§7.28) —
                                    explicit, not just relying on the
@@ -7272,6 +7326,116 @@ for what's next.
 
 ---
 
+### 7.32 OpenRouter Integration (Showcase prep, after Phase 6 finished)
+
+**Not a Phase 6 Stage — Phase 6 finished, all 6 Stages, at §7.31.** This
+is a small, self-contained addition run in preparation for a Showcase:
+`LLMClientInterface` gains a third real implementation,
+`OpenRouterClient`, giving both `LLMPlanner` (§7.28) and
+`LLMReasoningEngine` (§7.31) access to [OpenRouter](https://openrouter.ai)
+— a single API in front of 100+ models from many providers, several
+genuinely free to call. The same shape the Tech Debt Sprint (§7.13) used
+between Phase 4 Stage 1 and Stage 2 — a real, useful piece of work that
+doesn't fit the numbered Stage sequence, recorded here rather than forced
+into one.
+
+**Audited the request's own pseudocode against the real codebase before
+writing any code, the same discipline every prior stage's own
+request-vs-codebase mismatch got:**
+
+1. The request's own `OpenRouterClient` sketch built a `GuzzleClient`
+   inline inside the constructor's default-parameter expression and typed
+   its injectable parameter as a bare `ClientInterface` with no `use`
+   statement — ambiguous between PSR-18's `Psr\Http\Client\ClientInterface`
+   and Guzzle's own `GuzzleHttp\ClientInterface`. Built instead exactly
+   matching `OpenAIClient`'s real, already-shipped shape: `GuzzleHttp\ClientInterface`
+   explicitly, a private `request()`/`decodeJson()`/`extractMessageContent()`
+   trio, and `LLMRequestFailedException` (reused, not a new exception
+   type) wrapping every `GuzzleException`/malformed-response case — the
+   same "real client + injectable `ClientInterface` for tests" shape
+   `WooCommerceClient` established (§7.6) and `OpenAIClient`/`ClaudeClient`
+   already carry forward.
+2. **The one real correction, confirmed sound rather than asked about:
+   no `SimpleLLMClient` "fallback for a missing API key" class was
+   built**, despite the request's own `ServiceProvider` sketch naming one
+   (`default => new SimpleLLMClient()`). `config/agent-orchestrator.php`'s
+   own docblock already documents the actual, already-shipped convention:
+   an empty/invalid API key still constructs a real `OpenAIClient`/
+   `ClaudeClient` — it fails, correctly, only the moment it's actually
+   called, no different handling for "empty key" vs. "wrong key" vs.
+   "network down." That failure is already caught one layer up —
+   `LLMPlanner` falls back to `DeterministicPlanner`, `LLMReasoningEngine`
+   falls back to `SimpleReasoningEngine` (§7.28/§7.31), both automatic,
+   both already fully built and tested. A `SimpleLLMClient` implementing
+   `LLMClientInterface` itself would have been a second, redundant safety
+   net one layer *below* two that already exist — and it's unclear what
+   `SimpleLLMClient::complete()` would even honestly return (a canned
+   string?) that wouldn't be more confusing than the existing, already-
+   proven fallback chain. The request's own `default` match arm (an
+   unrecognized `LLM_PROVIDER` string) still throws
+   `InvalidArgumentException`, unchanged — `PlannerConfigTest::test_unsupportedLlmProvider_throws()`
+   already depends on this, and a config typo should fail loudly, not
+   degrade quietly to a fabricated client.
+3. `HTTP-Referer`/`X-Title` (OpenRouter's own optional attribution
+   headers) — the request's own constructor sketch hardcoded
+   `https://opencommerce.ir` as the Referer. Read instead as two plain
+   class constants (`ATTRIBUTION_REFERER`/`ATTRIBUTION_TITLE`), not a
+   `config('app.url')` call — `OpenAIClient`/`ClaudeClient` never call
+   `config()`/`env()` internally (every value is resolved once, in
+   `AgentOrchestratorServiceProvider::register()`, and passed through the
+   constructor), and `OpenRouterClientTest` extends plain
+   `PHPUnit\Framework\TestCase` the same framework-free way
+   `OpenAIClientTest` does — a `config()` call inside the class under test
+   would have fatally errored the instant that Unit test ran with no
+   Laravel container booted. Caught before the test suite was even run
+   the first time, not as a debugging session afterward.
+
+**New this stage**: `OpenRouterClient` (`Application/Services` — real
+Guzzle-backed `LLMClientInterface` implementation, `$baseUrl` a genuine,
+configurable 4th constructor parameter, unlike `OpenAIClient`/
+`ClaudeClient`'s own hardcoded `base_uri` — routing to a chosen endpoint
+is this provider's whole reason to exist). `config('agent-orchestrator.llm.openrouter')`
+(`api_key`/`model`/`base_url` — `model` defaults to
+`meta-llama/llama-3.1-405b-instruct:free`, so a real key with $0 balance
+still works) + a new `'openrouter'` match arm in
+`AgentOrchestratorServiceProvider::register()`'s existing `LLMClientInterface`
+binding closure — the exact 3-step recipe `docs/llm-planner.md`'s own
+"Adding a third provider" section (renamed "Adding another provider" this
+stage) already documented before this provider existed. `.env.example`
+gained `OPENROUTER_API_KEY`/`OPENROUTER_MODEL`/`OPENROUTER_BASE_URL` —
+and, filling a real gap left over from §7.31 (that stage's own
+`config/agent-orchestrator.php` addition was never mirrored into
+`.env.example`), `REASONING_TYPE`/`REASONING_FALLBACK_TO_SIMPLE` too.
+
+No new MCP capability, no new Domain Entity/Value Object/Repository, no
+change to `PlannerInterface`/`ReasoningEngineInterface`/`PlanningPromptTemplate`/
+`ReasoningPromptTemplate`/anything above `LLMClientInterface` — this
+stage is scoped entirely to one new port implementation and its own
+wiring, exactly the "Adding another provider" recipe promises.
+
+New tests: `tests/Unit/AgentOrchestrator/OpenRouterClientTest.php` (7,
+framework-free, mirrors `OpenAIClientTest` exactly — complete()/
+completeStructured() happy paths, malformed-content/malformed-body/
+HTTP-failure error cases, the default free model, and the attribution
+headers/Bearer token/request path), 1 new case in
+`tests/Feature/AgentOrchestrator/PlannerConfigTest.php`
+(`llmProviderOpenrouter_resolvesOpenRouterClient`, alongside the existing
+openai/claude cases — the same file, not a redundant new one, since that
+file already exists specifically to cover config-driven `LLMClientInterface`
+bindings), and `tests/Feature/AgentOrchestrator/OpenRouterIntegrationTest.php`
+(3 — mirrors `LLMPlannerIntegrationTest`'s own exact shape: `LLM_PROVIDER=openrouter`
++ `PLANNER_TYPE=llm` drives a real CEO-goal execution end to end through a
+fake `LLMClientInterface`; the identical setup with `REASONING_TYPE=llm`
+instead produces real `pre_reasoning`/`post_reasoning` fields with the
+fake's own confidence/decision/explanation; and a fake that always throws
+proves both `LLMPlanner`→`DeterministicPlanner` and
+`LLMReasoningEngine`→`SimpleReasoningEngine` fall back gracefully together
+under `LLM_PROVIDER=openrouter`, still 200, never a hard failure). 1078
+tests total (1067 + 11 new), 2779 assertions (2757 + 22 new), zero known
+regressions — confirmed by actually running the full suite.
+
+---
+
 ## 8. Known technical debt (ranked, carried over + Phase 2 additions)
 
 1. ~~**No per-tenant tax-rate configuration exists.**~~ **Resolved in
@@ -7828,6 +7992,18 @@ for what's next.
     is ever fed back into planning (item 90 above) would make it matter.
 94. **No Dashboard UI for Self-Reflection & Reasoning** (§7.31) — same gap
     item 69/75/84/89 already flag, now also true for reasoning traces.
+95. **No live end-to-end verification against a real OpenRouter API
+    exists** (§7.32) — the identical "real infra assumed in production,
+    verified honestly once credentials exist" shape `OpenAIClient`/
+    `ClaudeClient` already carry (§8.79); `OpenRouterClient` is real,
+    tested against mocked HTTP only.
+96. **OpenRouter's own free-model list isn't tracked anywhere in this
+    codebase** (§7.32) — `OPENROUTER_MODEL`'s own default
+    (`meta-llama/llama-3.1-405b-instruct:free`) is a real model as of this
+    stage, but free-tier availability on OpenRouter's own platform changes
+    over time and isn't this codebase's to track; an operator relying on
+    "free" should check OpenRouter's own current model list, not assume
+    this default stays free indefinitely.
 
 ---
 
@@ -7901,12 +8077,13 @@ already exists:
   resource's own Controller reuses its Actions (§3 pattern #19); only the
   page itself is missing, the same gap item 69/75 already flag for
   Executions/Goals and Agent Profiles.
-- **Stand up real OpenAI/Claude credentials and verify `LLMPlanner`
-  end to end against a live API** (§8.79) — every test so far is against
-  a mock; a real run is the natural next increment once credentials
-  exist, the same "real infra assumed in production, verified honestly
-  once credentials exist" step every external Connector in this codebase
-  eventually needs.
+- **Stand up real OpenAI/Claude/OpenRouter credentials and verify
+  `LLMPlanner`/`LLMReasoningEngine` end to end against a live API**
+  (§8.79/§8.95) — every test so far is against a mock; a real run,
+  starting with OpenRouter's own free tier (cheapest to try, §7.32), is
+  the natural next increment once credentials exist, the same "real infra
+  assumed in production, verified honestly once credentials exist" step
+  every external Connector in this codebase eventually needs.
 - **Give each Agent persona real identity/specialized behavior beyond its
   own `planning_rules`** (§7.27) — CEO/Sales/Support/Finance all have
   working profiles now, but "a persona" today only means "a different

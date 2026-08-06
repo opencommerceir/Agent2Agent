@@ -6,6 +6,7 @@ use App\Modules\AgentOrchestrator\Application\Services\ClaudeClient;
 use App\Modules\AgentOrchestrator\Application\Services\DeterministicPlanner;
 use App\Modules\AgentOrchestrator\Application\Services\LLMPlanner;
 use App\Modules\AgentOrchestrator\Application\Services\OpenAIClient;
+use App\Modules\AgentOrchestrator\Application\Services\OpenRouterClient;
 use App\Modules\AgentOrchestrator\Domain\Services\LLMClientInterface;
 use App\Modules\AgentOrchestrator\Domain\Services\PlannerInterface;
 use InvalidArgumentException;
@@ -52,6 +53,13 @@ class PlannerConfigTest extends TestCase
         config(['agent-orchestrator.llm.provider' => 'claude']);
 
         $this->assertInstanceOf(ClaudeClient::class, app(LLMClientInterface::class));
+    }
+
+    public function test_llmProviderOpenrouter_resolvesOpenRouterClient(): void
+    {
+        config(['agent-orchestrator.llm.provider' => 'openrouter']);
+
+        $this->assertInstanceOf(OpenRouterClient::class, app(LLMClientInterface::class));
     }
 
     public function test_unsupportedLlmProvider_throws(): void

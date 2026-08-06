@@ -8,17 +8,21 @@
 ## What it is
 
 `LLMPlanner` is the second `PlannerInterface` implementation (alongside
-Stage 1/2's `DeterministicPlanner`) — it asks a real LLM provider (OpenAI
-or Claude) to plan a Goal against every capability the platform currently
-has, instead of matching the Goal's text against a profile's own
-hardcoded `planning_rules`. Enable it with one env var:
+Stage 1/2's `DeterministicPlanner`) — it asks a real LLM provider (OpenAI,
+Claude, or, since Showcase prep §7.32, OpenRouter) to plan a Goal against
+every capability the platform currently has, instead of matching the
+Goal's text against a profile's own hardcoded `planning_rules`. Enable it
+with one env var:
 
 ```bash
 PLANNER_TYPE=llm
-LLM_PROVIDER=openai        # or: claude
+LLM_PROVIDER=openai        # or: claude, openrouter
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4         # optional, this is the default
 ```
+
+Prefer a free model to try this without spending anything? Set
+`LLM_PROVIDER=openrouter` instead — see `docs/openrouter-integration.md`.
 
 With `PLANNER_TYPE=deterministic` (the shipped default), none of the LLM
 config matters — `LLMClientInterface` is never even resolved.
@@ -69,8 +73,9 @@ would hide the real problem.
 |---|---|---|
 | `openai` (default) | `OpenAIClient` | Chat Completions, `response_format: json_object` + the schema embedded in the prompt text |
 | `claude` | `ClaudeClient` | Messages API, a single forced tool call (`tool_choice`) whose `input_schema` is the caller's own schema — validated by the API itself before it's returned |
+| `openrouter` | `OpenRouterClient` | Same mechanism as `openai` — OpenRouter's own Chat Completions endpoint is OpenAI-compatible. Access to 100+ models, several genuinely free — see `docs/openrouter-integration.md` |
 
-Both are real implementations (Guzzle-backed, matching
+All three are real implementations (Guzzle-backed, matching
 `WooCommerceClient`'s own "real client + injectable `ClientInterface`"
 shape) — **no live credentials exist in this dev environment**, the same
 "needs real credentials to test honestly" situation every external
@@ -79,7 +84,7 @@ Connector in this codebase is already in. Every test injects a fake
 instead of calling a real API — see `docs/agent-orchestrator.md`'s own
 testing notes.
 
-## Adding a third provider
+## Adding another provider
 
 1. Implement `LLMClientInterface` (`Domain/Services/LLMClientInterface.php`)
    — `complete()`/`completeStructured()`.
@@ -89,7 +94,8 @@ testing notes.
    `LLMClientInterface` binding closure.
 
 Nothing about `LLMPlanner`, `PlanningPromptTemplate`, or anything above
-`PlannerInterface` needs to change.
+`PlannerInterface` needs to change — `OpenRouterClient` (§7.32) followed
+exactly these 3 steps.
 
 ## Known scope decisions
 

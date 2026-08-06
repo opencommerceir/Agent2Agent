@@ -27,6 +27,7 @@ use App\Modules\AgentOrchestrator\Application\Services\LearningService;
 use App\Modules\AgentOrchestrator\Application\Services\LLMPlanner;
 use App\Modules\AgentOrchestrator\Application\Services\LLMReasoningEngine;
 use App\Modules\AgentOrchestrator\Application\Services\OpenAIClient;
+use App\Modules\AgentOrchestrator\Application\Services\OpenRouterClient;
 use App\Modules\AgentOrchestrator\Application\Services\PatternExtractor;
 use App\Modules\AgentOrchestrator\Application\Services\PlanExecutor;
 use App\Modules\AgentOrchestrator\Application\Services\ResultAggregator;
@@ -109,6 +110,11 @@ class AgentOrchestratorServiceProvider extends ServiceProvider
                 'claude' => new ClaudeClient(
                     config('agent-orchestrator.llm.claude.api_key'),
                     config('agent-orchestrator.llm.claude.model'),
+                ),
+                'openrouter' => new OpenRouterClient(
+                    apiKey: config('agent-orchestrator.llm.openrouter.api_key'),
+                    model: config('agent-orchestrator.llm.openrouter.model'),
+                    baseUrl: config('agent-orchestrator.llm.openrouter.base_url'),
                 ),
                 default => throw new InvalidArgumentException("Unsupported LLM provider: [{$provider}]."),
             };

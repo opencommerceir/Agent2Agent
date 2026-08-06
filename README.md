@@ -233,14 +233,18 @@ step failed.
   discount-percentage parsed straight from the goal text, a real
   generated coupon code. Sales/Support/Finance profiles ship alongside it.
 - **A real LLM-based planner (Phase 6, Stage 3)** — set `PLANNER_TYPE=llm`
-  (+ `LLM_PROVIDER=openai|claude` and the matching API key) and
-  `LLMPlanner` asks a real GPT-4 or Claude model to plan each Goal against
-  every capability the platform currently has, instead of matching
-  config-declared keyword rules. Any failure — network, a malformed
-  response — is caught and falls back to the deterministic planner
-  automatically, so a broken/unreachable LLM never turns into a hard
-  failure for the caller. Ships defaulted to `PLANNER_TYPE=deterministic`
-  (no code change needed to keep using the config-driven planner).
+  (+ `LLM_PROVIDER=openai|claude|openrouter` and the matching API key) and
+  `LLMPlanner` asks a real GPT-4, Claude, or (via OpenRouter — Showcase
+  prep, §7.32 — a single API in front of 100+ models, several genuinely
+  free) model to plan each Goal against every capability the platform
+  currently has, instead of matching config-declared keyword rules. Any
+  failure — network, a malformed response — is caught and falls back to
+  the deterministic planner automatically, so a broken/unreachable LLM
+  never turns into a hard failure for the caller. Ships defaulted to
+  `PLANNER_TYPE=deterministic` (no code change needed to keep using the
+  config-driven planner). The identical `LLM_PROVIDER` choice also drives
+  `REASONING_TYPE=llm` (Self-Reflection & Reasoning, below) — see
+  `docs/openrouter-integration.md` for how to try either one for free.
 - `DeterministicPlanner` (still the default) reads each profile's own
   config-declared rules and resolves a small set of template tokens
   (`{date:N}`/`{coupon_code}`/`{discount_percent}`).
@@ -377,9 +381,10 @@ Orchestrator (config-driven Agent Profiles, a real CEO Agent persona, a
 real LLM-based planner with automatic deterministic fallback, execution
 memory & learning, persona-to-persona delegation under the caller's own
 real permissions, and now pre/post-execution reasoning with the same
-LLM-backed-with-automatic-fallback shape), plus a bilingual Admin
-Dashboard for human operators. 1067 automated tests pass across 124 MCP
-capabilities, with zero known regressions.
+LLM-backed-with-automatic-fallback shape, plus, in Showcase prep §7.32, a
+third LLM provider — OpenRouter, with free-model access), plus a
+bilingual Admin Dashboard for human operators. 1078 automated tests pass
+across 124 MCP capabilities, with zero known regressions.
 
 Phase 6 (AI Agent Orchestration) is now fully complete, all 6 Stages.
 Whoever drives scope next is choosing where the platform goes from here —
