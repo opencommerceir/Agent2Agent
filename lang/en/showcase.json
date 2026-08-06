@@ -1,0 +1,82 @@
+{
+    "title": "OpenCommerce Agent Showcase",
+    "subtitle": "Pick a persona, send it a goal, and watch the real Agent Orchestrator plan, execute, and reflect — live, against real store data.",
+    "personas": {
+        "ceo": "CEO",
+        "sales": "Sales",
+        "support": "Support",
+        "finance": "Finance"
+    },
+    "input_placeholder": "e.g. Increase sales by 15% this week",
+    "send": "Send",
+    "thinking": "Thinking...",
+    "pre_reasoning_title": "Pre-execution reasoning",
+    "confidence_label": "Confidence:",
+    "alternatives_title": "Alternatives considered",
+    "steps_title": "Execution steps",
+    "summary_title": "Summary",
+    "post_reasoning_title": "Reflection",
+    "demo_missing_title": "Demo store not seeded yet",
+    "demo_missing_body": "The showcase tenant hasn't been created. Ask an operator to run the command below, then reload this page.",
+    "error_generic": "Something went wrong. Please try again.",
+    "suggestions": {
+        "ceo": {
+            "sales": "📈 Increase sales this week",
+            "revenue": "💵 Review quarterly revenue",
+            "inventory": "📦 Check inventory levels",
+            "delegate": "🤝 Delegate a campaign to Sales"
+        },
+        "sales": {
+            "promotion": "🎯 Launch a promotional campaign",
+            "performance": "📊 Review this week's performance",
+            "default": "⚡ Quick status check"
+        },
+        "support": {
+            "tickets": "🎫 Review open tickets",
+            "queue": "📋 Check the ticket queue"
+        },
+        "finance": {
+            "revenue": "💰 Review finance & revenue",
+            "invoices": "🧾 Check outstanding invoices"
+        }
+    },
+    "panel": {
+        "title": "Live Store Data",
+        "tabs": {
+            "kpis": "KPIs",
+            "products": "Products",
+            "orders": "Orders"
+        },
+        "empty": "Nothing to show yet.",
+        "error": "Couldn't load this panel — please try again.",
+        "revenue": "Revenue (this month)",
+        "orders": "Orders (this month)",
+        "aov": "Avg. order value",
+        "customers": "Customers",
+        "conversion": "Conversion rate",
+        "loyalty": "Active loyalty accounts",
+        "top_products": "Top products",
+        "sold": "sold"
+    },
+    "delegation": {
+        "delegated_to": "delegated to",
+        "executed_by": ":agent executed the following:"
+    },
+    "ai_toggle": {
+        "label": "Use real AI",
+        "hint": "Routes this one goal through a real LLM (OpenRouter) for planning and reasoning instead of the deterministic rules. Falls back automatically and silently if no OPENROUTER_API_KEY is configured — you may not notice a difference without one."
+    },
+    "history": {
+        "button": "History",
+        "title": "Conversation History",
+        "empty": "No past executions yet.",
+        "replayed": "Replayed from history (read-only)"
+    },
+    "gate": {
+        "title": "OpenCommerce Showcase",
+        "subtitle": "Enter the passcode to continue.",
+        "placeholder": "Passcode",
+        "submit": "Enter",
+        "invalid": "Incorrect passcode."
+    }
+}

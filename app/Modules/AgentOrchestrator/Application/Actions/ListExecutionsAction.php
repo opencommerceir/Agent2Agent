@@ -25,7 +25,11 @@ final class ListExecutionsAction
         $safeLimit = $limit !== null ? max(1, min($limit, self::MAX_LIMIT)) : self::DEFAULT_LIMIT;
 
         return array_map(
-            fn (array $record) => ExecutionResultData::fromEntity($record['result'], $record['id']),
+            fn (array $record) => ExecutionResultData::fromEntity(
+                $record['result'],
+                $record['id'],
+                createdAt: $record['createdAt'] ?? null,
+            ),
             $this->memory->list($tenantId, $agentType, $status, $safeLimit),
         );
     }

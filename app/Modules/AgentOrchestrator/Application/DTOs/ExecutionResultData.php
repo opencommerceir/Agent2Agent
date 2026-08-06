@@ -19,6 +19,17 @@ use App\Modules\AgentOrchestrator\Domain\Entities\ExecutionResult;
  * `tax`/`discount`/`total` across Stages 3-5) — every pre-existing caller
  * of `fromEntity()`/the constructor that doesn't pass them is unaffected;
  * `ExecuteGoalAction` is the only caller that does.
+ *
+ * `createdAt` (Showcase prep, Phase 3, §7.33) is the identical widening
+ * one level further — a real gap `ListExecutionsAction`/`GetExecutionResultAction`
+ * both had already (no timestamp anywhere on this DTO, even though
+ * `agent_executions.created_at` always existed on the underlying model):
+ * the Showcase history sidebar needs "goal + time + status" and there was
+ * no honest way to show "time" without either this widening or a
+ * Controller reaching into `Infrastructure\Models` directly, which this
+ * codebase's own Interfaces-layer convention forbids (HANDOFF §3 pattern
+ * #19). Optional and trailing, ISO-8601 string (matching `ReasoningTraceData::$createdAt`'s
+ * own convention) — every pre-existing caller is unaffected.
  */
 final class ExecutionResultData
 {
@@ -38,6 +49,7 @@ final class ExecutionResultData
         public readonly ?array $preReasoning = null,
         public readonly ?array $postReasoning = null,
         public readonly ?string $explanation = null,
+        public readonly ?string $createdAt = null,
     ) {
     }
 
@@ -51,6 +63,7 @@ final class ExecutionResultData
         ?array $preReasoning = null,
         ?array $postReasoning = null,
         ?string $explanation = null,
+        ?string $createdAt = null,
     ): self {
         return new self(
             id: $id,
@@ -63,11 +76,12 @@ final class ExecutionResultData
             preReasoning: $preReasoning,
             postReasoning: $postReasoning,
             explanation: $explanation,
+            createdAt: $createdAt,
         );
     }
 
     /**
-     * @return array{id: ?int, goal: string, agent_type: string, steps: list<array>, summary: string, status: string, execution_time: float, pre_reasoning: ?array, post_reasoning: ?array, explanation: ?string}
+     * @return array{id: ?int, goal: string, agent_type: string, steps: list<array>, summary: string, status: string, execution_time: float, pre_reasoning: ?array, post_reasoning: ?array, explanation: ?string, created_at: ?string}
      */
     public function toArray(): array
     {
@@ -82,6 +96,7 @@ final class ExecutionResultData
             'pre_reasoning' => $this->preReasoning,
             'post_reasoning' => $this->postReasoning,
             'explanation' => $this->explanation,
+            'created_at' => $this->createdAt,
         ];
     }
 }

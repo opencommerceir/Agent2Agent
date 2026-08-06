@@ -27,12 +27,17 @@ interface ExecutionMemoryRepositoryInterface
     public function save(ExecutionResult $result, int $tenantId, int $agentId, AgentType $agentType): array;
 
     /**
-     * @return ?array{id: int, tenantId: int, agentId: int, agentType: AgentType, result: ExecutionResult}
+     * `createdAt` (Showcase prep, Phase 3, §7.33) is a real, additive
+     * widening — an ISO-8601 string of the underlying record's own
+     * timestamp, not new data this Interface didn't already have access
+     * to (HANDOFF §3 pattern #6).
+     *
+     * @return ?array{id: int, tenantId: int, agentId: int, agentType: AgentType, result: ExecutionResult, createdAt: ?string}
      */
     public function findById(int $id, int $tenantId): ?array;
 
     /**
-     * @return list<array{id: int, tenantId: int, agentId: int, agentType: AgentType, result: ExecutionResult}>
+     * @return list<array{id: int, tenantId: int, agentId: int, agentType: AgentType, result: ExecutionResult, createdAt: ?string}>
      */
     public function list(int $tenantId, ?AgentType $agentType, ?string $status, int $limit): array;
 }

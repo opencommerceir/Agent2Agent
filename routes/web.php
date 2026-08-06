@@ -12,6 +12,9 @@ use App\Http\Controllers\Dashboard\ProductController;
 use App\Http\Controllers\Dashboard\SettingsController;
 use App\Http\Controllers\Dashboard\TenantController;
 use App\Http\Controllers\LanguageController;
+use App\Http\Controllers\Showcase\ShowcaseAccessController;
+use App\Http\Controllers\Showcase\ShowcaseController;
+use App\Http\Controllers\Showcase\ShowcasePanelController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => redirect()->route('login'));
@@ -19,6 +22,39 @@ Route::get('/', fn () => redirect()->route('login'));
 // Not behind 'auth'/'guest' — a language pick should work from the login
 // page too, before anyone is signed in.
 Route::get('/language/{code}', LanguageController::class)->name('language.switch');
+
+// The `/showcase` chat UI — deliberately outside 'auth'/'guest' too. It
+// is a public demo surface authenticated against the seeded Demo Agent's
+// own bearer token (a fresh one per browser session, see
+// ShowcaseController's own docblock), never the Dashboard's human User
+// session, so it carries none of the 'auth'/'admin' middleware above.
+Route::prefix('showcase')->name('showcase.')->group(function () {
+    // The passcode gate itself (Phase 3, §7.33) — deliberately outside
+    // the 'showcase.access' middleware below: this is the one route that
+    // must stay reachable to ever grant access in the first place.
+    Route::get('/enter', [ShowcaseAccessController::class, 'create'])->name('enter');
+    Route::post('/enter', [ShowcaseAccessController::class, 'store'])->name('enter.store');
+
+    Route::middleware('showcase.access')->group(function () {
+        Route::get('/', [ShowcaseController::class, 'index'])->name('index');
+        Route::post('/chat', [ShowcaseController::class, 'chat'])->name('chat');
+
+        // Conversation history (Phase 3, §7.33) — reads this Tenant's own
+        // past Executions back through the same read-only Actions
+        // `/api/agents/executions[/{id}]` already use.
+        Route::get('/history', [ShowcaseController::class, 'history'])->name('history');
+        Route::get('/history/{execution}', [ShowcaseController::class, 'historyShow'])->name('history.show');
+
+        // The live side panel (Phase 2, §7.33) — each tab its own route
+        // so the Alpine panel can refresh exactly the active tab, never
+        // all three at once.
+        Route::prefix('panel')->name('panel.')->group(function () {
+            Route::get('/products', [ShowcasePanelController::class, 'products'])->name('products');
+            Route::get('/orders', [ShowcasePanelController::class, 'orders'])->name('orders');
+            Route::get('/kpis', [ShowcasePanelController::class, 'kpis'])->name('kpis');
+        });
+    });
+});
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [LoginController::class, 'create'])->name('login');

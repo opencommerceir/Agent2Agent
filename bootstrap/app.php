@@ -3,6 +3,7 @@
 use App\Core\Exceptions\MCPExceptionHandler;
 use App\Http\Middleware\Authenticate;
 use App\Http\Middleware\CompressResponse;
+use App\Http\Middleware\EnsureShowcaseAccess;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\RecordPerformanceMetrics;
 use App\Http\Middleware\RedirectIfAuthenticated;
@@ -28,6 +29,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'auth' => Authenticate::class,
             'guest' => RedirectIfAuthenticated::class,
             'admin' => EnsureUserIsAdmin::class,
+            // Showcase prep, Phase 3 (§7.33) — a light session-flag gate
+            // for `/showcase/*`, completely independent of the 3 aliases
+            // above (no real User/Agent identity behind it).
+            'showcase.access' => EnsureShowcaseAccess::class,
         ]);
 
         // Phase 4 Stage 8 (Performance Optimization, §7.20). Global —

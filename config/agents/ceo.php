@@ -21,12 +21,30 @@
  * same request's own worked scenario explicitly expects 4 steps for a
  * "sales" goal, so the rule was written to match the testable behavior,
  * not the earlier, narrower example.
+ *
+ * `delegate` (Showcase prep, Phase 2) is the cheapest available increment
+ * HANDOFF §8.85 itself already named: one profile naming
+ * `agent.collaboration.delegate` in a real planning_rules entry, exactly
+ * like any other capability -- no PlannerInterface/ExecuteGoalAction
+ * change, the same config-driven mechanism this module has used since
+ * §7.27. Declared first, before `sales`, so a goal containing "delegate"
+ * can never be shadowed by a broader keyword declared later
+ * (first-match-wins order, docs/agent-profiles.md) -- no existing goal
+ * string CEOAgentTest/GoalExecutionTest assert on contains "delegate", so
+ * this reordering changes nothing about which rule those goals resolve
+ * to. `task`'s own literal text deliberately contains "promotion" so it
+ * resolves against config/agents/sales.php's own `promotion` rule (2 real
+ * capabilities) rather than its thinner `default` rule -- the same task
+ * text shape MultiAgentCollaborationTest's own scenario already proved.
  */
 return [
     'name' => 'CEO Agent',
     'description' => 'Strategic decision-making agent for business oversight — sales, revenue, and inventory health at a glance.',
 
     'planning_rules' => [
+        'delegate' => [
+            'agent.collaboration.delegate',
+        ],
         'sales' => [
             'report.sales.generate',
             'analytics.kpi.calculate',
@@ -49,6 +67,11 @@ return [
     ],
 
     'default_inputs' => [
+        'agent.collaboration.delegate' => [
+            'from_agent' => 'ceo',
+            'to_agent' => 'sales',
+            'task' => 'Create a 15% discount coupon for a summer promotion',
+        ],
         'report.sales.generate' => [
             'start_date' => '{date:-7}',
             'end_date' => '{date:0}',
@@ -82,5 +105,6 @@ return [
         'analytics.kpis.read',
         'commerce.coupons.create',
         'notifications.messages.send',
+        'agent.collaboration.delegate',
     ],
 ];

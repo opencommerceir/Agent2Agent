@@ -1,5 +1,52 @@
 # OpenCommerce Platform — Session Handoff
 
+**Status: Showcase Demo (§7.33 — Showcase prep, after §7.32, not a Phase
+6 Stage, built in three back-to-back passes) is now complete — a
+`/showcase` web chat UI lets an operator pick one of the 4 Agent
+personas, click a Suggested Goal or type one, optionally flip a "🧠 Use
+real AI" toggle, and watch the unmodified `ExecuteGoalAction` plan,
+execute, delegate, and reflect live, rendered from
+`ExecutionResultData::toArray()` with no reshaping, beside a live data
+panel (KPIs/Products/Orders, only its own active tab ever refetches) and
+a 🕘 conversation-history sidebar that replays any past run's own real,
+persisted reasoning read-only. An optional passcode gate
+(`SHOWCASE_PASSCODE`, blank/disabled by default) makes the demo link
+safe to share beyond one's own machine, entirely independent of the
+Dashboard's own real `User`/`auth`/`admin` system — two unrelated
+sessions, never composed. Backed by a new, explicitly-opt-in
+`DemoShowcaseSeeder` (a well-known `demo-showcase` Tenant: 40 Products, 2
+Warehouses, 40 Customers, 180 real backdated Orders, 10 Tickets, active
+Coupons/DiscountRules, 3 pre-run real Executions) and `php artisan
+demo:reset` for wiping/rebuilding it between demo runs — proven safe to
+run mid-demo, since every Controller resolves the demo Tenant fresh, by
+slug, on every request. The backend changes across all three passes stay
+small and precedented: one new `delegate` entry in
+`config/agents/ceo.php`'s own `planning_rules` (config-only, finally
+closing HANDOFF §8.85 — Multi-Agent Collaboration, §7.30, had been fully
+built and MCP-reachable since Phase 6 but never actually reachable
+*through a planned Goal* until now), and one small, additive DTO/Repository
+widening (`ExecutionResultData`/`ExecutionMemoryRepositoryInterface` gained
+an optional trailing `createdAt`, HANDOFF §3 pattern #6) for the history
+sidebar's own "goal + time + status" requirement — no new MCP capability,
+no new Domain Entity, no other Domain/Application layer touched. Three
+real bugs were caught and fixed across all three passes, not left latent
+— two by this work's own tests (a tenant-wide `VariantAttribute`
+registry collision; a random order-generation pool that could exhaust a
+deliberately low-stock Product), and one only by live smoke-testing
+against a real `php artisan demo:reset` database, not by `php artisan
+test` (a Suggested Goal's own text accidentally matched an
+already-learned `ExecutionPattern` from the seeded Execution history via
+a plain substring check, silently skipping the new `delegate` rule
+entirely) — the gap in test coverage that let it through is itself now
+closed with a dedicated regression test. Phase 3's own
+resolve-`ExecuteGoalAction`-after-the-config-override requirement (see
+that subsection below) was a real correctness constraint identified
+*during planning*, from reading `AgentOrchestratorServiceProvider`'s own
+binding closures and `PlannerConfigTest`'s own precedent before writing
+any Controller code — built correctly the first time, not a bug caught
+after the fact. 1102 tests passing (1078 + 24 new), 124 MCP capabilities
+(unchanged), zero known regressions. See §7.33 for the full detail.**
+
 **Status: OpenRouter Integration (§7.32 — Showcase prep, after Phase 6
 finished, not a Phase 6 Stage) is now complete — `LLMClientInterface` has
 a third real implementation, `OpenRouterClient`, alongside `OpenAIClient`/
@@ -7433,6 +7480,442 @@ proves both `LLMPlanner`→`DeterministicPlanner` and
 under `LLM_PROVIDER=openrouter`, still 200, never a hard failure). 1078
 tests total (1067 + 11 new), 2779 assertions (2757 + 22 new), zero known
 regressions — confirmed by actually running the full suite.
+
+---
+
+### 7.33 Showcase Demo — Live Chat, Data Panel, Delegation, History & Real-AI Toggle (Showcase prep, after §7.32)
+
+**Not a Phase 6 Stage, and not a new Domain Module — the same
+"Showcase prep, doesn't fit the numbered Stage sequence" shape §7.32
+itself used, built in three back-to-back passes recorded together here
+rather than as three separate section numbers** (each pass only ever
+extended what the last one built — one shared build log reads truer
+than an artificial split). **Phase 1** built the `/showcase` chat surface
+itself; **Phase 2** added a live side panel, Suggested Goals, and turned
+on real Agent-to-Agent delegation for the first time in this codebase;
+**Phase 3** (its own subsection below) turned the one-time-livedemo
+surface into a repeatable, shareable one — a real-AI toggle, a
+conversation history sidebar, and an optional passcode gate. A
+`/showcase` web chat UI sits on top of the *unmodified*
+Agent Orchestrator exactly the way the Admin Dashboard (Phase 4 Stage 5,
+§7.17) sits on top of every other module: a thin Interfaces-layer
+consumer of an existing Action (`ExecuteGoalAction`, the same one
+`/api/agents/{agent_type}` and `agent.goal.execute` already call), never
+a new capability, never a change to any module's Domain/Application
+layer (HANDOFF §3 pattern #19). Pick a persona, send a Goal, watch the
+real `think()` → plan → execute → `reflect()` cycle (§7.31) render live
+against a realistic, pre-seeded store — not an empty fixture.
+
+**New**: `DemoShowcaseSeeder` (`database/seeders/`) — a single,
+well-known Tenant (slug `demo-showcase`) with one seeded Agent ("Demo
+Agent") holding every permission all 4 shipped personas need end to end
+(the exact 10-permission list `GoalExecutionTest::REQUIRED_PERMISSIONS`
+already proved sufficient), 40 Products across 5 Categories, 2
+Warehouses, 6 variant-bearing Products, 40 Customers, ~40% of them with a
+LoyaltyAccount and a real earn transaction, 10 CRM Tickets, 2 Coupons + 2
+DiscountRules already active, 180 real Cart→Payment→Order checkouts
+(`AddToCartAction`/`ProcessPaymentAction` — the exact flow
+`commerce.checkout.process` itself uses) backdated across the last 85
+days so Reporting's/Analytics' own sales-trend charts show real
+day-to-day variance instead of a single flat spike today, and 3 real
+Executions pre-run through the *unmodified* `ExecuteGoalAction` (never a
+raw DB insert) so Execution Memory/`agent.execution.list` aren't empty
+the moment a visitor's first chat message arrives. Deliberately **not**
+called from `DatabaseSeeder::run()`
+— an operator opts in explicitly (`php artisan db:seed
+--class=DemoShowcaseSeeder` or `php artisan demo:reset`), the same
+"never silently seeded" boundary `ShowcaseController::index()` itself
+enforces (a missing demo Tenant shows an explicit operator-facing error,
+never an auto-seed mid-demo — predictability on stage outranks
+convenience here, the request's own explicit call).
+
+`app/Console/Commands/ResetDemoShowcaseCommand.php` (`demo:reset`) wipes
+and rebuilds the demo Tenant between showcase runs. **A real, deliberate
+implementation choice, not an oversight**: no
+`TenantRepositoryInterface::delete()` (or any cascading-delete Action)
+exists anywhere in this codebase for any entity — never requested, never
+built (HANDOFF §8's own running list of documented gaps). Rather than
+inventing a new Domain-layer deletion capability for one demo-only
+utility, this Command reaches the `tenants` table directly via the query
+builder and relies on referential integrity the schema itself already
+owns: every tenant-scoped migration in this codebase declares its own
+`tenant_id` foreign key with `->cascadeOnDelete()` (confirmed against
+every table this seeder's own data touches — products, orders, agents,
+agent_tokens, roles, warehouses, tickets, loyalty_accounts, coupons,
+discount_rules, notification_templates, agent_executions, ...), so
+deleting the one `tenants` row cascades through the entire tree in one
+statement. The one deliberate exception, correctly never touched: the
+global `permissions` table (no `tenant_id` at all — shared vocabulary
+across every Tenant, that migration's own docblock already says so).
+
+`app/Http/Controllers/Showcase/ShowcaseController.php` — `index()`
+mints one fresh Agent bearer token per browser session
+(`GenerateAgentTokenAction`, the same Action every test
+helper/`tinker` flow already uses — never a shared, hardcoded secret)
+for the one seeded Demo Agent, stored in the session; `chat()`
+authenticates that raw token string via `AuthenticateAgentAction`
+(`Core/Application/Actions` — **not** `AgentAuthenticationService`, which
+only ever takes an HTTP `Request` and reads its bearer header; confirmed
+by reading both classes before writing a line of controller code, the
+same audit-first discipline every prior stage's request-vs-codebase
+check got), then runs the identical authenticate → rate-limit →
+authorize → execute sequence `AgentController`
+(`app/Modules/AgentOrchestrator/Infrastructure/Controllers`) already
+established for `/api/agents/*`, and returns
+`ExecutionResultData::toArray()` completely unmodified. This is what
+makes the chat UI planner-agnostic without any of its own code caring:
+it renders whatever `pre_reasoning`/`steps`/`post_reasoning`/`explanation`
+the configured `PlannerInterface`/`ReasoningEngineInterface` produced,
+deterministic or LLM-backed (§7.28/§7.31/§7.32) alike. `routes/web.php`
+gained a top-level `Route::prefix('showcase')` group — deliberately
+outside both the `auth` and `guest` middleware groups (the same
+un-gated shape `/language/{code}` already has): this is a public demo
+surface authenticated against the seeded Agent's own bearer token, never
+the Dashboard's human `User` session, so it carries none of that
+middleware.
+
+**Two real bugs caught and fixed by this stage's own dedicated tests,
+not left latent:**
+
+1. `VariantAttribute` is a *tenant-wide* registry
+   (`unique(tenant_id, name)`, §7.21) — several catalog Products share
+   the same attribute *name* ("Size") with different value sets, so
+   calling `CreateVariantAttributeAction` once per Product threw
+   `DuplicateVariantAttributeException` on the second Hoodie/Sneaker/
+   T-Shirt in the loop. Fixed by registering each distinct attribute name
+   once, the first time it's seen — `CreateProductVariantAction`'s own
+   `attributes` input is free-form regardless (its own docblock: no
+   registry-level check against a real VariantAttribute/Value row), so
+   the registry row only ever backed `commerce.attribute.list`'s own
+   listing to begin with, never variant creation itself.
+2. A random 180-order generation pool that could pick from *every*
+   Product — including the ~6 deliberately low-stock ones (2-8 units,
+   for Analytics' own Low Stock KPI to have something real to show, §8.56)
+   — exhausted a low-stock row after 1-3 orders, after which every later
+   order that happened to pick it again failed its *entire* multi-item
+   cart with `InsufficientInventoryException`, silently dropping the
+   seeded order count well under the requested 150-300 range (145/180 on
+   one real run). Fixed by giving `seedOrders()` its own
+   `$orderableProductIndexes` pool that excludes every deliberately
+   low-stock Product by construction — a low-stock Product still exists
+   and still reads as low-stock, it simply never gets picked by this
+   seeder's own historical Order generation. Confirmed stable across
+   repeated runs after the fix (no flakiness reintroduced).
+
+**i18n**: `lang/{en,fa}/showcase.json` — a new, standalone translation
+group (HANDOFF gotcha #13's own lesson applied from the start: every key
+in the Blade view is called as `t('showcase.xxx')`, never a bare
+`t('xxx')`), covering persona labels, the input placeholder, section
+headings (pre-execution reasoning / execution steps / summary /
+reflection), and the "demo not seeded" operator-facing error — reusing
+Core's own `t()`/`dashboard_language()` helpers (§7.16/§7.17), the exact
+mechanism the Dashboard already runs on, applied here to a surface that
+was never part of the Dashboard's own `auth`/`admin` route group.
+
+**Frontend**: `resources/views/showcase/index.blade.php` — a single
+Alpine.js component (`Alpine.data('showcaseChat', ...)`, registered on
+`alpine:init` the same way `app.js` already bootstraps Alpine for the
+Dashboard, no new frontend dependency), Tailwind classes kept fully
+literal throughout (never string-interpolated per-persona, since
+Tailwind's own build-time class scanner can't see a class name assembled
+at runtime — `ring-{{ $color }}-500` would silently never compile). Each
+sent Goal renders its own message bubble plus a response card that
+stage-reveals pre-reasoning → steps → summary → reflection with a short
+`setTimeout` cadence — a staged reveal of one already-complete JSON
+response, not real token/event streaming (`ExecuteGoalAction` runs
+synchronously start to finish and returns one JSON body, same as every
+other MCP-shaped Action in this codebase). Laravel's own
+`VerifyCsrfToken::runningUnitTests()` already bypasses CSRF automatically
+under `php artisan test` (confirmed by reading the framework's own
+middleware before assuming either a test-only exclusion or a
+`withoutMiddleware()` call was needed) — no test-only CSRF workaround
+exists anywhere in this stage's own code; the live Blade view still
+sends a real `X-CSRF-TOKEN` header (`<meta name="csrf-token">` +
+`document.querySelector`) for actual browser traffic, since `/showcase`
+sits inside the standard `web` middleware group like every other
+non-MCP route.
+
+New tests (Phase 1): `tests/Feature/Showcase/ShowcaseControllerTest.php`
+(5 — demo Tenant missing shows the explicit error view, `GET /showcase`
+mints and sessions a fresh token, `POST /showcase/chat` without a prior
+visit 401s, a real CEO goal returns a complete `ExecutionResultData`
+shape with all 4 steps completed, an unknown persona 422s) and
+`tests/Feature/Showcase/DemoShowcaseSeederTest.php` (2 — real row counts
+across every table this seeder touches, at least 150 backdated Orders
+spread across more than 10 distinct calendar days, and a second run
+against an already-seeded Tenant is a verified no-op, not a duplicate).
+1085 tests total (1078 + 7 new) at the end of Phase 1, zero known
+regressions — confirmed by actually running the full suite, plus a
+manual `php artisan demo:reset` run twice in a row against a real
+(non-sqlite-`:memory:`) database to prove the cascade-delete path
+itself, not just the seeder's own create path.
+
+**Phase 2 — Live Panel, Suggested Goals, and real Delegation.** Ran
+immediately after Phase 1, extending the same surface rather than
+touching any Domain/Application layer a second time — the only backend
+change in the entire phase is one new `planning_rules` entry in
+`config/agents/ceo.php`, config-only, exactly the way every prior Agent
+Profile change in this module already worked (§7.27).
+
+**Turning on real delegation (HANDOFF §8.85, finally closed):** every
+config file this codebase ships planned goals into single-module
+capability sequences only — nothing ever named `agent.collaboration.delegate`
+inside a real `planning_rules` array, so Multi-Agent Collaboration
+(§7.30) was fully built, tested, and MCP-reachable, but never actually
+reachable *through a planned Goal*, only by calling the capability
+directly. `config/agents/ceo.php` gained a `delegate` rule (one
+capability: `agent.collaboration.delegate`) with a literal
+`default_inputs` entry (`from_agent: 'ceo'`, `to_agent: 'sales'`, and a
+`task` string deliberately shaped like `MultiAgentCollaborationTest`'s
+own already-proven scenario, "Create a 15% discount coupon for a summer
+promotion" — resolves against `config/agents/sales.php`'s own
+`promotion` rule, 2 real capabilities, not its thinner `default` rule).
+Declared *first* in `planning_rules` (`AgentProfile::getCapabilitiesForGoal()`'s
+own first-match-wins order, `docs/agent-profiles.md`) — confirmed against
+every literal goal string `CEOAgentTest`/`GoalExecutionTest` already
+assert on, none of which contain "delegate," so this reordering changes
+nothing about which rule those goals resolve to (re-ran both test files
+directly after the config edit alone, before writing any other Phase 2
+code, the same "prove the risky change in isolation first" discipline
+every prior stage's own config/schema edit got). `agent.collaboration.delegate`
+was also added to `ceo.php`'s own descriptive `permissions` list and to
+`DemoShowcaseSeeder`'s real granted-permission set (Phase 1's own list
+didn't include it — Phase 1 never exercised delegation at all), the
+latter a small, deliberate, necessary addition to seed/test data, not a
+Domain/Application change.
+
+**A real bug this stage's own live smoke-testing caught — not by any
+automated test, which is itself the finding worth recording.** Every
+Feature test in this codebase (including this stage's own) builds a
+fresh Tenant with no prior Execution history, so none of them exercise
+Execution Memory & Learning's (§7.29) own cross-goal interaction.
+`DemoShowcaseSeeder` (Phase 1) pre-seeds a real CEO execution for
+"Increase sales by 15% this week," which — success, real capabilities —
+creates a learned `ExecutionPattern` keyed on the single word "sales"
+(`PatternExtractor::KEYWORDS`, a fixed 5-word vocabulary: `sales`,
+`revenue`, `inventory`, `customer`, `report`, §7.29/§8.80).
+`ExecuteGoalAction` consults `LearningServiceInterface::suggestPlan()`
+*before* either `PlannerInterface` implementation ever runs, and
+`ExecutionPattern::matches()` is a plain substring check — the first
+Suggested Goal text written for the delegate button, "Delegate this
+campaign to the **Sales** team," contained the word "sales" and matched
+that already-learned pattern, silently reusing its old 4-step
+`report.sales.generate`/`analytics.kpi.calculate`/`commerce.coupon.create`/
+`notification.message.send` plan and never reaching `ceo.php`'s own new
+`delegate` rule at all — confirmed only by running `php artisan
+demo:reset` against a real database and hitting `/showcase/chat` with
+curl, not by `php artisan test`, which stayed green throughout. Fixed by
+rewording the Suggested Goal's own text to "Delegate this promotional
+campaign to another agent" (avoids every `PatternExtractor::KEYWORDS`
+word entirely, verified live afterward), and by adding a new regression
+test, `ShowcaseControllerTest::test_chat_delegateGoal_stillDelegatesEvenWhenASalesPatternWasAlreadyLearned()`,
+that deliberately pre-seeds the exact colliding "sales" pattern first
+(the one thing a fresh-Tenant fixture never exercises) before asserting
+delegation still resolves correctly — the gap in test coverage itself is
+now closed, not just the one symptom.
+
+**New this Phase**: `app/Http/Controllers/Showcase/ShowcasePanelController.php`
+(`products()`/`orders()`/`kpis()`, `GET /showcase/panel/{products,orders,kpis}`)
+— a live side panel that calls the *exact same* Actions the Admin
+Dashboard's own read-only Controllers already call
+(`ListProductsAction`/`ListOrdersAction`/`GetDashboardStatsAction`, HANDOFF
+§3 pattern #19 again — no second, parallel read implementation), scoped
+permanently to the one seeded `demo-showcase` Tenant (no `?tenant_id=`
+selector, unlike the Dashboard's own multi-tenant equivalents). Each
+method returns a rendered Blade partial
+(`resources/views/showcase/partials/{products,orders,kpis}.blade.php`),
+not JSON — the Alpine panel injects the response body directly via
+`x-html`, so money/status formatting lives once, server-side, never
+duplicated in client-side JS templating. Three tabs beside the chat
+column (`resources/views/showcase/index.blade.php`, restructured into a
+two-column `flex` layout — chat first in DOM order, panel second, which
+flows correctly right-to-left under `dir="rtl"` with no `rtl:` class
+overrides needed); only the *active* tab ever refetches after a chat
+turn completes (`refreshActivePanel()`), never all three at once, and
+switching tabs lazily loads that tab on demand.
+
+**Suggested Goals** — 2-4 one-click buttons per persona
+(`$suggestions` built server-side in the Blade view itself and passed
+into Alpine via `@js()`, so each button's user-facing `label` is
+properly translated while its underlying `goal` text stays a plain PHP
+string checked directly against the real keyword vocabulary), each
+proven against the real `config/agents/{type}.php` rule it's meant to
+demonstrate (CEO: `sales`/`revenue`/`inventory`/`delegate`; Sales:
+`promotion`/`sales`/`default`; Support: `support`/`ticket`; Finance:
+`finance`/`invoice`) — never a made-up phrase that could silently
+resolve to a different, less interesting rule than the one being shown.
+Clicking a suggestion calls `sendGoal(overrideGoal)` directly (a one-click
+send, not a fill-and-review step) — the safer choice for a live
+presenter on stage, per this stage's own explicit request.
+
+**Delegation's own visual** — when a step's `capability ===
+'agent.collaboration.delegate'`, the step checklist renders a distinct
+card instead of a plain checkmark row: an animated arrow
+(`showcase-delegation-arrow`, a small custom `@keyframes` rule, since
+Tailwind ships no built-in "pulse sideways" utility) between the
+`from_agent`/`to_agent` personas' own emoji avatars (read straight from
+`step.input.from_agent`/`.to_agent` — the capability's own real
+`inputSchema` fields, §7.30, not anything invented for display), and — the
+part that actually proves the delegation was real — `step.output.result`
+opened inline as its own nested mini execution card (capability
+checklist + summary), confirmed by tracing the exact data path from
+`AgentCommunicationService::requestDelegation()` (returns the real
+`ExecutionResultData` object) through `DelegateToAgentAction`'s own
+handler closure (`AgentOrchestratorServiceProvider::register()`, wraps it
+as `['delegation_id' => ..., 'result' => $delegation['result']->toArray()]`)
+through `CapabilityToolInvoker`/`CapabilityExecutionService` (a plan
+step's own `output` *is* exactly a capability handler's return value,
+confirmed by reading that call chain before writing any Blade/Alpine
+code) — before writing a line of frontend code, the same
+audit-the-real-shape-first discipline every prior stage's own DTO
+consumption got.
+
+**i18n**: `lang/{en,fa}/showcase.json` gained `suggestions.*` (one key
+per persona per Suggested Goal, label text only — never the goal text
+itself, which stays an unlocalized, keyword-bearing PHP string),
+`panel.*` (tab labels, the 6 KPI card labels, empty/error states), and
+`delegation.*` (the "delegated to"/"X executed the following:" strings
+the delegation card renders) — same `showcase.` group-prefix discipline
+Phase 1 already established (HANDOFF gotcha #13).
+
+New tests (Phase 2): `tests/Feature/Showcase/ShowcasePanelControllerTest.php`
+(4 — each panel tab renders real seeded data via a minimal store fixture,
+not the full 180-order seeder; an unseeded demo Tenant renders the
+translated empty state, not a 500) and 3 new methods added to
+`ShowcaseControllerTest.php` (a real delegation end to end with a nested
+Sales `ExecutionResultData`; the pre-existing `inventory` rule proven
+unaffected by the new rule's insertion; the Execution-Memory-collision
+regression above). **7 new tests this Phase, 1092 tests total (1085 + 7),
+zero known regressions** — confirmed by the full suite, and by a second,
+independent live-server smoke test (`php artisan serve` + `curl`,
+mirroring the one that caught the bug above) after the fix, proving the
+`/showcase/chat` delegate flow actually works against a real database, not
+only inside `php artisan test`'s own sqlite `:memory:` isolation.
+
+**Phase 3 — Real-AI Toggle, Conversation History, and an Access Gate.**
+Ran immediately after Phase 2, turning the one-time-livedemo surface into
+a repeatable, shareable one. The only Domain/Application-layer change
+this Phase made — small, additive, and precedented (HANDOFF §3 pattern
+#6) — was widening `ExecutionResultData`/`ExecutionMemoryRepositoryInterface::list()`/
+`findById()` with an optional trailing `createdAt` (ISO-8601 string): a
+real, pre-existing gap (`ListExecutionsAction`/`GetExecutionResultAction`
+had no timestamp anywhere, even though `agent_executions.created_at`
+always existed on the underlying model) the History sidebar's own "goal +
+time + status" requirement finally surfaced. Every other pre-existing
+caller of `fromEntity()`/the constructor is unaffected. Everything else
+this Phase built lives entirely in the Interfaces layer.
+
+**The "🧠 Use real AI" toggle** — `ShowcaseController::chat()` now reads a
+`use_real_ai` boolean from the request and, only when true, calls
+`config(['agent-orchestrator.planner.type' => 'llm', 'agent-orchestrator.reasoning.type' => 'llm', 'agent-orchestrator.llm.provider' => 'openrouter'])`
+before resolving `ExecuteGoalAction`. **The one real implementation
+constraint identified during planning, before writing any Controller
+code — not a bug caught afterward**: `ExecuteGoalAction` could not stay
+a method-injected controller parameter (`ExecuteGoalAction $executeGoal`,
+the shape Phase 1's own `chat()` originally used, correct then because no
+config override existed yet to race against) — Laravel resolves
+method-injected parameters *before* the method body runs, which would
+construct `ExecuteGoalAction` (and transitively whichever
+`PlannerInterface`/`ReasoningEngineInterface`/`LLMClientInterface` its
+constructor pulls in) *before* any config override in the method body
+ever executes. Reading `AgentOrchestratorServiceProvider`'s own binding
+closures and `PlannerConfigTest`'s own precedent first (the same
+audit-before-writing-code discipline every prior stage's own request
+got) made this obvious before a single line of `chat()` was rewritten —
+resolved instead via `app(ExecuteGoalAction::class)`, called manually
+*after* the override — safe only because
+`AgentOrchestratorServiceProvider::register()` already binds
+all three of those Interfaces as closures re-evaluated on every
+resolution, never `singleton()` (§7.28/§7.31) — the exact mechanism
+`PlannerConfigTest`/`ReasoningConfigTest`/`OpenRouterIntegrationTest`
+already prove in isolation, reached here for the first time from a real
+Controller rather than a test rebinding config directly. The override is
+captured and restored in a `finally` block regardless of how the request
+exits (success, a caught exception, an uncaught one) — the request's own
+brief was explicit that this must never be assumed safe "because php-fpm
+reuses a fresh process per request anyway": that's true and makes this
+restoration currently unobservable in this deployment, but the code does
+not quietly depend on it. With no `OPENROUTER_API_KEY` configured, the
+toggle never turns into a hard failure for the caller — `LLMPlanner`/
+`LLMReasoningEngine` both already catch that one layer down and fall back
+to `DeterministicPlanner`/`SimpleReasoningEngine` automatically
+(`fallback_to_deterministic`/`fallback_to_simple`, both default `true`)
+— documented explicitly in README's own Showcase Demo section as a
+real, expected "you may not notice a difference," never left as a
+silent surprise.
+
+**Conversation History** — `GET /showcase/history` (`ListExecutionsAction`,
+scoped to the one seeded demo Tenant, 20 most recent) and
+`GET /showcase/history/{id}` (`GetExecutionResultAction` +
+`GetReasoningTraceAction` + `ExplainReasoningAction` — the last two real
+and tested since §7.31 but with no caller anywhere in this codebase until
+this Phase) back a slide-in drawer (🕘 button, top-right of the chat
+column) rather than a permanent third layout column, so the existing
+two-column chat/live-panel layout needed no restructuring. `GetExecutionResultAction`
+alone never carries reasoning data (`ExecutionResultData::fromEntity()`
+is called with no `preReasoning`/`postReasoning`/`explanation` arguments
+inside that Action) — `historyShow()` merges the two real traces onto the
+same `ExecutionResultData::toArray()` shape `chat()` itself returns, so
+the history detail card renders through the *identical* Blade/Alpine
+template a live response does, just with `revealStage` set to its final
+value immediately (no staged reveal for a replay — that animation exists
+to pace a *new* run, not a historical one).
+
+**The access gate** — `config/showcase.php` (`passcode` from
+`env('SHOWCASE_PASSCODE')`, blank by default) + `EnsureShowcaseAccess`
+(`app/Http/Middleware`, aliased `showcase.access` in `bootstrap/app.php`,
+the same alias-registration shape `auth`/`guest`/`admin` already
+establish) + `ShowcaseAccessController` (`create()`/`store()`,
+`GET`/`POST /showcase/enter`). Deliberately holds no Domain/Application
+logic at all — a shared demo passcode has no real identity behind it
+worth modeling as an Entity, unlike `LoginController`'s own
+`AuthenticateUserAction`/real `User`/real password hash; a plain
+`hash_equals()` string comparison against config is the entire "business
+rule." Blank passcode (no `SHOWCASE_PASSCODE` in `.env`, the default)
+disables the gate entirely — the same "safe default for local dev,
+explicit opt-in for a stricter production-shaped behavior" reasoning
+`CACHE_STORE=database`/`WOOCOMMERCE_*`/`PLANNER_TYPE=deterministic`
+already establish throughout this codebase, and the reason every prior
+Phase 1/2 Showcase test kept working unmodified (none of them ever set
+this env var, so the gate has always been transparently off for them).
+`routes/web.php`'s own `/showcase` group now nests everything except
+`/showcase/enter` itself (which must stay reachable to ever grant access)
+inside a `Route::middleware('showcase.access')` sub-group — completely
+independent of, and never composed with, `auth`/`admin` (the real
+Dashboard `User` system, §7.17): two passcodes, two sessions, two
+unrelated concerns, exactly as the request's own explicit rule demanded.
+
+New tests (Phase 3): `tests/Feature/Showcase/ShowcaseAccessTest.php` (6 —
+gate disabled by default, gate redirects to `/showcase/enter` when a
+passcode is set, the enter form itself always reachable, a wrong passcode
+redirects back with a translated error and grants nothing, the right
+passcode grants access, and the panel/history routes are gated exactly
+like `/showcase` itself), `tests/Feature/Showcase/ShowcaseHistoryTest.php`
+(3 — history returns only the demo Tenant's own Executions even when a
+second, unrelated Tenant has its own; opening a past Execution returns
+its real, persisted `pre_reasoning`/`post_reasoning`/`explanation`, not
+nulls; an unknown execution id 404s), and one new method in
+`ShowcaseControllerTest.php` (`use_real_ai=true` with a fake
+`LLMClientInterface` rebound the same way `OpenRouterIntegrationTest`
+already does — proves the response actually reflects the fake LLM's own
+1-step plan rather than `ceo.php`'s real 4-step deterministic `sales`
+rule, asserts the raw config values are back to `deterministic`/`simple`
+immediately afterward, and — the sharper proof, not just the raw config
+value — that a real, independent follow-up request for a *different*
+goal resolves a real deterministic plan again). One test-design subtlety
+worth recording: the follow-up request in that last test deliberately
+uses a different goal ("revenue," not "sales") from the one just run
+through the fake LLM — reusing the identical goal text would have hit the
+`ExecutionPattern` that successful LLM run had just taught Execution
+Memory (§7.29) and short-circuited straight past `PlannerInterface`
+entirely, proving nothing about config leakage (the same interaction
+class Phase 2's own delegate-suggestion bug already documents, caught
+here during test-writing rather than needing a second live smoke-test
+surprise). **10 new tests this Phase, 1102 tests total (1092 + 10), zero
+known regressions** — confirmed by the full suite, and by a third
+live-server smoke test (`php artisan demo:reset` + `curl`) exercising the
+history list, a history detail's real reasoning traces, and the AI
+toggle's own silent no-key fallback end to end against a real database.
 
 ---
 

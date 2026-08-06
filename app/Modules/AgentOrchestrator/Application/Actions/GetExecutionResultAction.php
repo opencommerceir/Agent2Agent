@@ -21,6 +21,6 @@ final class GetExecutionResultAction
             throw new ExecutionNotFoundException("Execution [{$executionId}] does not exist.");
         }
 
-        return ExecutionResultData::fromEntity($record['result'], $record['id']);
+        return ExecutionResultData::fromEntity($record['result'], $record['id'], createdAt: $record['createdAt'] ?? null);
     }
 }

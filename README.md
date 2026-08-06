@@ -295,6 +295,167 @@ interfaces as a documented exception, and more).
 
 ---
 
+## 🎬 Showcase Demo
+
+A `/showcase` chat UI (Showcase prep, §7.33 — built after Phase 6
+finished, across 3 back-to-back passes, not a Phase 6 Stage) for watching
+the Agent Orchestrator think, plan, execute, delegate, and reflect
+**live**, against a realistic, pre-seeded store — not an empty fixture,
+not a mocked response, and repeatable/shareable rather than a one-time
+demo. It's a thin Interfaces-layer surface, the same shape the Admin
+Dashboard already uses: every response it renders is `ExecuteGoalAction`'s
+own, unmodified `ExecutionResultData::toArray()`; the live data panel
+reuses the exact same `ListProductsAction`/`ListOrdersAction`/
+`GetDashboardStatsAction` the Dashboard's own Controllers call; the
+history sidebar reuses `ListExecutionsAction`/`GetExecutionResultAction`/
+`GetReasoningTraceAction`/`ExplainReasoningAction` unmodified. No new
+business logic exists anywhere behind it.
+
+### Setup
+
+```bash
+php artisan db:seed --class=DemoShowcaseSeeder   # first time only
+```
+
+Two more env vars are worth setting, both entirely optional:
+
+```bash
+# .env — optional, both blank by default
+SHOWCASE_PASSCODE=            # set this to gate /showcase behind a shared passcode
+                               # before handing the demo link to anyone outside your
+                               # own machine; blank (the default) means /showcase is
+                               # open to anyone with the URL — the right choice for
+                               # local development, not for a public staging URL.
+OPENROUTER_API_KEY=           # set this so the in-app "🧠 Use real AI" toggle (below)
+                               # actually reaches a real LLM; without it, the toggle
+                               # still never errors — it just falls back to the same
+                               # deterministic planner/reasoning silently, so you may
+                               # not notice a difference. OpenRouter's own free tier
+                               # (OPENROUTER_MODEL defaults to a $0 model) is the
+                               # cheapest way to try this for real.
+```
+
+### Getting in
+
+Visit **`/showcase`**. If `SHOWCASE_PASSCODE` is unset, you land directly
+on the chat. If it's set, you're redirected to `/showcase/enter` — enter
+the passcode once and your browser session stays in until it expires or
+you clear cookies; this gate is a plain session flag with no relationship
+at all to the Dashboard's own `/login` (a real `User` with a real
+password) — sharing the showcase passcode with someone grants them
+nothing on `/dashboard`, and vice versa.
+
+To wipe and rebuild the demo store between sessions (recommended before
+every live demo — a prior run's own chat history/coupons/Executions get
+cleared):
+
+```bash
+php artisan demo:reset
+```
+
+**Resetting never breaks anything above it.** `ShowcaseController`/
+`ShowcasePanelController` all resolve the demo Tenant fresh, by slug,
+on every single request (`TenantRepositoryInterface::findBySlug('demo-showcase')`)
+— nothing caches a Tenant/Agent id across requests except the one
+session-scoped bearer token `ShowcaseController::index()` mints, which a
+reset Tenant's own newly-seeded Agent transparently accepts again the
+next time `/showcase` loads (a stale token from before the reset simply
+fails `AuthenticateAgentAction` once and `chat()` returns a clean 401
+telling the visitor to reload — never a 500). The passcode gate is
+entirely independent of Tenant data altogether. Resetting mid-demo is
+safe; the worst case is one reload.
+
+`DemoShowcaseSeeder` builds one well-known Tenant (`demo-showcase`): 40
+Products across 5 Categories, 2 Warehouses, 6 variant-bearing Products, 40
+Customers (some with a real Loyalty balance), 10 CRM Tickets, active
+Coupons/DiscountRules, 180 real Cart→Payment→Order checkouts backdated
+across the last 85 days (so the sales-trend numbers actually vary day to
+day), and 3 Executions pre-run through the real `ExecuteGoalAction` so
+Execution Memory and the history sidebar both already have something to
+show from the moment you first load the page.
+
+### What it demonstrates
+
+- **Transparent reasoning** — every response shows a real, confidence-scored
+  `think()` (🤔 pre-execution reasoning: what the goal needs, alternatives
+  considered) *before* the plan runs, a step-by-step execution checklist,
+  and a real `reflect()` (✅ post-execution reasoning) afterward — the exact
+  `ReasoningTrace`s Self-Reflection & Reasoning (Phase 6, Stage 6)
+  persists, rendered live instead of queried after the fact.
+- **A "🧠 Use real AI" toggle** next to the input box — flips
+  `agent-orchestrator.{planner,reasoning}.type` to `llm` and `.llm.provider`
+  to `openrouter` for that one request only (the same config-driven
+  binding `PlannerConfigTest`/`ReasoningConfigTest` already prove in
+  tests, reached here from a real Controller), then explicitly restores
+  the original values afterward regardless of outcome — proven with a
+  dedicated test, not just documented. With no `OPENROUTER_API_KEY`, the
+  request still succeeds via the same automatic deterministic fallback
+  every LLM path in this codebase already has.
+- **Live delegation between personas** — the CEO persona's own
+  `config/agents/ceo.php` includes a `delegate` planning rule (the
+  cheapest available increment named in this module's own build log,
+  HANDOFF §8.85): a "Delegate this promotional campaign to another agent"
+  goal resolves to a single `agent.collaboration.delegate` step, rendered
+  as an animated hand-off between the CEO and Sales personas' own
+  avatars, with the *real*, nested `ExecutionResultData` the Sales
+  persona's own planning rules produced (`commerce.coupon.create` +
+  `notification.message.send`) opened inline as its own mini execution
+  card — not a canned "delegation succeeded" message.
+- **A live data panel, not a static screenshot** — three tabs (KPIs,
+  Products, Orders) beside the chat, backed by the same read Actions the
+  Dashboard uses, scoped to the one demo Tenant. Only the active tab
+  refetches after each chat turn, so a presenter can watch a coupon or a
+  KPI number change in the panel right after the Agent that just created
+  it finishes — real cause and effect, on screen, at the same time.
+- **A History sidebar (🕘 button, top-right)** — every past Execution for
+  this Tenant, newest first; opening one replays its real, persisted
+  pre/post reasoning and step checklist read-only, through the identical
+  card the live chat itself renders.
+- **Suggested Goals** — 2-4 one-click buttons per persona, each wired to a
+  real keyword its own `config/agents/{type}.php` profile actually
+  recognizes (never a made-up phrase that would silently fall back to a
+  different, less interesting plan), so a presenter never has to type or
+  guess a working goal live on stage.
+
+### A suggested demo walkthrough
+
+1. Open `/showcase` (enter the passcode first if one is configured),
+   leave the **CEO** persona selected (the default).
+2. Click **"📈 Increase sales this week"** — watch the pre-reasoning
+   thoughts and confidence bar appear, then all 4 steps
+   (`report.sales.generate` → `analytics.kpi.calculate` →
+   `commerce.coupon.create` → `notification.message.send`) complete in
+   sequence, then the reflection. Glance at the **KPIs** tab — it just
+   refreshed with the real numbers this run computed.
+3. Click **"🤝 Delegate a campaign to Sales"** — this time there's only
+   one step, `agent.collaboration.delegate`, rendered as an animated
+   arrow from 🧑‍💼 CEO to 📈 Sales. Open the nested card: the Sales
+   persona really did plan and run its own 2-step plan
+   (`commerce.coupon.create` + `notification.message.send`) under the
+   same call.
+4. Turn on **"🧠 Use real AI"** and send **"Check our inventory levels"**
+   — if `OPENROUTER_API_KEY` is set, the pre-reasoning thoughts and
+   decision text now come from a real model instead of the deterministic
+   template; if not, nothing breaks, it just reads the same as before
+   (worth narrating either way, since the silent fallback *is* the point).
+5. Switch to the **Sales** persona and click **"🎯 Launch a promotional
+   campaign"** to show the same persona acting on its own, unprompted by
+   a delegation. Switch to **Support**/**Finance** to show the other two
+   personas' own, narrower rule sets.
+6. Open the **🕘 History** drawer and click the oldest item — the exact
+   same reasoning/step card renders again, read-only, proving nothing
+   about this UI is faked or randomly generated per view.
+7. Point at the **Orders** tab at any point — every number on it is a
+   real, backdated Order from `DemoShowcaseSeeder`, not a placeholder.
+
+See `HANDOFF.md` §7.33 for the full build log across all 3 passes —
+including a real bug this work's own live smoke-testing caught that no
+automated test happened to (a Suggested Goal colliding with a learned
+`ExecutionPattern` from the seeded Execution history) — and how it was
+fixed and regression-tested.
+
+---
+
 ## Technology Stack
 
 OpenCommerce Platform is built using modern technologies and architectural principles.
@@ -383,8 +544,13 @@ memory & learning, persona-to-persona delegation under the caller's own
 real permissions, and now pre/post-execution reasoning with the same
 LLM-backed-with-automatic-fallback shape, plus, in Showcase prep §7.32, a
 third LLM provider — OpenRouter, with free-model access), plus a
-bilingual Admin Dashboard for human operators. 1078 automated tests pass
-across 124 MCP capabilities, with zero known regressions.
+bilingual Admin Dashboard for human operators and a repeatable, shareable
+`/showcase` chat UI (Showcase prep, §7.33 — see **🎬 Showcase Demo**
+above) for watching the Agent Orchestrator plan, execute, delegate, and
+reflect live against a realistic, pre-seeded store, with a real-AI
+toggle, a conversation history sidebar, and an optional passcode gate for
+sharing the link safely. 1102 automated tests pass across 124 MCP
+capabilities, with zero known regressions.
 
 Phase 6 (AI Agent Orchestration) is now fully complete, all 6 Stages.
 Whoever drives scope next is choosing where the platform goes from here —

@@ -77,7 +77,7 @@ class EloquentExecutionMemoryRepository implements ExecutionMemoryRepositoryInte
     }
 
     /**
-     * @return array{id: int, tenantId: int, agentId: int, agentType: AgentType, result: ExecutionResult}
+     * @return array{id: int, tenantId: int, agentId: int, agentType: AgentType, result: ExecutionResult, createdAt: ?string}
      */
     private function toRecord(ExecutionModel $model): array
     {
@@ -87,6 +87,7 @@ class EloquentExecutionMemoryRepository implements ExecutionMemoryRepositoryInte
             'agentId' => $model->agent_id,
             'agentType' => AgentType::from($model->agent_type),
             'result' => $this->toResult($model),
+            'createdAt' => $model->created_at?->toIso8601String(),
         ];
     }
 
