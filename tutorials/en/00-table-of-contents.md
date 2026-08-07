@@ -8,11 +8,18 @@ The goal: someone with zero prior context on this project should be able to read
 
 ---
 
+## New to this? Start with an optional pre-tutorial
+
+If you're not yet comfortable with concepts like APIs, databases, layered architecture, software testing, or LLMs/Agents/MCP from an engineer's perspective, read a separate, optional section called the **[Pre-Tutorial](pre-tutorial/00-table-of-contents.md)** before file 01 below — 12 chapters explaining every technical term this project uses, from zero, with examples, and with a direct reference to where it's actually used in the real code. If you're already comfortable with these concepts, skip straight to file 01.
+
+---
+
 ## Reading order
 
 | # | File | Topic |
 |---|------|-------|
 | 00 | This file | Table of contents |
+| — | [Pre-Tutorial (optional)](pre-tutorial/00-table-of-contents.md) | 12 foundational chapters: web/API, databases, architecture, DDD, design patterns, Laravel, security, testing, AI/LLM, MCP, payments, professional concepts |
 | 01 | [Introduction and Vision](01-introduction-and-vision.md) | What the project is, why it exists, what it is not |
 | 02 | [Architecture and Philosophy](02-architecture-and-philosophy.md) | Infrastructure First, layering, design principles |
 | 03 | [Tech Stack and Project Structure](03-tech-stack-and-project-structure.md) | Laravel, folder structure, the per-module pattern |
