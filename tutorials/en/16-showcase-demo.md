@@ -4,6 +4,55 @@
 
 After Phase 6 finished and OpenRouter was added, the last step before real-world testing was building a **live chat interface** to demonstrate all of it. This was built in three consecutive passes, covered together in this file.
 
+## First, the real question: what is this Showcase actually for?
+
+The entire pitch of OpenCommerce Platform is: "a business can become Agent Ready for AI agents." That sentence stays **abstract** as long as it only ever appears as a `curl` command and a JSON blob — especially to anyone who isn't a developer. The Showcase exists specifically to solve that problem: turning an abstract claim into a **live, tangible experience**.
+
+In plain terms: the Showcase is a web page where, instead of clicking around a storefront yourself, **you type an ordinary sentence** (like "increase sales by 15% this week") and watch an "AI agent" actually:
+
+1. **think** about that goal,
+2. build a **real plan** out of MCP capabilities,
+3. **execute** that plan against a real (seeded) store,
+4. and finally **reflect** on the outcome — all of it live, in front of you.
+
+## Where — and by whom — is it actually used?
+
+### 1. Sales and business demos
+This is the single most important real-world use of this page. When you want to show a prospective customer, an investor, or a business partner what OpenCommerce actually does, you don't need to show them code or JSON — they can type one sentence, or click a "Suggested Goal," and watch an "AI employee" genuinely act inside the store: creating a coupon, pulling a sales report, delegating work to another persona. This is the exact moment the "Agent Ready" pitch stops being a marketing sentence and becomes something they can watch happen.
+
+### 2. An exploratory, visual QA tool for developers
+As you'll see in Pass 2 below, the only real bug from the entire Phase 6 body of work that no automated test caught (a suggested button colliding with a learned pattern) was found only by **manually clicking through this exact page**. In other words, the Showcase is not just a demo tool — it's a genuine **exploratory testing surface**: the whole Planner → Executor → Reasoning → Delegation → Memory chain can be followed visually, on one page, without writing a single `curl` command.
+
+### 3. An onboarding and fast-ramp-up tool for new team members
+A developer who has just read the five Phase 6 stages (files 12–15 of this tutorial) can, in a few minutes of direct interaction with this page, see exactly what those abstract concepts (Planner, Reasoning, Delegation, Memory) actually look like — much faster than tracing through code alone.
+
+### 4. A safe sandbox for testing real AI models
+The "🧠 Use real AI" toggle lets you try the real behavior of `LLMPlanner`/`LLMReasoningEngine` without touching any real Agent token and at zero cost (via OpenRouter's free tier, file 15) — a completely safe environment to see how a real LLM actually plans and reasons about these same goals, before you'd ever consider wiring it into a real environment.
+
+### 5. A reference implementation for third-party developers
+Anyone who wants to build their own UI on top of MCP (not necessarily a chatbot) can read `ShowcaseController`'s own code directly to see exactly what "correctly authenticating an Agent" and "correctly calling `ExecuteGoalAction`" look like — a real, working example, not just documentation.
+
+### 6. A live, on-stage or video-call demo
+Because the seeded data is real and varied (not a hollow empty fixture), and an optional passcode (`SHOWCASE_PASSCODE`) lets you share the link safely with an external audience, this page is specifically built for a live demo at a conference or on a sales call.
+
+## What this Showcase is *not* — to avoid any confusion
+
+- **It is not a production feature.** The `demo-showcase` tenant is a fully fictional demo tenant with realistic but fabricated data, not a real customer's real store.
+- **It is not a replacement for the Admin Dashboard.** The Admin Dashboard (file 9) is for real management of any real tenant on the platform; the Showcase only ever demonstrates "AI capability" on one demo tenant — the two never substitute for each other.
+- **It is not a real customer-support channel.** The conversation here is between an operator/visitor and an internal AI agent, not between a real end customer and a storefront.
+
+## A concrete usage walkthrough
+
+Imagine you want to show a prospective customer's CEO what this platform does:
+
+1. You send them the `/showcase` link (probably behind a demo passcode).
+2. They select the "CEO" persona.
+3. They click the suggested goal "Delegate this promotional campaign to the sales team."
+4. In front of their eyes: the agent first "thinks" about why this makes sense, then genuinely delegates the work to the Sales persona, the Sales persona creates a real coupon and sends a real notification, and finally an honest reflection on the outcome appears.
+5. They glance at the side panel and see real (seeded) KPIs and orders sitting right there.
+
+This is the exact moment file 1's whole vision ("AI agents that actually run a business") stops being an idea and becomes a clickable experience.
+
 ## What exactly is this demo?
 
 A web page at `/showcase` that:
