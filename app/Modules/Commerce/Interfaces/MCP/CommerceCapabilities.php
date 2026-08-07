@@ -131,6 +131,33 @@ final class CommerceCapabilities
                 'requiredPermissions' => ['commerce.payments.refund'],
             ],
             [
+                'name' => 'commerce.payment.initiate',
+                'description' => 'Start a real, redirect-based charge (Zibal, Stripe, or any registered gateway) for a cart',
+                // gateway/coupon_code/customer_id/notes/region/mobile all
+                // optional — gateway defaults to config('payment_gateways.default').
+                // The response's tracking_reference is this platform's own
+                // opaque PaymentSession id, never a gateway-specific trackId/
+                // session id (§7.37) — commerce.payment.confirm/.inquiry
+                // below both take it back the same way regardless of gateway.
+                'inputSchema' => ['cart_id' => 'integer'],
+                'outputSchema' => ['redirect_url' => 'string', 'tracking_reference' => 'integer', 'gateway' => 'string'],
+                'requiredPermissions' => ['commerce.checkout.create'],
+            ],
+            [
+                'name' => 'commerce.payment.confirm',
+                'description' => 'Explicitly confirm a redirect-based charge server-to-server (the callback/webhook routes already do this automatically)',
+                'inputSchema' => ['tracking_reference' => 'integer'],
+                'outputSchema' => ['successful' => 'boolean', 'order' => 'array', 'payment' => 'array', 'message' => 'string'],
+                'requiredPermissions' => ['commerce.checkout.create'],
+            ],
+            [
+                'name' => 'commerce.payment.inquiry',
+                'description' => 'Read-only status check for a redirect-based charge, without confirming/finalizing anything',
+                'inputSchema' => ['tracking_reference' => 'integer'],
+                'outputSchema' => ['session_status' => 'string', 'gateway_successful' => 'boolean'],
+                'requiredPermissions' => ['commerce.checkout.read'],
+            ],
+            [
                 'name' => 'commerce.coupon.create',
                 'description' => 'Create a new discount Coupon',
                 // expires_at, max_uses, and discount_rule_id (Phase 5

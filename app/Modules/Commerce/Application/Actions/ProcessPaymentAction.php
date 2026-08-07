@@ -10,15 +10,12 @@ use App\Modules\Commerce\Application\Services\TaxRateProviderInterface;
 use App\Modules\Commerce\Domain\Entities\Cart;
 use App\Modules\Commerce\Domain\Entities\CartItem;
 use App\Modules\Commerce\Domain\Entities\Coupon;
-use App\Modules\Commerce\Domain\Entities\Payment;
-use App\Modules\Commerce\Domain\Events\PaymentWasProcessed;
 use App\Modules\Commerce\Domain\Exceptions\CartNotFoundException;
 use App\Modules\Commerce\Domain\Exceptions\InvalidCouponException;
 use App\Modules\Commerce\Domain\Exceptions\PaymentFailedException;
 use App\Modules\Commerce\Domain\Repositories\CartRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\CouponRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\DiscountRuleRepositoryInterface;
-use App\Modules\Commerce\Domain\Repositories\PaymentRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\ProductRepositoryInterface;
 use App\Modules\Commerce\Domain\Services\CouponValidationService;
 use App\Modules\Commerce\Domain\Services\DiscountCalculator;
@@ -27,10 +24,8 @@ use App\Modules\Commerce\Domain\ValueObjects\CouponCode;
 use App\Modules\Commerce\Domain\ValueObjects\DiscountEvaluationContext;
 use App\Modules\Commerce\Domain\ValueObjects\Money;
 use App\Modules\Commerce\Domain\ValueObjects\PaymentMethod;
-use App\Modules\Commerce\Domain\ValueObjects\PaymentStatus;
 use App\Modules\Commerce\Domain\ValueObjects\TaxRate;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Event;
 use InvalidArgumentException;
 
 /**
@@ -44,17 +39,21 @@ use InvalidArgumentException;
  * docblock).
  *
  * DB::transaction wraps the whole thing per this stage's explicit
- * "Transaction Safety" rule. Note this only stays correct because
- * MockPaymentGateway is synchronous and local — a real gateway
- * integration should charge *outside* the transaction and only wrap the
- * subsequent DB writes, so a slow network call never holds a DB lock;
- * that boundary change is deliberately out of scope until a real
- * gateway exists.
+ * "Transaction Safety" rule — still correct because MockPaymentGateway
+ * (the only `PaymentGatewayInterface` implementation) is synchronous and
+ * local. The real, redirect-based gateways added in §7.37
+ * (Zibal/Stripe) don't use this synchronous `charge()` contract at all
+ * — see `RedirectPaymentGatewayInterface`/`InitiatePaymentAction`/
+ * `ConfirmRedirectPaymentAction` for that separate, async flow, which
+ * *does* charge outside any DB transaction (the real fix HANDOFF §8.10
+ * asked for, reached via `FinalizeSuccessfulPaymentAction`'s own
+ * transaction boundary rather than changed here).
  *
- * ApplyCouponAction (incrementing usedCount, writing the Discount row)
- * only runs after the Order has been placed — never during pricing —
- * so a coupon's limited uses are only ever consumed by a checkout that
- * actually completed.
+ * The Order-placement/Payment-record/coupon-apply tail is extracted into
+ * `FinalizeSuccessfulPaymentAction` (§7.37) — composed here unchanged in
+ * observable behavior, so it can be shared with
+ * `ConfirmRedirectPaymentAction` without duplicating this
+ * security/money-relevant sequence a second time.
  *
  * DEFAULT_TAX_RATE_PERCENT is now only the last-resort fallback — see
  * CalculatePricingAction's docblock for the full reasoning (both Actions
@@ -67,12 +66,10 @@ final class ProcessPaymentAction
     public function __construct(
         private readonly CartRepositoryInterface $carts,
         private readonly CouponRepositoryInterface $coupons,
-        private readonly PaymentRepositoryInterface $payments,
         private readonly CouponValidationService $couponValidation,
         private readonly PricingService $pricingService,
         private readonly PaymentGatewayInterface $gateway,
-        private readonly PlaceOrderAction $placeOrder,
-        private readonly ApplyCouponAction $applyCoupon,
+        private readonly FinalizeSuccessfulPaymentAction $finalizePayment,
         private readonly TaxRateProviderInterface $taxRateProvider,
         private readonly DiscountRuleRepositoryInterface $discountRules,
         private readonly DiscountCalculator $discountCalculator,
@@ -141,38 +138,21 @@ final class ProcessPaymentAction
                 );
             }
 
-            $order = $this->placeOrder->execute(
+            return $this->finalizePayment->execute(
                 tenantId: $tenantId,
                 agentId: $agentId,
                 cartId: $cartId,
-                notes: $notes,
-                customerId: $customerId,
                 tax: $pricing->tax,
                 discount: $pricing->discount,
                 total: $pricing->total,
-            );
-
-            $payment = Payment::record(
-                tenantId: $tenantId,
-                orderId: $order->id,
-                amount: $pricing->total,
                 method: $method,
-                status: PaymentStatus::Completed,
+                gateway: 'mock',
                 transactionId: $result->transactionId,
                 gatewayResponse: $result->rawResponse,
+                notes: $notes,
+                customerId: $customerId,
+                coupon: $coupon,
             );
-            $payment = $this->payments->save($payment);
-
-            Event::dispatch(new PaymentWasProcessed($payment));
-
-            if ($coupon !== null) {
-                $this->applyCoupon->execute($coupon->id(), $tenantId, $order->id, $pricing->discount, $coupon->discountRuleId());
-            }
-
-            return [
-                'order' => $order,
-                'payment' => PaymentData::fromEntity($payment),
-            ];
         });
     }
 

@@ -50,6 +50,13 @@
              config(['agent-orchestrator.reasoning.type' => 'llm']) after
              also rebinding LLMClientInterface to a fake. -->
         <env name="REASONING_TYPE" value="simple"/>
+        <!-- §7.37 — same reasoning as PLANNER_TYPE above: explicit, not
+             just relying on config/payment_gateways.php's own default,
+             so the whole suite never attempts a real Zibal/Stripe
+             network call. Tests that specifically exercise
+             ZibalPaymentGateway/StripePaymentGateway construct them
+             directly with an injected Guzzle MockHandler instead. -->
+        <env name="PAYMENT_GATEWAY" value="mock"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>

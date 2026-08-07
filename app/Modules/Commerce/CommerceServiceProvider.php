@@ -42,6 +42,9 @@ use App\Modules\Commerce\Application\Actions\GetWarehouseStockAction;
 use App\Modules\Commerce\Application\Actions\GetWooCommerceProductAction;
 use App\Modules\Commerce\Application\Actions\ImportCustomersAction;
 use App\Modules\Commerce\Application\Actions\ImportProductsAction;
+use App\Modules\Commerce\Application\Actions\ConfirmRedirectPaymentAction;
+use App\Modules\Commerce\Application\Actions\InitiatePaymentAction;
+use App\Modules\Commerce\Application\Actions\InquirePaymentAction;
 use App\Modules\Commerce\Application\Actions\ListBulkOperationsAction;
 use App\Modules\Commerce\Application\Actions\ListCustomersAction;
 use App\Modules\Commerce\Application\Actions\ListDiscountRulesAction;
@@ -85,9 +88,15 @@ use App\Modules\Commerce\Domain\Services\CsvParserInterface;
 use App\Modules\Commerce\Domain\Services\CsvValidatorInterface;
 use App\Modules\Commerce\Application\Services\ConnectorRegistry;
 use App\Modules\Commerce\Application\Services\MockPaymentGateway;
+use App\Modules\Commerce\Application\Services\MockRedirectPaymentGateway;
 use App\Modules\Commerce\Application\Services\NullTaxRateProvider;
 use App\Modules\Commerce\Application\Services\PaymentGatewayInterface;
+use App\Modules\Commerce\Application\Services\PaymentGatewayRegistry;
+use App\Modules\Commerce\Application\Services\StripeConfig;
+use App\Modules\Commerce\Application\Services\StripePaymentGateway;
 use App\Modules\Commerce\Application\Services\TaxRateProviderInterface;
+use App\Modules\Commerce\Application\Services\ZibalConfig;
+use App\Modules\Commerce\Application\Services\ZibalPaymentGateway;
 use App\Modules\Commerce\Application\Services\WooCommerceClient;
 use App\Modules\Commerce\Application\Services\WooCommerceClientInterface;
 use App\Modules\Commerce\Application\Services\WooCommerceConfig;
@@ -101,6 +110,7 @@ use App\Modules\Commerce\Domain\Repositories\DiscountRuleRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\InventoryRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\OrderRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\PaymentRepositoryInterface;
+use App\Modules\Commerce\Domain\Repositories\PaymentSessionRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\ProductRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\ProductVariantRepositoryInterface;
 use App\Modules\Commerce\Domain\Repositories\BulkOperationRepositoryInterface;
@@ -126,6 +136,7 @@ use App\Modules\Commerce\Infrastructure\Repositories\EloquentDiscountRuleReposit
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentInventoryRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentOrderRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentPaymentRepository;
+use App\Modules\Commerce\Infrastructure\Repositories\EloquentPaymentSessionRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentProductRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentProductVariantRepository;
 use App\Modules\Commerce\Infrastructure\Repositories\EloquentBulkOperationRepository;
@@ -181,6 +192,8 @@ class CommerceServiceProvider extends ServiceProvider
         $this->app->bind(CsvParserInterface::class, CsvParser::class);
         $this->app->bind(CsvValidatorInterface::class, CsvValidator::class);
         $this->app->bind(PaymentGatewayInterface::class, MockPaymentGateway::class);
+        $this->app->bind(PaymentSessionRepositoryInterface::class, EloquentPaymentSessionRepository::class);
+        $this->app->singleton(PaymentGatewayRegistry::class);
 
         $this->app->bind(
             WooCommerceClientInterface::class,
@@ -202,6 +215,17 @@ class CommerceServiceProvider extends ServiceProvider
             new WooCommerceProductMapper(),
             WooCommerceConfig::fromConfig()->currency,
         ));
+
+        // Real Payment Gateways (§7.37) — mirrors the ConnectorRegistry
+        // pattern above exactly. Adding a 3rd/4th gateway means
+        // implementing RedirectPaymentGatewayInterface and adding one
+        // more register() call here — see docs/payment-gateways.md.
+        $gateways = $this->app->make(PaymentGatewayRegistry::class);
+        $gateways->register('mock', new MockRedirectPaymentGateway());
+        $gateways->register('zibal', new ZibalPaymentGateway(ZibalConfig::fromConfig()));
+        $gateways->register('stripe', new StripePaymentGateway(StripeConfig::fromConfig()));
+
+        $this->loadRoutesFrom(base_path('routes/payments.php'));
 
         $handlers = $this->app->make(CapabilityHandlerRegistry::class);
 
@@ -321,6 +345,45 @@ class CommerceServiceProvider extends ServiceProvider
 
             return ['payment' => $payment->toArray(), 'message' => 'Payment refunded.'];
         });
+
+        // Real Payment Gateways (§7.37) — Zibal/Stripe, or any future
+        // gateway registered above, all reached through these same 3
+        // capabilities regardless of which one actually runs.
+        $handlers->register('commerce.payment.initiate', function (array $input, AuthContext $context) {
+            return $this->app->make(InitiatePaymentAction::class)->execute(
+                tenantId: $context->tenantId,
+                agentId: $context->agentId,
+                cartId: (int) $input['cart_id'],
+                gatewayName: $input['gateway'] ?? null,
+                couponCode: $input['coupon_code'] ?? null,
+                customerId: isset($input['customer_id']) ? (int) $input['customer_id'] : null,
+                notes: $input['notes'] ?? null,
+                region: $input['region'] ?? null,
+                mobile: $input['mobile'] ?? null,
+            );
+        });
+
+        $handlers->register('commerce.payment.confirm', function (array $input, AuthContext $context) {
+            $result = $this->app->make(ConfirmRedirectPaymentAction::class)->execute(
+                sessionId: (int) $input['tracking_reference'],
+                tenantId: $context->tenantId,
+            );
+
+            return [
+                'successful' => $result['successful'],
+                'order' => $result['order']?->toArray(),
+                'payment' => $result['payment']?->toArray(),
+                'message' => $result['message'],
+            ];
+        });
+
+        $handlers->register(
+            'commerce.payment.inquiry',
+            fn (array $input, AuthContext $context) => $this->app->make(InquirePaymentAction::class)->execute(
+                sessionId: (int) $input['tracking_reference'],
+                tenantId: $context->tenantId,
+            ),
+        );
 
         $handlers->register('commerce.coupon.create', function (array $input, AuthContext $context) {
             /** @var CouponData $coupon */

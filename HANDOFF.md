@@ -1,5 +1,50 @@
 # OpenCommerce Platform — Session Handoff
 
+**Status: Real Payment Gateways — Zibal + Stripe (§7.37 — after §7.36,
+not a Phase Stage) is now complete — Iranian (Zibal) and international
+(Stripe) checkout, both real, redirect-based, and built behind one new,
+extensible `RedirectPaymentGatewayInterface`/`PaymentGatewayRegistry`
+pair (the Connector Pattern's fourth application in this codebase,
+HANDOFF §3 pattern #15) rather than forced into the pre-existing,
+synchronous `PaymentGatewayInterface::charge()` contract, which
+`MockPaymentGateway` alone still satisfies, completely unchanged. The
+real architecture fork, confirmed sound before writing any code: Zibal
+(request -> redirect -> callback -> verify) and Stripe Checkout Sessions
+(verified live against docs.stripe.com this session, not from memory)
+are both async, "the buyer pays on the gateway's own hosted page, then
+we re-verify server-to-server, never trusting the callback/webhook
+payload alone" flows — structurally incompatible with `charge()`'s
+"caller already has card details, gets an immediate result" shape. A new
+`PaymentSession` entity bridges "a charge was started" and "the gateway
+confirmed it" (`Payment`/`Order` still can't exist until then — the
+existing `Payment.orderId` non-nullable invariant, untouched); a new
+`FinalizeSuccessfulPaymentAction`, extracted from `ProcessPaymentAction`'s
+own previously-inline tail with **zero observable behavior change**
+(the full pre-existing Payment/Checkout test suite passed unchanged,
+confirming this), is composed by both the old synchronous path and the
+new async one, closing HANDOFF §8.10's own long-standing "charge outside
+the transaction" ask as a natural side effect of the extraction rather
+than a separate change. Three new MCP capabilities
+(`commerce.payment.initiate`/`.confirm`/`.inquiry`) return and accept a
+platform-owned, gateway-agnostic `tracking_reference` — never a
+gateway's own trackId/session id — and two new public, unauthenticated
+routes (`routes/payments.php`, loaded the same "no `web` middleware
+group" way `routes/mcp.php`/`routes/agents.php` already are) handle the
+real confirmation: one shared `GET /payments/{gateway}/callback` for
+every registered gateway's own browser redirect, plus a signature-verified
+`POST /payments/stripe/webhook` (manual HMAC-SHA256, no `stripe-php` SDK
+dependency, verified live against Stripe's own docs) for Stripe's
+additional authoritative async signal. The OpenRouterClient `base_uri`
+bug this same session already found and fixed in §7.35 was applied
+*preemptively* to both new Guzzle clients from the start, each locked in
+with the identical reflection-based regression test. 1156 tests passing
+(1103 + 53 new), zero known regressions. See §7.37 for the full detail.**
+
+**Status: SDK Registry Publish-Readiness (§7.36 — after §7.35, not a
+Phase Stage) closed the real, live-verified PyPI naming collision §7.34
+never checked for, set the Go SDK's own module path, and fixed a real
+npm scoped-package publish blocker — see §7.36 for the full detail.**
+
 **Status: Live OpenRouter Verification (§7.35 — after §7.34, not a Phase
 Stage) is now complete — the first time any `LLMClientInterface`
 implementation in this codebase has actually been exercised against a
@@ -8342,6 +8387,326 @@ zero known regressions.
 
 ---
 
+### 7.36 SDK Registry Publish-Readiness (after §7.35, not a Phase Stage)
+
+**Not a Phase Stage — repository prep only, no registry account exists
+in this environment to actually run `npm publish`/`twine upload` with, so
+this pass closes every blocker that can be closed *without* one, and
+documents the exact runbook for the two steps that genuinely need a
+human's own credentials.**
+
+**A real, live-verified naming collision, not the "reserved" status
+§7.34's own text assumed.** A live PyPI lookup (`https://pypi.org/pypi/opencommerce-sdk/json`)
+returned a real, unrelated, already-published package named
+`opencommerce-sdk` (author placeholder `yourusername`, uploaded
+2024-11-13, describing something else entirely) — the exact name
+`packages/opencommerce-sdk-python/pyproject.toml` shipped with. §7.34's
+own claim that this name was "reserved" was never actually checked
+against the live registry; it wasn't. Renamed the PyPI **distribution**
+name to `opencommerce-platform-sdk` (confirmed available live, along with
+3 other candidates, before picking one) — the **importable** package is
+unchanged (`import opencommerce_sdk`), since a distribution name and its
+import name have always been independent in Python packaging; every
+`pip install`/build reference updated to match, and a real
+`python -m build` confirmed the renamed wheel
+(`opencommerce_platform_sdk-1.0.0-py3-none-any.whl`) still contains the
+unchanged `opencommerce_sdk/*` import package.
+
+**The Go SDK's `go.mod` module path is no longer a placeholder** — set to
+`github.com/opencommerceir/opencommerce-platform/packages/opencommerce-sdk-go`,
+the real, existing monorepo's own path (no separate repository), the
+same decision §7.34's own "Module path" README section had flagged as
+still open (§8.97). Every internal reference (`go.mod`, the 4 `*_test.go`
+files' own external-test-package imports, `README.md`, `examples/go.mod`,
+`examples/sample-agent.go`) updated to match — a Go module's own import
+path is derived entirely from where it's declared to live, not from a
+central registry the way npm/PyPI work, so this alone is enough for
+`go get github.com/opencommerceir/opencommerce-platform/packages/opencommerce-sdk-go`
+to resolve correctly the moment a `packages/opencommerce-sdk-go/vX.Y.Z`
+git tag exists on this repository — no account, no login, no separate
+publish step. No Go toolchain exists in this environment to re-run
+`go build`/`go test` against this rename this pass (the same "fetched
+into a scratch location purely to verify, not installed by default"
+environment gap §7.34 already documented, §8.98) — every occurrence of
+the old bare `"opencommerce-sdk-go"` import string was confirmed removed
+by a full-repository grep instead.
+
+**A real, would-have-failed npm publish blocker, independent of who owns
+the `@opencommerce` scope:** `package.json` had no `publishConfig`
+at all — npm defaults a *scoped* package (`@opencommerce/sdk`) to
+`restricted` (private) visibility, which a free npm account cannot
+publish at all (it 402s, asking for a paid org plan) unless
+`publishConfig.access` is explicitly `public`, or `--access public` is
+passed by hand on every single `npm publish` call. Added
+`"publishConfig": {"access": "public"}` plus a `repository` field — a
+real `npm pack --dry-run` after `npm run build` confirms a correctly
+named, 13.0 kB, 26-file tarball ready to publish. Whether the
+`opencommerce` npm *organization* itself already exists on the operator's
+own account is something only that account's own owner can confirm
+(`npm org ls opencommerce`, or attempting the publish itself, which fails
+with a clear, specific permission error if not) — not verifiable from
+this environment.
+
+**Three registry-side actions remain genuinely outside what this
+environment can do — they need a human's own account, not just correct
+repository metadata:** creating the `opencommerce` npm organization (if
+it doesn't already exist) and running `npm login && npm publish` from
+`packages/opencommerce-sdk-js`; running
+`python -m build && twine upload dist/*` (needs a real PyPI API token)
+from `packages/opencommerce-sdk-python`; and pushing a real
+`packages/opencommerce-sdk-go/v1.0.0` git tag once the module path above
+is merged, which is the entire Go "publish" step. None of these three
+were run this pass.
+
+No change to any Domain Module, the main Laravel test suite, or any MCP
+capability — every change lives under `packages/opencommerce-sdk-python/`,
+`packages/opencommerce-sdk-go/`, `packages/opencommerce-sdk-js/package.json`,
+and `examples/`. Python's own 24 tests and a real `python -m build` both
+re-run and passing; JS's own 23 tests, `tsc --noEmit`, and a real
+`npm run build` + `npm pack --dry-run` both re-run and passing; Go
+unverified this pass (no local toolchain, see above).
+
+---
+
+### 7.37 Real Payment Gateways — Zibal + Stripe (after §7.36, not a Phase Stage)
+
+**Not a Phase Stage — a real, user-requested feature outside the numbered
+Stage sequence, the same "real, useful work" shape §7.13/§7.32/§7.33/
+§7.34/§7.35/§7.36 already used.** The request: real Iranian (Zibal) and
+international (Stripe) checkout, "اعتماد‌سازی حیاتی برای هر خریدار"
+(critical trust-building for every buyer) — and built so a third/fourth
+gateway, Iranian or foreign, is cheap to add later. The user supplied
+Zibal's own official docs directly; Stripe's own current API was
+researched live against docs.stripe.com this session, not assumed from
+memory, given the stakes of getting money-handling code wrong.
+
+**The real architecture fork, confirmed sound with the user before
+writing any code (`docs.stripe.com` research + a full design plan,
+approved via this session's own Plan Mode) — the single biggest decision
+this stage made.** `PaymentGatewayInterface::charge(Money, PaymentMethod,
+array $paymentDetails): PaymentGatewayResult` — this codebase's only
+payment abstraction until now, `MockPaymentGateway` its only
+implementation — is **synchronous**: the caller already has card details
+in hand, and `ProcessPaymentAction` charges, places the Order, and
+records the Payment inside one DB transaction, one call. Real gateways
+don't work this way. Zibal's own docs: request -> get a `trackId` ->
+redirect the buyer to Zibal's own hosted page (`/start/{trackId}`) ->
+the buyer pays *there*, never on this platform's own server -> Zibal
+calls back -> this platform **must** call `verify` server-side (Zibal's
+own explicit warning: never trust the callback query string alone).
+Stripe Checkout Sessions (verified live, not assumed) mirror this shape
+almost exactly: create a Session -> redirect to `session.url` -> the
+buyer pays on Stripe's own hosted page -> a signature-verified webhook
+(`checkout.session.completed`) or the `success_url` redirect signals
+"check again" -> retrieve the Session server-side, `payment_status ===
+'paid'` is the only thing ever trusted. Both are async, redirect-based,
+"never trust the caller, always re-verify server-side" flows —
+structurally incompatible with `charge()`'s "immediate result" contract.
+Resolution: a **new, parallel** path, `RedirectPaymentGatewayInterface`,
+alongside the untouched existing one — `PaymentGatewayInterface`/
+`MockPaymentGateway`/`commerce.checkout.process` behave identically to
+before this stage, confirmed by the full pre-existing Payment/Checkout
+test suite (`ProcessPaymentTest`/`CheckoutCapabilityTest`/
+`RefundPaymentTest`/`PaymentTest`) passing completely unchanged after
+this stage's own refactor (see `FinalizeSuccessfulPaymentAction` below).
+The same shape every prior "existing interface doesn't fit a new
+requirement" fork in this codebase already resolved (Product Variants
+extending `Inventory` rather than a second stock column, §7.21; Discount
+Rules reusing `Discount` rather than a second `AppliedDiscount` table,
+§7.24) — not a novel kind of decision for this codebase, just this
+stage's own instance of it.
+
+**The Connector Pattern's fourth application (HANDOFF §3 pattern #15).**
+`RedirectPaymentGatewayInterface` (`getName()`/`initiate()`/`verify()`/
+`inquiry()`) + `PaymentGatewayRegistry` (`register()`/`get()`/
+`registered()`) mirror `ConnectorRegistry`/`ShippingProviderRegistry`/
+`ChannelSenderRegistry` file-for-file. Three registered implementations:
+`ZibalPaymentGateway`, `StripePaymentGateway` (both real, Guzzle-backed),
+and `MockRedirectPaymentGateway` (no HTTP, deterministic — the
+`PAYMENT_GATEWAY` default, `mock`, same "safe default, explicit opt-in
+for real infra" reasoning `PLANNER_TYPE=deterministic` already
+establishes). Adding a fourth gateway — Iranian or foreign, the user's
+own explicit ask — needs exactly three things, documented in the new
+`docs/payment-gateways.md`: implement the Interface, add a small
+`*Config` class + env vars, register it in
+`CommerceServiceProvider::boot()`. No new capability, no new route, no
+new Controller — the shared callback route and both new capabilities are
+already fully gateway-agnostic.
+
+**The OpenRouterClient `base_uri` bug (§7.35), applied preemptively
+rather than rediscovered.** This same session already found and fixed a
+real bug in `OpenRouterClient`: Guzzle resolves a leading-slash request
+path against `base_uri` by *replacing* the base's own path, not
+appending to it (RFC 3986 §5.3) — silently dropping `/api/v1` on every
+real request. Both `ZibalPaymentGateway` and `StripePaymentGateway` use
+the corrected convention from their very first line (`base_uri` ends
+with `/`, request paths never start with one) — Zibal's own
+`/start/{trackId}` redirect page (a genuinely different root than
+`/v1/*`) is deliberately never built through the Guzzle client at all,
+just plain string concatenation, so the two path families can never be
+conflated the way the bug required. Both gateways carry the identical
+reflection-based regression test §7.35 introduced
+(`test_defaultConstructor_resolvesBaseUrlAndPathToTheFullRealEndpoint`),
+reaching the real, un-mocked `base_uri`-building constructor branch
+every other test in each file bypasses by injecting `$http` directly.
+
+**`PaymentSession`** (new Domain Entity) bridges "a redirect-based charge
+was started" and "the gateway confirmed it" — `Payment`/`Order` still
+cannot exist until confirmation (`Payment.orderId`'s own existing
+non-nullable invariant, completely untouched). Its own `total`/`tax`/
+`discount` are the pricing **frozen** at `initiate()` time (computed once
+via a **composed** `CalculatePricingAction` call, HANDOFF §3 pattern #3 —
+never re-derived a third time the way `ProcessPaymentAction`'s own
+`resolveRuleDiscount()`/`buildEvaluationContext()` duplication already
+established as this codebase's accepted precedent for *that* narrow
+logic specifically) — never recomputed at confirm time, the same
+"compute once, apply durably later" principle `Order.tax`/`discount`/
+`total` already establish. `id`/`providerReference` are each one-time
+mutators (`assignId()`/`markInitiated()`, mirrors `ExecutionPattern`'s
+own shape) — a real `PaymentSession` id must exist *before* `initiate()`
+is even called, since that id is what every gateway gets handed back as
+its own `orderId`/`client_reference_id`/callback-URL query param, and is
+the **only** thing `commerce.payment.confirm`/`.inquiry` ever accept
+back (`tracking_reference`) — never a gateway-specific trackId/session
+id, the concrete mechanism that keeps the public API surface
+gateway-agnostic. Small state machine (`ALLOWED_TRANSITIONS`, mirrors
+`WarehouseTransfer`/`DelegationRequest`'s own shape):
+`Pending -> Completed|Failed|Cancelled`, no path back.
+
+**`FinalizeSuccessfulPaymentAction`** (new Action) — the common "a charge
+is now confirmed successful" tail (place the Order, record the Payment,
+dispatch `PaymentWasProcessed`, apply a Coupon if one was used),
+**extracted from `ProcessPaymentAction`'s own previously-inline logic**
+so this security/money-relevant sequence exists in exactly one place,
+composed by both the refactored `ProcessPaymentAction` (byte-identical
+observable behavior, confirmed by the full pre-existing test suite) and
+the new `ConfirmRedirectPaymentAction`. Wraps its **own**
+`DB::transaction()` (nests safely via Laravel's own savepoint support
+inside `ProcessPaymentAction`'s own wider transaction — zero behavior
+change there) specifically so `ConfirmRedirectPaymentAction` — which has
+no outer transaction of its own, since the real gateway `verify()`
+network call it makes first must never hold a DB lock — still gets the
+identical atomic "Order + Payment + Coupon apply, all or nothing"
+guarantee. **This is the real fix HANDOFF §8.10 had already named**
+("a real gateway should charge outside the transaction and only wrap the
+subsequent DB writes") — reached naturally by this extraction, not as a
+separate change.
+
+**`InitiatePaymentAction`** composes `CalculatePricingAction` (so Cart
+ownership/non-empty validation comes free — no duplicate guard needed),
+resolves the named gateway from the Registry (input `gateway`, default
+`config('payment_gateways.default')`), persists a `Pending`
+`PaymentSession`, calls `initiate()`, and returns `redirect_url` +
+`tracking_reference` + `gateway`. **`ConfirmRedirectPaymentAction`** is
+the one Action backing both the MCP capability *and* both public
+routes — distinguished only by whether a real, authenticated `$tenantId`
+is available (`PaymentSessionRepositoryInterface::findByIdUnscoped()`,
+a new, deliberately tenant-**unscoped** lookup that exists *only* for
+the public callback/webhook routes — safe despite the missing scope
+check because this Action's own `verify()` call, never anything a caller
+claims, is what actually decides success; at worst a guessed id wastes
+one `verify()` call against someone else's session). **Idempotent**: an
+already-`Completed` session returns its existing Order/Payment again
+rather than re-running `FinalizeSuccessfulPaymentAction` — required for
+Stripe's own documented "the same webhook event may be delivered more
+than once," and for either trigger (webhook vs. browser callback) firing
+on top of the other's already-completed work. **`InquirePaymentAction`**
+is thin and read-only, matching "استعلام" being explicitly a status
+check in Zibal's own docs, never a confirmation.
+
+**Public callback routes — new `routes/payments.php`**, loaded via
+`CommerceServiceProvider::boot()`'s own `loadRoutesFrom()`, the identical
+"no `web` middleware group, no CSRF, no session" mechanism
+`routes/mcp.php`/`routes/agents.php` already use (confirmed directly
+against `bootstrap/app.php`'s own `withRouting()` call, not assumed).
+`GET /payments/{gateway}/callback` is deliberately **one shared route
+for every registered gateway**, not one per gateway — the concrete
+mechanism that means adding a new gateway never needs a new route:
+`InitiatePaymentAction` always hands every gateway's own `initiate()`
+call this same URL (with `?session={id}` attached) as `$callbackUrl`.
+For Zibal, this route *is* the only confirmation signal that exists. For
+Stripe, `POST /payments/stripe/webhook` is the real, authoritative
+mechanism (`StripeWebhookVerifier`, manual HMAC-SHA256 — no `stripe-php`
+SDK dependency, verified live against `docs.stripe.com/webhooks/signatures`:
+`Stripe-Signature: t=<ts>,v1=<sig>[,v1=<sig>...]`, `signed_payload =
+"{ts}.{raw_body}"`, `hash_hmac('sha256', ...)`, `hash_equals()`, a 300s
+replay-attack timestamp tolerance, accepting a match against *any* `v1`
+entry since Stripe sends multiple during a secret-rotation window and
+always ignoring the deliberate `v0` downgrade-attack decoy) — the
+browser `success_url`/`cancel_url` redirect is UX only. Per Stripe's own
+documented best practice, the webhook controller always returns a fast
+`200` once the signature itself is valid, even if downstream processing
+fails (only a bad signature is a real `400`) — a `4xx`/`5xx` here would
+only trigger a pointless retry storm for a problem no retry can fix.
+Neither route is covered by `MCPExceptionHandler` (scoped to
+`mcp/*`/`api/agents/*` only) — every exception is caught explicitly in
+each Controller instead, since an external gateway's own browser
+redirect should always land on a real page, never a raw Laravel error
+screen.
+
+**Three new MCP capabilities**, all pre-checked against the recurring
+3-dot-segment gotcha (§3 pattern #13) and already compliant:
+`commerce.payment.initiate`/`.confirm`/`.inquiry`, reusing the existing
+`commerce.checkout.create`/`.read` permissions (the same tier as the
+pre-existing `commerce.checkout.process`/`.calculate`) rather than
+introducing new, overlapping ones.
+
+**A real bug caught by this stage's own tests, not shipped**:
+`ConfirmRedirectPaymentAction::alreadyCompletedResult()` first wrote
+`$order->id` (the `Order` **entity**'s own `id` is a private property
+behind an `id()` method, not a public property — `OrderData`, the
+**DTO** `FinalizeSuccessfulPaymentAction` actually returns, is what has
+a public readonly `$id`) — a real `Error` that
+`test_execute_whenAlreadyCompleted_isIdempotentAndDoesNotDoubleProcess()`
+caught immediately, fixed to `$order->id()` before this stage was
+considered done.
+
+**`Money`'s own "amount is always the smallest unit" convention means
+something genuinely different for IRR** (and other zero-decimal
+currencies) than for USD/EUR — Zibal's own `amount` field is literally
+whole Rials, no `/100` division applies the way every existing Dashboard
+view's own `number_format($x / 100, 2)` pattern assumes. Not fixed
+platform-wide this stage (a real, separate, pre-existing gap touching
+many unrelated files) — handled explicitly at the one place a real buyer
+actually looks at an amount, `resources/views/payments/confirmed.blade.php`,
+with the gap itself flagged directly on `Money`'s own docblock and in
+`docs/payment-gateways.md`'s own "Known gaps" section, not silently
+papered over or silently left wrong.
+
+**A documented, honest gap in the Zibal implementation, confirmed with
+the user before writing any code**: the pasted Zibal docs' own "تایید
+پرداخت" ("Verify")/"استعلام پرداخت" ("Inquiry") sections were both
+Collapsed — the exact request/response field names weren't available.
+`ZibalPaymentGateway::verify()`/`inquiry()` are implemented from Zibal's
+well-known public API shape (`{merchant, trackId}` in,
+`amount`/`status`/`cardNumber`/`paidAt`/`refNumber` out) — but the
+numeric **result codes** (100/102/103/104/105/106/201/202/203) and
+**transaction status codes** (-1/-2/1/2/3/.../21) both switch on are
+taken verbatim from the tables the user's own pasted docs did include in
+full. Flagged in `docs/payment-gateways.md`, not silently assumed
+correct.
+
+**`RefundPaymentAction` still never calls any real gateway API** — a
+**pre-existing** gap this stage didn't introduce or touch (it already
+didn't call `PaymentGatewayInterface` either, before this stage
+existed) — deliberately not half-built for only one of the two new
+gateways.
+
+No live Zibal/Stripe network call was made from the automated test
+suite — every gateway test injects a Guzzle `MockHandler`, the identical
+discipline every external Connector's own test in this codebase already
+follows. New tests: `tests/Unit/Commerce/{PaymentSessionTest,
+ZibalPaymentGatewayTest,StripePaymentGatewayTest,StripeWebhookVerifierTest}.php`
+(9+10+7+9, framework-free except the two gateway clients' own Guzzle
+`MockHandler` usage), `tests/Feature/Commerce/{InitiatePaymentActionTest,
+ConfirmRedirectPaymentActionTest,PaymentGatewayCapabilityTest,
+PaymentCallbackRouteTest}.php` (5+6+1+6, real DB — the last two exercise
+the full MCP/HTTP surface end to end, including tenant isolation and a
+real, self-signed Stripe webhook signature). 1156 tests total (1103 +
+53 new), zero known regressions.
+
+---
+
 ## 8. Known technical debt (ranked, carried over + Phase 2 additions)
 
 1. ~~**No per-tenant tax-rate configuration exists.**~~ **Resolved in
@@ -8395,13 +8760,14 @@ zero known regressions.
    typo'd coupon code returns 409 CONFLICT rather than a 404. No dedicated
    `CouponNotFoundException` was requested; revisit if that distinction
    ever matters to a caller.
-10. **A real Payment Gateway integration needs a transaction-boundary
-    change.** `ProcessPaymentAction` currently wraps the *entire* flow,
-    including the gateway call, in one `DB::transaction` — fine today only
-    because `MockPaymentGateway` is synchronous and local. A real gateway
-    should charge *outside* the transaction and only wrap the subsequent DB
-    writes, so a slow network call never holds a DB lock. Documented in
-    `ProcessPaymentAction`'s own docblock.
+10. ~~**A real Payment Gateway integration needs a transaction-boundary
+    change.**~~ **Resolved in §7.37** — real gateways (Zibal/Stripe) now
+    exist, and their own `verify()` network call happens *outside* any
+    transaction; only `FinalizeSuccessfulPaymentAction`'s own subsequent
+    DB writes are wrapped, reached naturally by extracting that Action
+    out of `ProcessPaymentAction`'s own previously-inline tail, not as a
+    separate change. `ProcessPaymentAction`'s own outer transaction is
+    unchanged (still fine — `MockPaymentGateway` is synchronous/local).
 11. **Coverage percentage is still unmeasured locally** — the Tech Debt
     Sprint (§7.13) added the `<coverage>` block to `phpunit.xml` and wired
     `coverage: pcov` into CI, but this dev environment has neither PCOV
@@ -8911,13 +9277,12 @@ zero known regressions.
     over time and isn't this codebase's to track; an operator relying on
     "free" should check OpenRouter's own current model list, not assume
     this default stays free indefinitely.
-97. **The Go SDK's `go.mod` module path (`opencommerce-sdk-go`) is a
-    local placeholder, not a real, published location** (§7.34) — it
-    resolves correctly for every use inside this repo today, but needs a
-    real, permanent import path (conventionally a GitHub URL, per Go's
-    own module ecosystem norms) before anyone outside this repo could
-    meaningfully `go get` it. `packages/opencommerce-sdk-go/README.md`'s
-    own "Module path" section flags this explicitly.
+97. ~~**The Go SDK's `go.mod` module path is a local placeholder, not a
+    real, published location.**~~ **Resolved in §7.36** — set to
+    `github.com/opencommerceir/opencommerce-platform/packages/opencommerce-sdk-go`,
+    resolvable the moment a matching version tag is pushed (§9's own
+    runbook). No local Go toolchain to re-verify with this pass, the same
+    gap §8.98 already carries.
 98. **None of the three new SDKs (Python/Node.js-TypeScript/Go) have been
     verified against a real, running OpenCommerce server** (§7.34) — the
     identical "real infra assumed, verified honestly once it's actually
@@ -8934,6 +9299,61 @@ zero known regressions.
     convenience wrapper (a Facade + a ServiceProvider auto-binding
     `MCPClient` from Laravel's own config), not new underlying
     capability.
+100. **Partially resolved this session — a real, live network attempt was
+     made against both gateways, with two different honest outcomes, not
+     left untried.** `StripePaymentGateway` was confirmed live against
+     the real `api.stripe.com` (an intentionally invalid test key, no
+     charge possible): the request reached Stripe, `base_uri`/path
+     resolved correctly (`POST https://api.stripe.com/v1/checkout/sessions`,
+     no OpenRouterClient-class bug), and Stripe's own real API responded
+     with a genuine `401 Invalid API Key provided` — proof the request
+     shape, form-encoding, and Basic Auth header are all genuinely
+     correct against the live API, short of a real key completing an
+     actual Session. `ZibalPaymentGateway::initiate()` was attempted
+     against the real `gateway.zibal.ir` (their own public `merchant:
+     zibal` test account, no real money) but timed out — confirmed via a
+     plain `curl` to the same host (no application code involved at all)
+     also timing out identically, while `google.com`/`api.stripe.com`
+     both connected fine from the same environment in the same session —
+     this dev environment's own outbound network cannot reach Zibal's
+     servers specifically, not a bug in `ZibalPaymentGateway`. A real
+     live Zibal round-trip (request -> verify) is still open, from an
+     environment that can actually reach `gateway.zibal.ir`.
+101. **`ZibalPaymentGateway::verify()`/`inquiry()`'s exact response body
+     field names are best-effort from public knowledge, not the docs
+     this stage was given** (§7.37) — the numeric result/status codes
+     they switch on are taken verbatim from the tables the user's own
+     pasted docs did include in full; only the two field-name-shaped
+     response sections were collapsed. Confirmed as an acceptable,
+     flagged gap with the user before building — a real check against
+     either a fuller copy of Zibal's docs or a live sandbox response
+     (item 100 above) would close this at the same time.
+102. **`RefundPaymentAction` still never calls a real gateway's own
+     refund API** (§7.37) — a pre-existing gap, unrelated to and
+     untouched by this stage (it didn't call `PaymentGatewayInterface`
+     either before Zibal/Stripe existed); a real fix needs a `refund()`
+     method added to `RedirectPaymentGatewayInterface` (Stripe's own
+     `POST /v1/refunds` is well-documented; Zibal's own refund endpoint
+     wasn't in the docs this stage was given at all, matching item 101's
+     same caveat) plus a matching branch in `RefundPaymentAction` for
+     which gateway actually processed the original `Payment`.
+103. **No customer-facing checkout page exists anywhere in this
+     codebase** (§7.37) — confirmed as in-scope with the user before
+     building: this platform has no storefront, only MCP/API + the
+     `routes/payments.php` callback/webhook routes. Zibal/Stripe's own
+     `redirect_url` actually reaching a real buyer is a future
+     frontend's own job, not this platform's.
+104. **`Money`'s own "amount is always the smallest unit" convention
+     doesn't hold for zero-decimal currencies** (IRR, JPY, KRW, ...)
+     (§7.37) — every existing Dashboard view's own
+     `number_format($x / 100, 2)` pattern would silently show an IRR
+     amount 100x too small; handled explicitly only at
+     `resources/views/payments/confirmed.blade.php` (the one place this
+     stage's own primary Zibal/IRR use case puts a real amount in front
+     of a real buyer), not fixed platform-wide — a real, separate,
+     pre-existing gap in `Money`'s own display convention that predates
+     this stage and touches many unrelated files across Dashboard/
+     Analytics/Reporting.
 
 ---
 
@@ -8948,7 +9368,46 @@ Learning §7.29, Multi-Agent Collaboration §7.30, and Self-Reflection &
 Reasoning §7.31)** are all complete. Whoever drives scope next is choosing
 where the platform goes from here, not just picking the next item off
 this list (the same framing that applied after Phase 4 and Phase 5 each
-finished — this is now the third time). Candidates specific to what Phase
+finished — this is now the third time).
+
+Candidates specific to what §7.37 (Real Payment Gateways) just built,
+cheapest first:
+
+- **Retry the live Zibal round-trip from an environment that can
+  actually reach `gateway.zibal.ir`** (§8.100) — this session's own
+  attempt timed out at the network level (confirmed via plain `curl` to
+  the same host, not an application bug — `StripePaymentGateway`/
+  `google.com` both connected fine from the same sandbox in the same
+  session). `merchant: zibal`, no real money, the same "confirmed by an
+  actual call, not assumed" discipline §7.35 already established for
+  OpenRouter — likely the cheapest possible next increment for this
+  stage from a normal, unrestricted network.
+- **Get a free Stripe test secret key and complete a real Checkout
+  Session end to end** (§8.100) — `dashboard.stripe.com`, no cost.
+  `StripePaymentGateway` is already live-confirmed reachable and
+  correctly-shaped this session (a real 401 from an intentionally
+  invalid key, §8.100) — a real key would prove a full Session
+  creation + a real Stripe CLI webhook delivery
+  (`stripe listen --forward-to`) instead of only this session's own
+  self-signed test payload.
+- **Add `refund()` to `RedirectPaymentGatewayInterface`** (§8.102) —
+  Stripe's own `POST /v1/refunds` is well-documented; Zibal's own refund
+  endpoint needs either more of their docs or a live sandbox call to
+  confirm the exact request/response shape (§8.101's own caveat applies
+  here too).
+- **A real customer-facing checkout page** (§8.103) — out of scope by
+  design this stage (no storefront exists), but the natural next
+  consumer of `commerce.payment.initiate`'s own `redirect_url` once one
+  does.
+- **Fix `Money`'s own zero-decimal-currency display gap platform-wide**
+  (§8.104) — today handled only at
+  `resources/views/payments/confirmed.blade.php`; every Dashboard/
+  Analytics/Reporting view's own `number_format($x / 100, 2)` pattern
+  would need the same currency-aware branch, or `Money` itself would
+  need a real `displayAmount()` method that knows which ISO currencies
+  have no minor unit.
+
+Candidates specific to what Phase
 6 has already built, roughly in order of how much they'd reuse what
 already exists:
 
@@ -9029,10 +9488,18 @@ already exists:
   increment: mint one token via the existing Tinker snippet
   (`packages/opencommerce-sdk/README.md`) and run all four
   `examples/sample-agent.*` scripts against it back to back.
-- **Publish the three new SDKs to their real package registries and give
-  the Go SDK a real, permanent module path** (§7.34/§8.97) — PyPI
-  (`opencommerce-sdk`), npm (`@opencommerce/sdk`), and a real Go module
-  proxy location are all still local-only inside this monorepo today.
+- **Run the two remaining registry publish steps §7.36 prepped but could
+  not run itself (no registry account in this environment)** — the repo
+  side is done (real names/paths/metadata, all live-verified where
+  possible): (1) npm — `cd packages/opencommerce-sdk-js && npm login &&
+  npm publish` (create the `opencommerce` org first via npmjs.com if it
+  doesn't already exist; `publishConfig.access: public` already set, so
+  no `--access` flag needed); (2) PyPI — `cd packages/opencommerce-sdk-python
+  && python -m build && twine upload dist/*` (needs a real PyPI API
+  token, `opencommerce-platform-sdk` confirmed available live); (3) Go
+  needs no registry at all — push a `packages/opencommerce-sdk-go/v1.0.0`
+  git tag against this repo and `go get github.com/opencommerceir/opencommerce-platform/packages/opencommerce-sdk-go`
+  resolves for anyone, immediately, via `proxy.golang.org`.
 - **Build the still-planned Laravel SDK** (§7.34/§8.99) — a thin Facade +
   ServiceProvider wrapper around the existing, framework-agnostic PHP SDK
   (`packages/opencommerce-sdk`), for Laravel projects that would rather

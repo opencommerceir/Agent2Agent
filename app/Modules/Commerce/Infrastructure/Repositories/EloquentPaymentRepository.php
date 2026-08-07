@@ -43,6 +43,7 @@ class EloquentPaymentRepository implements PaymentRepositoryInterface
         $model->status = $payment->status()->value;
         $model->transaction_id = $payment->transactionId();
         $model->gateway_response = $payment->gatewayResponse();
+        $model->gateway = $payment->gateway();
         $model->save();
 
         return $this->toEntity($model);
@@ -60,6 +61,7 @@ class EloquentPaymentRepository implements PaymentRepositoryInterface
             transactionId: $model->transaction_id,
             gatewayResponse: $model->gateway_response ?? [],
             createdAt: DateTimeImmutable::createFromInterface($model->created_at),
+            gateway: $model->gateway,
         );
     }
 }

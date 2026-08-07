@@ -15,6 +15,7 @@ final class PaymentData
         public readonly string $method,
         public readonly string $status,
         public readonly ?string $transactionId,
+        public readonly ?string $gateway = null,
     ) {
     }
 
@@ -29,6 +30,7 @@ final class PaymentData
             method: $payment->method()->value,
             status: $payment->status()->value,
             transactionId: $payment->transactionId(),
+            gateway: $payment->gateway(),
         );
     }
 
@@ -46,6 +48,7 @@ final class PaymentData
             'method' => $this->method,
             'status' => $this->status,
             'transactionId' => $this->transactionId,
+            'gateway' => $this->gateway,
         ];
     }
 }

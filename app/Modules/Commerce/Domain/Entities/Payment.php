@@ -31,6 +31,7 @@ final class Payment
         private readonly ?string $transactionId,
         private readonly array $gatewayResponse,
         private readonly DateTimeImmutable $createdAt,
+        private readonly ?string $gateway = null,
     ) {
     }
 
@@ -45,6 +46,7 @@ final class Payment
         PaymentStatus $status,
         ?string $transactionId,
         array $gatewayResponse,
+        ?string $gateway = null,
     ): self {
         return new self(
             id: null,
@@ -56,6 +58,7 @@ final class Payment
             transactionId: $transactionId,
             gatewayResponse: $gatewayResponse,
             createdAt: new DateTimeImmutable(),
+            gateway: $gateway,
         );
     }
 
@@ -103,6 +106,11 @@ final class Payment
     public function transactionId(): ?string
     {
         return $this->transactionId;
+    }
+
+    public function gateway(): ?string
+    {
+        return $this->gateway;
     }
 
     /**

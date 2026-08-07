@@ -176,6 +176,7 @@ Commerce was the first domain implemented on top of OpenCommerce Platform, and r
 - Check and transfer inventory across warehouses
 - Access customer information
 - Run complete checkout workflows (tax, discounts, coupons)
+- Accept real payments via Zibal (Iranian IPG) or Stripe, alongside the existing Mock gateway — see `docs/payment-gateways.md`
 - Create and manage recurring Subscriptions (trials, pause/resume/cancel/upgrade, automated billing)
 - Bulk import/export catalog and customer data
 
@@ -526,8 +527,7 @@ phase/stage breakdown and `HANDOFF.md` for the detailed build log.
 - [x] Execution Memory & Learning (Phase 6, Stage 4 — pattern extraction from real execution history, learned-plan suggestions ahead of both Planners)
 - [x] Multi-Agent Collaboration (Phase 6, Stage 5 — persona-to-persona delegation under the caller's own real permissions, `agent.collaboration.delegate`/`.messages`)
 - [x] Self-Reflection & Reasoning (Phase 6, Stage 6 — the last Stage of Phase 6 — pre-execution `think()` and post-execution `reflect()`, LLM-backed with automatic deterministic fallback, `agent.reasoning.trace`/`.explain`)
-- [ ] Additional SDKs (TypeScript, Node.js, Python, Go — PHP SDK is the
-      only one built so far)
+- [x] Real Payment Gateways (Zibal + Stripe, redirect-based checkout via `RedirectPaymentGatewayInterface`/`PaymentGatewayRegistry`, extensible to any future gateway — see `docs/payment-gateways.md`)
 - [ ] Real carrier (USPS/FedEx/DHL) and SMS gateway integrations (mock/stub today)
 - [ ] Upgrade to Laravel 13 (blocked on the runtime environment moving to PHP 8.3+ first — see `docs/decisions.md`, Decision 003)
 
