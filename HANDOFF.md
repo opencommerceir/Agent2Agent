@@ -1,5 +1,49 @@
 # OpenCommerce Platform — Session Handoff
 
+**Status: Multi-Language SDK Expansion (§7.34 — after §7.33, not a Phase
+Stage) is now complete — three new, independent, dependency-free client
+packages (`packages/opencommerce-sdk-python`, `-js` (`@opencommerce/sdk`,
+covering both the roadmap's own "TypeScript SDK" and "Node.js SDK" line
+items as one package — a deliberate merge, not an oversight, see §7.34),
+and `-go`) give Python, Node.js/TypeScript, and Go developers the same
+`MCPClient`-shaped access to any OpenCommerce deployment's MCP Gateway
+(self-hosted or OpenCommerce's own hosted infrastructure at
+OpenCommerce.ir) the PHP SDK has had since Phase 1 — mirroring its public
+contract (`MCPConfig`/`MCPClient.discoverCapabilities()`/`.execute()`/
+`.getCapability()`, the same v1/v2 envelope-shape tolerance, the same
+`AuthenticationException`/`AuthorizationException`/`NotFoundException`/
+`ValidationException`/base-exception mapping from HTTP 401/403/404/422/
+other) as closely as each language's own idioms allow, field for field.
+Each is deliberately built on nothing but its own language's standard
+library (`urllib` for Python, the native `fetch` API for Node.js/
+TypeScript, `net/http` for Go) rather than a third-party HTTP dependency
+— PHP's own Guzzle dependency is the one asymmetry, unchanged from Phase
+1, since PHP has no equivalent de facto standard-library HTTP client the
+other three ecosystems already have. Every one of the three new SDKs
+carries the identical "no test ever touches a real socket" discipline
+the PHP SDK's own Guzzle `MockHandler` usage already established — a
+small, injectable `Transport` interface/protocol in each, with a
+canned-response fake standing in for every test. New example scripts
+(`examples/sample-agent.{py,ts,go}`) mirror the existing
+`examples/sample-agent.php` line for line, including its own deliberate
+NOT_FOUND negative-test case. Real verification this session, not just
+written and assumed: 24 Python tests (`python -m unittest`), 23 Node.js/
+TypeScript tests (`node --test` against real `.ts` source, using Node's
+own native TypeScript support — no build step needed to test, though a
+real `tsc` build to `dist/*.js`+`.d.ts` was also run and smoke-tested)
+and 24 Go tests (`go build`/`go vet`/`gofmt -l`/`go test`, using a Go
+toolchain fetched into a scratch/temp location purely to verify this
+session's own work — this dev environment has no Go toolchain installed
+by default, the same "real infra not present locally, verified honestly
+when it matters" shape this file's own PCOV/Redis notes already
+establish elsewhere) all passed, zero known regressions. No change
+whatsoever to the main Laravel application, the MCP Gateway, any Domain
+Module, or the 124 MCP capabilities — 1102 tests / 124 capabilities in
+the main app stay exactly as §7.33 left them; the 71 new SDK tests live
+in three entirely separate, independent test suites, the same way the
+PHP SDK's own tests already sit outside `php artisan test`. See §7.34
+for the full detail.**
+
 **Status: Showcase Demo (§7.33 — Showcase prep, after §7.32, not a Phase
 6 Stage, built in three back-to-back passes) is now complete — a
 `/showcase` web chat UI lets an operator pick one of the 4 Agent
@@ -7919,6 +7963,204 @@ toggle's own silent no-key fallback end to end against a real database.
 
 ---
 
+### 7.34 Multi-Language SDK Expansion — Python, Node.js/TypeScript, Go (after §7.33, not a Phase Stage)
+
+**Not a Phase Stage — the same "a real, useful piece of work that doesn't
+fit the numbered Stage sequence" shape the Tech Debt Sprint (§7.13),
+OpenRouter Integration (§7.32), and the Showcase Demo (§7.33) each
+already used.** The request: give developers working in languages other
+than PHP a real, documented way to connect to an OpenCommerce
+deployment's MCP Gateway — matching the four still-"planned" entries the
+README's own SDK Platform section had carried since Phase 1 (TypeScript
+SDK, Node.js SDK, Python SDK, Go SDK, alongside a still-separately-planned
+Laravel SDK).
+
+**One real, deliberate correction from the README's own literal
+four-item list, decided before writing any code, not discovered
+afterward: "TypeScript SDK" and "Node.js SDK" become one package, not
+two.** TypeScript compiles to JavaScript and both would need to solve the
+identical problem (an HTTP client + typed DTOs + exception mapping) —
+shipping two separate packages would mean either one is a thin,
+pointless wrapper around the other, or two independently-drifting
+implementations of the same contract. `packages/opencommerce-sdk-js`
+(published as `@opencommerce/sdk`) is written entirely in TypeScript,
+ships real `.d.ts` declarations for TypeScript consumers, and compiles to
+plain CommonJS `dist/*.js` any Node.js 18+ project (TypeScript or plain
+JavaScript) can `require`/`import` — one package, both roadmap line items
+closed at once. The README's own SDK Platform section documents this
+merge explicitly rather than silently checking off two boxes with one
+package.
+
+**Every new SDK mirrors the existing PHP SDK's own public contract
+field-for-field**, the same discipline every prior module in this
+codebase used when a second implementation of an existing Interface
+needed to feel like the same platform (`LLMPlanner` alongside
+`DeterministicPlanner`, §7.28; `OpenRouterClient` alongside `OpenAIClient`,
+§7.32):
+
+- `MCPConfig`/`Config` — `baseUrl`/`token`/`timeout` (30s default)/
+  `verifySSL` (`true` default), plus a `forVersion(host, version, token)`
+  convenience constructor building `{host}/mcp/{version}` — identical to
+  `packages/opencommerce-sdk/src/Config/MCPConfig.php`'s own
+  `forVersion()`, including trimming a trailing slash off `host`.
+- `MCPClient`/`Client` — exactly three public operations:
+  `discoverCapabilities()`/`discover_capabilities()`/`DiscoverCapabilities()`
+  (GET `capabilities`), `execute(name, input)`/`Execute(ctx, name, input)`
+  (POST `execute`), and `getCapability(name)`/`get_capability()`/
+  `GetCapability()` (client-side filter over `discoverCapabilities()` —
+  there is still no `GET /mcp/{version}/capabilities/{name}` endpoint on
+  the server, the same honest gap the PHP SDK's own `MCPClient::getCapability()`
+  docblock already flags).
+- Envelope-shape tolerance identical to `CapabilityDiscovery`/
+  `CapabilityExecutor`'s own PHP implementation: `discoverCapabilities()`
+  reads `data.capabilities` (v1) falling back to top-level `capabilities`
+  (v2); `execute()` reads `result`/`metadata` (v2) if present, else
+  `data`/`meta` (v1) — the SDK never guesses which version it's talking
+  to, it just accepts either shape that comes back, exactly like the PHP
+  SDK's own docblocks already explain.
+- One base error type (`MCPException`/`MCPError`) carrying the server's
+  own `error.code`/`error.message`/HTTP status untouched, plus four
+  narrower types for the four statuses worth catching separately (401
+  Authentication, 403 Authorization, 404 NotFound, 422 Validation) —
+  anything else (429, 500, ...) stays the base type, identical to
+  `MCPException::fromResponse()`'s own `match` in the PHP SDK.
+
+**Each SDK is deliberately built on nothing but its own language's
+standard library — zero required runtime dependencies — a real,
+considered trade-off, not an oversight.** Python's `UrllibTransport` uses
+`urllib.request`/`json` instead of `requests`; the Node.js/TypeScript
+`FetchTransport` uses the native `fetch`/`AbortController` APIs (stable
+since Node.js 18, and identical in every modern browser, Deno, and Bun)
+instead of `axios`/`node-fetch`; Go's `HTTPTransport` uses `net/http`
+instead of a third-party HTTP client. Installing any of these three SDKs
+never pulls a version-pinned HTTP library into a consuming project that
+may already depend on a different one. The PHP SDK's own Guzzle
+dependency is the one asymmetry — left unchanged, since PHP (unlike the
+other three ecosystems) has no HTTP client in its own standard library at
+all, so Guzzle remains PHP's own real precedent, not an inconsistency
+worth "fixing" here.
+
+**The identical "no test ever touches a real socket" discipline the PHP
+SDK's own Guzzle `MockHandler` usage already established, carried into
+all three.** Every `MCPClient`/`Client` constructor accepts an optional,
+injectable `Transport` (Python: a `Protocol`; TypeScript: an `interface`;
+Go: an `interface`) — production code never supplies one (the same "an
+injected client is for tests only" rule `packages/opencommerce-sdk/src/MCPClient.php`'s
+own docblock already states), and every test in every new SDK constructs
+a small, canned-response fake instead. This is what let the full
+behavioral surface (v1/v2 envelope parsing, the bearer-token header, the
+capability-name/input JSON body, every exception/error mapping,
+`getCapability()`'s own not-found path) be verified with zero network
+access, zero test server, and zero flakiness risk — 24 Python tests
+(`python -m unittest discover`), 23 Node.js/TypeScript tests
+(`node --test`, run directly against the real `.ts` source using Node's
+own native TypeScript type-stripping support — see the Node.js/TypeScript
+subsection below for the one real syntax constraint that discipline
+imposes), and 24 Go tests (`go test ./...`) — 71 new tests total, all
+passing, confirmed by actually running each suite, not assumed from
+reading the code.
+
+**Go's one deliberate API difference from its PHP/Python/Node.js
+siblings, decided during design rather than left inconsistent: every
+`Client` method takes a `context.Context` first.** Explicit context
+propagation for cancellation/timeouts is Go's own standard idiom across
+virtually every real-world HTTP-calling package (the same role
+`AuthContext`/`ctx` parameters play project-wide in idiomatic Go SDKs
+generally) — omitting it would have made this SDK feel foreign to any Go
+developer picking it up, a worse outcome than one documented,
+language-appropriate divergence from perfect field-for-field parity with
+the other three.
+
+**Errors are Go `error` values satisfying the standard `error` interface,
+not a ported "exception" hierarchy** — `AuthenticationError`/
+`AuthorizationError`/`NotFoundError`/`ValidationError` each embed the base
+`*MCPError` (so `err.Error()` and every promoted field work directly),
+and `errors.As(err, &target)` is the idiomatic way to branch on one, the
+Go-native equivalent of `instanceof`/`isinstance` in the other three SDKs.
+`ErrorFromResponse` (exported, unlike its Python/TypeScript
+`exceptionFromResponse`/`exception_from_response` counterparts staying
+private in this codebase's own convention — Go's own idiom leans toward
+exporting anything a caller building a custom `Transport` might
+legitimately want to reuse) is the single place a non-2xx response
+becomes the right error type.
+
+**Go's `go.mod` declares a local placeholder module path
+(`module opencommerce-sdk-go`, no domain) — a real, documented gap, not
+an oversight.** Unlike PHP (Packagist name reserved: `opencommerce/sdk`),
+Python (PyPI name reserved: `opencommerce-sdk`), and Node.js (npm scope
+reserved: `@opencommerce/sdk`), no public Go module proxy path has been
+decided yet, and Go module paths conventionally mirror a real, resolvable
+VCS location (typically a GitHub URL) rather than an arbitrary name the
+way the other three ecosystems' package names can be. The placeholder
+resolves correctly for every local use (`go build`/`go vet`/`go test`
+inside this repo, and `replace` directives from another local module,
+exactly as `examples/go.mod` demonstrates) — `packages/opencommerce-sdk-go/README.md`'s
+own "Module path" section flags exactly this, so it isn't silently
+mistaken for a real, resolvable location later.
+
+**A Node.js/TypeScript-specific technical note worth recording, since it
+shaped real source-level decisions, not just tooling config:** running
+this SDK's own tests directly against `.ts` source (`node --test`, no
+build step) relies on Node.js's native TypeScript support, which only
+strips *erasable* syntax — constructs needing real code transformation
+(TypeScript's own parameter-property constructor shorthand,
+`const enum`, legacy `namespace`) are rejected outright at parse time, and
+a type-only import (an `interface`, which produces zero runtime export)
+silently fails at *runtime* module resolution unless explicitly marked
+`import type`/`{ type X }`, since the stripper does no cross-file usage
+analysis the way `tsc`'s own transpiler does. Every class in this SDK
+therefore declares its fields explicitly (no parameter-property
+shorthand) and every import of an interface-only type
+(`Capability`/`ExecutionResult`/`Transport`) is marked accordingly — both
+caught and fixed by actually running the test suite during development,
+not discovered as a live bug later. Consumers of the *published* package
+only ever run the compiled `dist/*.js` output (via `tsc`, which has no
+such restriction) and only need Node.js 18+; the native-TypeScript-test
+convenience is a contributor-only requirement (Node.js 23.6+), documented
+as such in the package's own README.
+
+**New example scripts, one per language, mirroring
+`examples/sample-agent.php` line for line** — same four demo capability
+calls (`demo.tools.echo`/`demo.tools.time`/`demo.tools.calculator`) plus
+the identical deliberate negative-test case at the end
+(`demo.tools.nonexistent` — well-formed `domain.resource.action` shape
+but genuinely unregistered, proving a real `NOT_FOUND` rather than a
+format-validation `VALIDATION_ERROR`): `examples/sample-agent.py`,
+`examples/sample-agent.ts` (runnable directly via
+`node examples/sample-agent.ts <token>`, importing the SDK's own source
+inside this monorepo — an external project would instead
+`npm install @opencommerce/sdk` and import the package name, noted
+directly in the file's own header comment), and `examples/sample-agent.go`
+(paired with a small `examples/go.mod` carrying a `replace` directive at
+the local Go SDK, exactly mirroring how a real external consumer would
+wire a pre-publish/local copy of the module into their own project). Every
+one of the four language scripts' own "no token supplied" usage path was
+run directly this session, confirming argument parsing and the SDK's own
+import/construction path both work end to end before ever needing a live
+`php artisan serve` + a real Agent token to exercise the network calls
+themselves.
+
+**Root `README.md`'s own SDK Platform section and Roadmap checklist were
+both updated** to move Python/Go/Node.js/TypeScript from "planned" to
+"available today," each with a one-line description and a pointer to its
+own package; a Laravel-specific wrapper SDK (a thin Facade/ServiceProvider
+around the existing framework-agnostic PHP SDK, genuinely distinct scope
+from any of the four general-purpose clients built this pass) remains the
+one still-planned entry, named as such rather than silently dropped from
+the list.
+
+No change to `app/Core`, any `app/Modules/*`, `routes/mcp.php`, or any of
+the 124 MCP capabilities — every new file lives under `packages/` or
+`examples/`, entirely outside the main Laravel application's own test
+suite. 1102 tests / 124 capabilities in the main app are exactly what
+§7.33 left them; 71 new tests (24 + 23 + 24) live in three new,
+independent suites alongside the PHP SDK's own pre-existing one, the
+identical "an SDK's own tests are not part of `php artisan test`" shape
+this file's own "How to run things" section already establishes for the
+PHP SDK.
+
+---
+
 ## 8. Known technical debt (ranked, carried over + Phase 2 additions)
 
 1. ~~**No per-tenant tax-rate configuration exists.**~~ **Resolved in
@@ -8487,6 +8729,29 @@ toggle's own silent no-key fallback end to end against a real database.
     over time and isn't this codebase's to track; an operator relying on
     "free" should check OpenRouter's own current model list, not assume
     this default stays free indefinitely.
+97. **The Go SDK's `go.mod` module path (`opencommerce-sdk-go`) is a
+    local placeholder, not a real, published location** (§7.34) — it
+    resolves correctly for every use inside this repo today, but needs a
+    real, permanent import path (conventionally a GitHub URL, per Go's
+    own module ecosystem norms) before anyone outside this repo could
+    meaningfully `go get` it. `packages/opencommerce-sdk-go/README.md`'s
+    own "Module path" section flags this explicitly.
+98. **None of the three new SDKs (Python/Node.js-TypeScript/Go) have been
+    verified against a real, running OpenCommerce server** (§7.34) — the
+    identical "real infra assumed, verified honestly once it's actually
+    exercised" shape `OpenAIClient`/`ClaudeClient`/`OpenRouterClient`
+    already carry (§8.79/§8.95). Every test in every new SDK injects a
+    fake `Transport`; each example script's own argument-parsing/usage
+    path was run this session, but none of the four language example
+    scripts (PHP included) have been run this session against a live
+    `php artisan serve` with a real Agent token.
+99. **No Laravel-specific SDK exists yet** (§7.34) — the README's own SDK
+    Platform section still lists this as planned; the framework-agnostic
+    PHP SDK (`packages/opencommerce-sdk`) already covers any plain-PHP or
+    Laravel use case directly, so this would only ever be a thin
+    convenience wrapper (a Facade + a ServiceProvider auto-binding
+    `MCPClient` from Laravel's own config), not new underlying
+    capability.
 
 ---
 
@@ -8567,6 +8832,23 @@ already exists:
   the natural next increment once credentials exist, the same "real infra
   assumed in production, verified honestly once credentials exist" step
   every external Connector in this codebase eventually needs.
+- **Run all four SDK example scripts against a real `php artisan serve` +
+  a real Agent token** (§7.34/§8.98) — every new SDK's own tests inject a
+  fake `Transport`, and each example script's own argument-parsing path
+  was verified this session, but none of the four (PHP included) have
+  been run against a genuinely live server yet. Cheapest possible next
+  increment: mint one token via the existing Tinker snippet
+  (`packages/opencommerce-sdk/README.md`) and run all four
+  `examples/sample-agent.*` scripts against it back to back.
+- **Publish the three new SDKs to their real package registries and give
+  the Go SDK a real, permanent module path** (§7.34/§8.97) — PyPI
+  (`opencommerce-sdk`), npm (`@opencommerce/sdk`), and a real Go module
+  proxy location are all still local-only inside this monorepo today.
+- **Build the still-planned Laravel SDK** (§7.34/§8.99) — a thin Facade +
+  ServiceProvider wrapper around the existing, framework-agnostic PHP SDK
+  (`packages/opencommerce-sdk`), for Laravel projects that would rather
+  auto-resolve a configured `MCPClient` from `config/services.php` than
+  construct one by hand.
 - **Give each Agent persona real identity/specialized behavior beyond its
   own `planning_rules`** (§7.27) — CEO/Sales/Support/Finance all have
   working profiles now, but "a persona" today only means "a different

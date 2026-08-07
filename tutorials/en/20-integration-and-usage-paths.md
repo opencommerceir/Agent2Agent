@@ -1,4 +1,4 @@
-← [Technical Debt and Roadmap](19-technical-debt-and-roadmap.md) | Back to: [Table of Contents](00-table-of-contents.md)
+← [Technical Debt and Roadmap](19-technical-debt-and-roadmap.md) | Next: [SDKs and Multi-Language Integration](21-sdks-and-multi-language-integration.md) →
 
 # 20. Integration and Usage Paths — How Others Can Use This Project
 
@@ -78,8 +78,6 @@ This project is simultaneously an **installable open-source product** and a **co
 
 ---
 
-This is the last file in the tutorial series. For deeper, more technical detail on any point, `HANDOFF.md` at the project root is always the final authority.
+One file remains: the next file gets fully practical — if your project is in Python, Go, or Node.js/TypeScript, exactly how and with which SDK you connect to this platform.
 
-The Persian version of this same tutorial lives in `tutorials/fa/`.
-
-← [Technical Debt and Roadmap](19-technical-debt-and-roadmap.md) | Back to: [Table of Contents](00-table-of-contents.md)
+← [Technical Debt and Roadmap](19-technical-debt-and-roadmap.md) | Next: [SDKs and Multi-Language Integration](21-sdks-and-multi-language-integration.md) →

@@ -133,16 +133,20 @@ Different commerce systems—including Shopify, WooCommerce, Magento, Laravel ap
 
 ### SDK Platform
 
-OpenCommerce provides official SDKs that enable developers to make their applications Agent Ready with minimal effort.
+OpenCommerce provides official SDKs that enable developers to make their applications Agent Ready with minimal effort — whether connecting to a self-hosted deployment or to OpenCommerce's own hosted infrastructure at OpenCommerce.ir. Every SDK talks the same underlying MCP Gateway protocol, so no SDK at all is strictly required — any language that can send HTTP + JSON can integrate directly.
 
-Planned SDKs include:
+**Available today:**
 
-- PHP SDK
-- Laravel SDK
-- TypeScript SDK
-- Node.js SDK
-- Python SDK
-- Go SDK
+- **PHP SDK** — `packages/opencommerce-sdk` (framework-agnostic, Guzzle-backed)
+- **Python SDK** — `packages/opencommerce-sdk-python` (dependency-free, standard library only)
+- **Node.js / TypeScript SDK** — `packages/opencommerce-sdk-js` (`@opencommerce/sdk`, dependency-free, built on the standard `fetch` API)
+- **Go SDK** — `packages/opencommerce-sdk-go` (dependency-free, standard library only)
+
+All four mirror the same `MCPClient`/`discover`/`execute`/`getCapability` surface, support both the `v1` and `v2` wire envelopes transparently, and map every HTTP-level failure to a typed error/exception. See each package's own `README.md` for a 5-minute quick start, and `examples/sample-agent.{php,py,ts,go}` for a complete, runnable script in every language.
+
+**Still planned:**
+
+- Laravel SDK (a thin, Laravel-specific wrapper — Facade + ServiceProvider — around the framework-agnostic PHP SDK above)
 
 ---
 
@@ -505,7 +509,7 @@ phase/stage breakdown and `HANDOFF.md` for the detailed build log.
 - [x] Capability Registry
 - [x] MCP Gateway (`/mcp/v1` and `/mcp/v2`)
 - [x] Universal Commerce Protocol (UCP)
-- [x] SDK Platform (PHP SDK — `packages/opencommerce-sdk`)
+- [x] SDK Platform (PHP, Python, Node.js/TypeScript, and Go SDKs — `packages/opencommerce-sdk*`; a Laravel-specific wrapper SDK remains planned)
 - [x] Commerce Connectors (Mock + real WooCommerce)
 - [x] Event System (Domain Events across every module)
 - [x] Multi-tenant Infrastructure (shared-database, `tenant_id` isolation)

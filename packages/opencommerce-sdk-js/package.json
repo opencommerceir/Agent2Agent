@@ -1,0 +1,38 @@
+{
+  "name": "@opencommerce/sdk",
+  "version": "1.0.0",
+  "description": "Node.js / TypeScript SDK for the OpenCommerce Platform MCP Gateway — lets AI Agents discover and execute platform capabilities.",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "opencommerce",
+    "mcp",
+    "model-context-protocol",
+    "ai-agents",
+    "sdk"
+  ],
+  "homepage": "https://opencommerce.ir",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test test/**/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}
