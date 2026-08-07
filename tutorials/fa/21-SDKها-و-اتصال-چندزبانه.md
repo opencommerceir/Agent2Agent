@@ -92,13 +92,41 @@ fmt.Println(result.Data)
 
 ## PHP
 
-برای کامل‌بودن فهرست (SDK اصلی که همه‌ی SDKهای بالا از روی آن الگوبرداری شده‌اند):
+SDK اصلی و اولین SDK این پلتفرم — همان چیزی که هر سه SDK بالا دقیقاً از روی آن الگوبرداری شده‌اند (فایل ۳ و ۱۸). فریم‌ورک‌مستقل است — به هیچ‌وجه نیازی به Laravel ندارد و در هر اسکریپت خام PHP هم کار می‌کند.
 
 ```bash
 composer require opencommerce/sdk
 ```
 
-جزئیات کامل: `packages/opencommerce-sdk/README.md`
+```php
+use OpenCommerce\SDK\Config\MCPConfig;
+use OpenCommerce\SDK\MCPClient;
+
+$config = new MCPConfig(baseUrl: 'http://localhost:8000/mcp/v1', token: 'agent_token');
+$client = new MCPClient($config);
+
+$capabilities = $client->discoverCapabilities();
+$result = $client->execute('commerce.product.search', ['query' => 'laptop']);
+print_r($result->getData());
+```
+
+مدیریت خطا با Exception های معمولی PHP:
+
+```php
+use OpenCommerce\SDK\Exceptions\{MCPException, ValidationException};
+
+try {
+    $client->execute('commerce.order.place', []);
+} catch (ValidationException $e) {
+    echo "ورودی نامعتبر: {$e->getMessage()}\n";
+} catch (MCPException $e) {
+    echo "خطا ({$e->errorCode}): {$e->getMessage()}\n";
+}
+```
+
+تنها SDK ای که به یک وابستگی خارجی (Guzzle) نیاز دارد — چون خودِ PHP، برخلاف Python/Node.js/Go، هیچ کلاینت HTTP استانداردی در کتابخانه‌ی پایه‌اش ندارد؛ سه SDK دیگر همین دلیل را برای بدون‌وابستگی‌بودن خودشان دارند.
+
+جزئیات کامل + اسنیپت Tinker برای ساخت یک توکن Agent واقعی (همان چیزی که فایل ۱۸ همین آموزش هم به آن ارجاع می‌دهد): `packages/opencommerce-sdk/README.md`
 
 ## اگر زبان شما SDK رسمی ندارد چه کنیم؟
 

@@ -92,13 +92,41 @@ Full detail: `packages/opencommerce-sdk-go/README.md`
 
 ## PHP
 
-For completeness (the original SDK every other one mirrors):
+The original SDK — the one every SDK above was deliberately mirrored from, field for field (files 3 and 18). Framework-agnostic — it needs no Laravel at all and runs from any plain PHP script.
 
 ```bash
 composer require opencommerce/sdk
 ```
 
-Full detail: `packages/opencommerce-sdk/README.md`
+```php
+use OpenCommerce\SDK\Config\MCPConfig;
+use OpenCommerce\SDK\MCPClient;
+
+$config = new MCPConfig(baseUrl: 'http://localhost:8000/mcp/v1', token: 'agent_token');
+$client = new MCPClient($config);
+
+$capabilities = $client->discoverCapabilities();
+$result = $client->execute('commerce.product.search', ['query' => 'laptop']);
+print_r($result->getData());
+```
+
+Error handling with ordinary PHP exceptions:
+
+```php
+use OpenCommerce\SDK\Exceptions\{MCPException, ValidationException};
+
+try {
+    $client->execute('commerce.order.place', []);
+} catch (ValidationException $e) {
+    echo "Bad input: {$e->getMessage()}\n";
+} catch (MCPException $e) {
+    echo "Request failed ({$e->errorCode}): {$e->getMessage()}\n";
+}
+```
+
+The one SDK that needs an external dependency (Guzzle) — because PHP, unlike Python/Node.js/Go, has no standard-library HTTP client at all; the other three SDKs are dependency-free for exactly that reason.
+
+Full detail + a copy-pasteable Tinker snippet for minting a real Agent token (the same one file 18 of this tutorial points to as well): `packages/opencommerce-sdk/README.md`
 
 ## What if your language has no official SDK?
 
