@@ -102,14 +102,15 @@ DTO → Action → Domain Event → register in ServiceProvider
 
 ## The numbers, at a glance (current state)
 
-- **1,102 passing tests** (zero known regressions)
-- **124 MCP capabilities**
+- **1,156 passing tests** (zero known regressions)
+- **127 MCP capabilities**
 - **10 domain modules** plus the Core
-- **6 completed phases** (Phase 1 through Phase 6) plus a couple of side stages (Tech Debt Sprint, OpenRouter, Showcase Demo)
+- **5 official SDKs** (PHP, Laravel, Python, Node.js/TypeScript, Go)
+- **6 completed phases** (Phase 1 through Phase 6) plus several side stages (Tech Debt Sprint, OpenRouter, Showcase Demo, the multi-language SDK expansion, live verification against a real OpenRouter model, and real Zibal + Stripe payment gateways)
 
 ## How to move through the codebase (a reading roadmap for this tutorial)
 
-Files 4 through 16 of this tutorial follow the exact order the project was actually built — the phase order:
+Files 4 through 22 of this tutorial follow the exact order the project was actually built — the phase order:
 
 | Phase | What was built | Related file in this tutorial |
 |---|---|---|
@@ -120,6 +121,9 @@ Files 4 through 16 of this tutorial follow the exact order the project was actua
 | Phase 5 | Product Variants, multi-warehouse, bulk operations, advanced discounts, subscriptions (5 stages) | File 11 |
 | Phase 6 | AI Agent Orchestration (6 stages) | Files 12, 13, 14, 15 |
 | — | OpenRouter + the live Showcase demo | Files 15, 16 |
+| — | Architecture patterns, install/run/test, technical debt & roadmap | Files 17, 18, 19 |
+| — | Integration paths for others + the five official SDKs (incl. real Zibal/Stripe payment gateways) | Files 20, 21 |
+| — | Profitable, revenue-generating use cases | File 22 |
 
 This order matters, because every phase builds on the mechanisms of the phase before it — understanding Commerce before the Agent Orchestrator is essential, since AI agents ultimately call the exact same Commerce capabilities through MCP.
 

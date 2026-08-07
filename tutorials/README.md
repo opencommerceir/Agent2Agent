@@ -5,7 +5,7 @@ A complete, step-by-step tutorial of the OpenCommerce Platform project, availabl
 - 🇮🇷 **فارسی**: [`fa/00-فهرست-مطالب.md`](fa/00-فهرست-مطالب.md)
 - 🇬🇧 **English**: [`en/00-table-of-contents.md`](en/00-table-of-contents.md)
 
-Each language folder contains 22 numbered files (00–21), meant to be read in order — from the project's vision and architecture, through every module and every phase of the AI Agent Orchestrator, to a hands-on guide for installing, running, and testing the live Showcase demo, how others can integrate with or build on the project themselves, and finally a practical guide to every official SDK (PHP, Python, Node.js/TypeScript, Go).
+Each language folder contains 23 numbered files (00–22), meant to be read in order — from the project's vision and architecture, through every module and every phase of the AI Agent Orchestrator, to a hands-on guide for installing, running, and testing the live Showcase demo, how others can integrate with or build on the project themselves (including the real Zibal + Stripe payment gateways), a practical guide to every official SDK (PHP, Laravel, Python, Node.js/TypeScript, Go), and finally a guide to real, revenue-generating ways to use the project.
 
 Both versions cover the same content and follow the same structure; pick whichever language you're more comfortable reading in.
 

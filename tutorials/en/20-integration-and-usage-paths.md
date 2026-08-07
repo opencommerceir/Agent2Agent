@@ -34,11 +34,11 @@ The flow is exactly what files 4 and 5 already covered:
 
 1. An identity is provisioned for them on the platform (a Tenant/Organization + an Agent).
 2. They receive a Bearer token (`AgentToken`) and specific permissions (a Role/Permission set covering exactly the capabilities they need).
-3. From that point on, without installing anything on their own systems, they can connect directly with HTTP+JSON requests to the MCP Gateway and use any of the 124 existing capabilities across 10 modules.
+3. From that point on, without installing anything on their own systems, they can connect directly with HTTP+JSON requests to the MCP Gateway and use any of the 127 existing capabilities across 10 modules.
 
 This path suits anyone who **doesn't want** to deal with installation, updates, server security, backups, or infrastructure maintenance — they just want to connect, starting today, to a real, Agent-Ready business backend.
 
-**Do they need an SDK?** No — since the MCP Gateway is nothing more than a standard HTTP+JSON API (file 5), any language (PHP, Python, Go, Node, whatever) can connect directly. Today only an official PHP SDK exists (`packages/opencommerce-sdk`); other languages are on the roadmap, but their absence doesn't block the connection — the protocol, not the SDK, is what makes this possible.
+**Do they need an SDK?** No — since the MCP Gateway is nothing more than a standard HTTP+JSON API (file 5), any language (PHP, Python, Go, Node, Rust, Java, whatever) can connect directly. That said, nobody has to build one from scratch anymore: **five official, documented SDKs** exist today — PHP, Python, Node.js/TypeScript, Go, and a dedicated Laravel package (`packages/opencommerce-sdk-laravel`, a thin facade + ServiceProvider over the same PHP SDK) — all following the identical `discoverCapabilities`/`execute`/`getCapability` contract. Full detail on all five is in the next file (21). If your language isn't among these five, that's still fine — the protocol, not the SDK, is what makes this possible, and writing a small, personal client is a matter of hours, not weeks.
 
 ## Comparing the two paths
 

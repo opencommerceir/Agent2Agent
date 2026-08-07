@@ -1,5 +1,40 @@
 # OpenCommerce Platform — Session Handoff
 
+**Status: Laravel SDK + Documentation Sync (§7.38 — after §7.37, not a
+Phase Stage) is now complete — the still-planned Laravel SDK
+(`packages/opencommerce-sdk-laravel`, `opencommerce/sdk-laravel`) named in
+HANDOFF §8.99/§9 and the README's own SDK Platform section now exists: a
+thin `OpenCommerceServiceProvider` + `OpenCommerce` facade resolving a
+real `MCPClient` singleton from `config/opencommerce.php`, mirroring the
+PHP SDK's own `MCPConfig::forVersion()` two-constructor shape exactly, and
+tested with Orchestra Testbench (8 tests, a real booted Laravel container,
+zero network) — the first genuinely Laravel-booted test suite any
+`packages/` SDK has needed, since every prior one (PHP included) is
+deliberately framework-free. Alongside it, a real documentation/tutorial
+consistency pass swept `README.md`, `docs/roadmap.md`, this file's own §6
+header, and both language tracks of the bilingual `tutorials/` series for
+claims that went stale as real work shipped without every doc/tutorial
+reference following it — most notably tutorial file 20's own "today only
+an official PHP SDK exists... other languages are on the roadmap" line
+(written before §7.34 ever shipped Python/Node.js/Go, never updated
+afterward), a genuine capability-count drift (this file's own §6 header
+still said 124 after §7.37 added 3 payment capabilities — a live grep
+across every module's own Capability manifest confirms the real, current
+count is 127, matching §7.35's own "127 currently-discoverable
+capabilities" mention exactly, not a contradiction), and tutorial file 06
+still describing `MockPaymentGateway` as the only payment gateway
+implementation, no longer true of the platform as a whole since §7.37's
+own real, parallel Zibal/Stripe path. A new tutorial file 22
+("Monetization and Business Use Cases") was added to both language
+tracks — ten revenue models, each tied to a specific, already-shipped
+mechanism with a direct file citation, and each stating plainly what
+still needs to be built around it (most commonly a billing layer this
+platform deliberately doesn't provide for a SaaS operator's own
+customers). No change to any Domain Module, `routes/mcp.php`, any MCP
+capability, or the main application's own 1156 tests/127 capabilities —
+every code change lives under `packages/opencommerce-sdk-laravel/`,
+entirely outside `php artisan test`. See §7.38 for the full detail.**
+
 **Status: Real Payment Gateways — Zibal + Stripe (§7.37 — after §7.36,
 not a Phase Stage) is now complete — Iranian (Zibal) and international
 (Stripe) checkout, both real, redirect-based, and built behind one new,
@@ -3605,7 +3640,11 @@ end to end.
 
 ---
 
-## 6. The 124 MCP capabilities that exist right now
+## 6. The 127 MCP capabilities that exist right now
+
+*(124 through §7.31 — the last Stage of Phase 6 — plus 3 more added in
+§7.37 for the real Zibal/Stripe payment gateways:
+`commerce.payment.initiate`/`.confirm`/`.inquiry`, both listed below.)*
 
 | Capability | Phase/Stage | Permission | Notes |
 |---|---|---|---|
@@ -3621,6 +3660,9 @@ end to end.
 | `commerce.checkout.calculate` | P2.5 | `commerce.checkout.read` | Pure preview, no side effects. Optional `region` since P3.2 — real TaxRate lookup via Finance (§7.8). |
 | `commerce.checkout.process` | P2.5 | `commerce.checkout.create` | The full Cart→Payment→Order flow. Optional `region` since P3.2, same as above. |
 | `commerce.payment.refund` | P2.5 | `commerce.payments.refund` | Restores Inventory. |
+| `commerce.payment.initiate` | §7.37 | `commerce.checkout.create` | Starts a real, redirect-based charge (Zibal/Stripe/any registered gateway). Returns `redirect_url` + a platform-owned `tracking_reference`. |
+| `commerce.payment.confirm` | §7.37 | `commerce.checkout.create` | Explicit server-to-server confirm — the shared callback route and Stripe webhook already do this automatically. Idempotent. |
+| `commerce.payment.inquiry` | §7.37 | `commerce.checkout.read` | Read-only status check, never finalizes anything. |
 | `commerce.coupon.create` | P2.5 | `commerce.coupons.create` | |
 | `commerce.woocommerce.sync` | P2.6 | `commerce.connectors.sync` | Upserts a page of WooCommerce products into the catalog by SKU. |
 | `commerce.woocommerce.get` | P2.6 | `commerce.connectors.read` | Live lookup straight from the Connector — not the local catalog. |
@@ -8707,6 +8749,160 @@ real, self-signed Stripe webhook signature). 1156 tests total (1103 +
 
 ---
 
+### 7.38 Laravel SDK + Documentation Sync (after §7.37, not a Phase Stage)
+
+**Not a Phase Stage — a real, user-requested feature (the still-planned
+Laravel SDK named in HANDOFF §8.99/§9 and the README's own SDK Platform
+section) plus a docs/tutorials consistency pass, the same "real, useful
+work outside the numbered Stage sequence" shape §7.13/§7.32-§7.37 already
+used.** The request: build the Laravel SDK if it doesn't already exist,
+and audit `README.md`, `docs/`, and the bilingual `tutorials/` series for
+claims that went stale as real work (the other 4 SDKs, §7.34; live
+OpenRouter verification, §7.35; real Zibal/Stripe payment gateways,
+§7.37) shipped without every doc/tutorial reference to "still planned" or
+an old capability/test count being swept along with it — the exact kind
+of drift `docs/api-reference.md`'s own staleness banner (HANDOFF §10)
+already flagged as a known risk class in this codebase.
+
+**`packages/opencommerce-sdk-laravel` (`opencommerce/sdk-laravel`) is
+real, new code, not just a doc fix — a thin `OpenCommerceServiceProvider`
++ `OpenCommerce` facade over the existing, framework-agnostic
+`packages/opencommerce-sdk` (§7.1), following the exact "5-minute quick
+start + one-implementation-per-contract" shape every prior SDK in this
+codebase already established (§7.34's own Python/Node.js/Go trio, mirrored
+field-for-field from the PHP SDK).** `OpenCommerceServiceProvider`
+resolves a real `MCPClient` singleton from `config/opencommerce.php`
+(`mergeConfigFrom()` + `publishes()`, the standard Laravel package
+convention) — two ways to point at a deployment, mirroring
+`MCPConfig`'s own two constructors exactly: either
+`OPENCOMMERCE_BASE_URL` directly, or `OPENCOMMERCE_HOST`/`OPENCOMMERCE_VERSION`
+built via `MCPConfig::forVersion()`. Bound as a real `singleton()`, not a
+closure re-evaluated per resolution the way `AgentOrchestratorServiceProvider`
+binds `PlannerInterface`/`ReasoningEngineInterface`/`LLMClientInterface`
+(§7.28/§7.31) — a deliberate, narrower choice: a consuming app's own
+`config/opencommerce.php` doesn't change mid-request the way a test flips
+`planner.type`, so there's no rebind-in-a-test requirement to protect
+here, and a real singleton means one shared Guzzle connection per request
+instead of rebuilding it on every resolution. Tested with
+[Orchestra Testbench](https://packages.tools/testbench) (8 tests, a real,
+booted Laravel container, zero network) — the first genuinely
+Laravel-booted test suite any package in `packages/` has needed, since
+every prior SDK (PHP included) is deliberately framework-free.
+
+**One real, deliberate infrastructure difference from every sibling
+SDK's own "vendor is committed" convention, decided and documented rather
+than silently copied**: `packages/opencommerce-sdk/`'s own `vendor/`
+directory is committed (12MB, mostly Guzzle+PHPUnit) so the monorepo's
+own example scripts can run against it with no separate install step
+(that package's own README already documents this). `packages/opencommerce-sdk-laravel/`'s
+own `vendor/` is **not** committed — its `require-dev` pulls the entire
+Laravel framework via `orchestra/testbench` (59MB installed, roughly 5x
+the PHP SDK's own committed footprint), a real, disproportionate weight
+for a monorepo to carry for one package's own dev-only tooling. A
+contributor runs `composer install` before `vendor/bin/phpunit tests`
+(documented in the package's own README, the identical two-line
+instruction the PHP SDK's README already gives) — `composer.lock` is
+still committed for reproducibility, only the generated `vendor/` tree
+isn't.
+
+**The documentation sync pass found genuinely stale claims, not just
+missing mentions — three worth recording in detail:**
+
+1. **Tutorial file 20 (both languages) explicitly told a reader "today
+   only an official PHP SDK exists... other languages are on the
+   roadmap"** — written before §7.34 (Python/Node.js/Go) ever shipped,
+   never updated afterward. This is the exact kind of doc drift the
+   request flagged by name. Fixed in both languages, plus a matching fix
+   to file 21's own Go section, which still told a reader to
+   `go get github.com/<org>/opencommerce-sdk-go` — a placeholder
+   `<org>` — instead of the real, live module path §7.36 already set
+   (`github.com/opencommerceir/opencommerce-platform/packages/opencommerce-sdk-go`).
+2. **A real, live-counted capability-count drift, not just a stale
+   prose claim.** This file's own §6 header ("The 124 MCP capabilities
+   that exist right now") was never updated after §7.37 added 3 new ones
+   (`commerce.payment.initiate`/`.confirm`/`.inquiry`) — confirmed by
+   actually grepping every `Interfaces/MCP/*Capabilities.php` manifest's
+   own `'name' => '...'` entries (the same authoritative source this
+   file's own §10 doc-sync pass already established over trusting a
+   hand-maintained count), which returned 127 non-Demo capabilities
+   today, matching §7.35's own "127 currently-discoverable capabilities"
+   mention exactly (that section's own apparent "124 vs. 127"
+   inconsistency turns out not to be an error at all — 124 was always the
+   non-Demo count or, in §7.35's specific phrasing, 124 business
+   capabilities + Demo's own 3 = 127, both self-consistent once compared
+   against a real grep). §6's header and the `commerce.payment.refund`
+   table row both updated; `README.md`, `docs/roadmap.md`, and every
+   tutorial file that stated a capability/test count as *current state*
+   (not a historical "at the end of this stage" narration, which stays
+   frozen on purpose, matching every prior stage's own convention) were
+   updated to 127 capabilities / 1156 tests.
+3. **Tutorial file 06 (Commerce module, both languages) still described
+   `MockPaymentGateway` as "the only payment gateway implementation"** —
+   true of the original, synchronous `PaymentGatewayInterface::charge()`
+   contract only, no longer true of the platform as a whole since §7.37's
+   own new, parallel `RedirectPaymentGatewayInterface` gained two real
+   implementations (Zibal, Stripe). Fixed to state both facts precisely
+   rather than either leaving the stale claim or overcorrecting into "Mock
+   is no longer used" (it still is, for the untouched synchronous path).
+
+**`README.md`'s own Roadmap checklist and Project Status section were
+both stale in the same "shipped but never checked off" way** — the SDK
+Platform's own `- [x]` line still carried "a Laravel-specific wrapper SDK
+remains planned" after this session built it, and the "Phases 1 through 5
+are complete" / "1102 automated tests... 124 MCP capabilities" Project
+Status paragraph had never been updated past §7.33 (Showcase), silently
+missing §7.34-§7.37 entirely (the SDK expansion, live OpenRouter
+verification, SDK publish-readiness, and the real payment gateways
+themselves). Both rewritten to name every post-Phase-6 addition and the
+real, current 127/1156 numbers. `docs/roadmap.md` had the identical gap —
+its own "Phase 7 — Not Yet Scoped" section read as if nothing had
+shipped since Phase 6 finished; a new "Post-Phase-6 Additions" section
+was added between Phase 6 and Phase 7 specifically so real, shipped work
+(§7.32-§7.37 plus this pass's own Laravel SDK) is never confused with
+still-open Phase 7 candidates again.
+
+**Tutorial file 19 (Technical Debt) gained the real, new debt items
+§7.37 itself already documented in this file's own §8 (items 100-104)
+but the tutorial's own simplified version never carried** — the live
+Zibal network-timeout finding (this dev environment's own outbound
+network, not a code bug, confirmed via a plain `curl` to the same host),
+Stripe's own live-confirmed-reachable-with-an-invalid-key finding,
+`RefundPaymentAction` still never calling a real gateway API, the
+missing customer-facing checkout page, and `Money`'s own zero-decimal
+currency display gap — added to both languages' own category two/three
+lists and their own "suggested next steps," matching this file's own §9
+phrasing closely rather than paraphrasing loosely.
+
+**A new file 22 ("Monetization and Business Use Cases" / "کاربردهای
+سودآور و مدل‌های درآمدزایی") was added to both language tracks** — the
+request's own explicit ask for a tutorial section on profit-generating
+use cases for the project. Ten models (white-label multi-tenant hosting,
+implementation/consulting, forking the Core into a new vertical, selling
+Connectors, tiered hosted-infrastructure subscriptions, usage-based
+pricing, a partner/affiliate program, training/certification,
+regulated-industry data governance, and an Iran-local-market angle built
+directly on §7.37's own real Zibal integration) — each one tied to a
+specific, already-shipped mechanism with a direct file citation, and each
+one stating plainly what still needs to be built around it (most
+commonly: a billing/subscription layer, which this platform deliberately
+does not provide for a SaaS operator's own customers — only
+`RedirectPaymentGatewayInterface` for a Tenant's *own* customers, a
+distinction file 22 states explicitly to avoid conflating the two).
+`tutorials/00-*` (both languages), `tutorials/README.md`, and file 21's
+own closing "last file in the series" framing were all updated to route
+through the new file 22 instead of ending at file 21.
+
+No change to any Domain Module, `routes/mcp.php`, any MCP capability, the
+main Laravel application's own test suite, or its 1156/127 totals — every
+code change lives under `packages/opencommerce-sdk-laravel/`, entirely
+outside `php artisan test`, the identical "an SDK's own tests are not
+part of the main suite" shape every prior SDK in this codebase already
+established (§7.34). 8 new tests in the new package's own independent
+suite, all passing, confirmed by actually running them, not assumed from
+reading the code.
+
+---
+
 ## 8. Known technical debt (ranked, carried over + Phase 2 additions)
 
 1. ~~**No per-tenant tax-rate configuration exists.**~~ **Resolved in
@@ -9292,13 +9488,11 @@ real, self-signed Stripe webhook signature). 1156 tests total (1103 +
     path was run this session, but none of the four language example
     scripts (PHP included) have been run this session against a live
     `php artisan serve` with a real Agent token.
-99. **No Laravel-specific SDK exists yet** (§7.34) — the README's own SDK
-    Platform section still lists this as planned; the framework-agnostic
-    PHP SDK (`packages/opencommerce-sdk`) already covers any plain-PHP or
-    Laravel use case directly, so this would only ever be a thin
-    convenience wrapper (a Facade + a ServiceProvider auto-binding
-    `MCPClient` from Laravel's own config), not new underlying
-    capability.
+99. ~~**No Laravel-specific SDK exists yet** (§7.34)~~ — **Resolved in
+    §7.38.** `packages/opencommerce-sdk-laravel` is exactly the thin
+    convenience wrapper this item predicted (a Facade + a ServiceProvider
+    auto-binding `MCPClient` from Laravel's own config) — no new
+    underlying capability, same as predicted.
 100. **Partially resolved this session — a real, live network attempt was
      made against both gateways, with two different honest outcomes, not
      left untried.** `StripePaymentGateway` was confirmed live against
@@ -9500,11 +9694,11 @@ already exists:
   needs no registry at all — push a `packages/opencommerce-sdk-go/v1.0.0`
   git tag against this repo and `go get github.com/opencommerceir/opencommerce-platform/packages/opencommerce-sdk-go`
   resolves for anyone, immediately, via `proxy.golang.org`.
-- **Build the still-planned Laravel SDK** (§7.34/§8.99) — a thin Facade +
-  ServiceProvider wrapper around the existing, framework-agnostic PHP SDK
-  (`packages/opencommerce-sdk`), for Laravel projects that would rather
-  auto-resolve a configured `MCPClient` from `config/services.php` than
-  construct one by hand.
+- ~~**Build the still-planned Laravel SDK** (§7.34/§8.99)~~ — **Resolved
+  in §7.38.** `packages/opencommerce-sdk-laravel` now exists — a thin
+  Facade + ServiceProvider wrapper around the existing, framework-agnostic
+  PHP SDK (`packages/opencommerce-sdk`), auto-resolving a configured
+  `MCPClient` from its own `config/opencommerce.php`.
 - **Give each Agent persona real identity/specialized behavior beyond its
   own `planning_rules`** (§7.27) — CEO/Sales/Support/Finance all have
   working profiles now, but "a persona" today only means "a different

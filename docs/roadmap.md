@@ -11,7 +11,8 @@
 - Capability Registry
 - MCP Gateway (`/mcp/v1/execute`, `/mcp/v1/capabilities`)
 - UCP (Universal Commerce Protocol — normalized commerce value objects)
-- SDK (`packages/opencommerce-sdk`)
+- SDK (`packages/opencommerce-sdk` — the first of what are now 5 official
+  SDKs; see **Post-Phase-6 Additions** below for the other 4)
 - Connector Pattern (Mock Product Connector as the reference implementation)
 
 ## Phase 2 — Commerce (6 Stages) ✅ Complete
@@ -81,31 +82,71 @@ full architecture, and `HANDOFF.md` §7.26-§7.31 for the complete build
 narrative, including every deliberate correction made from each stage's
 own original request.
 
-**Current state**: 1067 automated tests passing, 124 MCP capabilities
+**Current state**: 1156 automated tests passing, 127 MCP capabilities
 across 10 Domain Modules (Commerce, CRM, Finance, Workflows, Loyalty,
 Reporting, Shipping, Notifications, Analytics) plus the Core platform,
-the now-complete Agent Orchestrator, and a session-authenticated Admin
-Dashboard. See `README.md`'s Project Status section and `HANDOFF.md` for
-the authoritative, up-to-date snapshot.
+the now-complete Agent Orchestrator, a session-authenticated Admin
+Dashboard, real Zibal/Stripe payment gateways, and 5 official SDKs. See
+`README.md`'s Project Status section and `HANDOFF.md` for the
+authoritative, up-to-date snapshot.
+
+## Post-Phase-6 Additions (real, shipped work — not numbered Stages)
+
+Phase 6 finished at Stage 6 (§7.31), but real work kept shipping on top of
+it rather than waiting for a numbered Phase 7 to be scoped — the same
+"a real, useful piece of work that doesn't fit the numbered Stage
+sequence" shape the Tech Debt Sprint already used between Phase 4 Stage 1
+and Stage 2. In build order:
+
+- **OpenRouter Integration** (`HANDOFF.md` §7.32) — a 3rd `LLMClientInterface`
+  provider alongside OpenAI/Claude, giving `LLMPlanner`/`LLMReasoningEngine`
+  access to 100+ models through one API, several genuinely free.
+- **Showcase Demo** (§7.33) — a `/showcase` web chat UI (see **🎬 Showcase
+  Demo** in `README.md`) with a live data panel, a real-AI toggle, a
+  conversation history sidebar, and an optional passcode gate.
+- **Multi-Language SDK Expansion** (§7.34) — Python, Node.js/TypeScript,
+  and Go SDKs (`packages/opencommerce-sdk-{python,js,go}`), each
+  dependency-free and mirroring the PHP SDK's own public contract field
+  for field.
+- **Live OpenRouter Verification** (§7.35) — the LLM integration exercised
+  against a real, live provider for the first time (not only mocked
+  HTTP), finding and fixing a real `base_uri`-resolution bug in the
+  process.
+- **SDK Registry Publish-Readiness** (§7.36) — closed real PyPI naming
+  collisions, set the Go SDK's real module path, and fixed a real npm
+  scoped-package publish blocker.
+- **Real Payment Gateways — Zibal + Stripe** (§7.37) — real,
+  redirect-based checkout via `RedirectPaymentGatewayInterface`/
+  `PaymentGatewayRegistry` (see `docs/payment-gateways.md`), extensible to
+  any future gateway in 3 steps.
+- **Laravel SDK** — `packages/opencommerce-sdk-laravel` (`opencommerce/sdk-laravel`),
+  a thin ServiceProvider + `OpenCommerce` facade around the PHP SDK,
+  completing the SDK Platform's original 5-language line-up.
 
 ## Phase 7 — Not Yet Scoped
 
 No Phase 7 has been decided. Whoever drives scope next is choosing where
 the platform goes from here, not just picking the next item off a list —
-Phase 6 was only 6 Stages in. Candidates carried over from Phase 6's own
-retrospective (`HANDOFF.md` §9) include: feeding `ReasoningTrace`
-alternatives back into planning (today purely explanatory), a real,
-genuinely async delegation flow (a queued Job another process later picks
-up), semantic/embedding-based `ExecutionPattern` matching in place of
-today's plain keyword substring check, cycle detection for delegation
-beyond "can't delegate to yourself," additional Agent personas beyond
-CEO, a `/dashboard/agents` page covering every Phase 6 surface (Goals,
-Executions, Profiles, Memory, Collaboration, and now Reasoning — none has
-one yet), plus the still-open Phase 5 items (a Dashboard UI for every
-Phase 5 resource, folding Cart-level automatic discounts into the real
-checkout total, a real file-upload endpoint for Bulk Operations imports, a
-"subscription expiring soon" notification, real carrier/SMS-gateway
-integrations replacing their current mock/stub implementations) and the
+Phase 6 was only 6 Stages in, and the post-Phase-6 additions above, while
+real and shipped, weren't a scoped Phase either. Candidates carried over
+from Phase 6's own retrospective (`HANDOFF.md` §9) include: feeding
+`ReasoningTrace` alternatives back into planning (today purely
+explanatory), a real, genuinely async delegation flow (a queued Job
+another process later picks up), semantic/embedding-based
+`ExecutionPattern` matching in place of today's plain keyword substring
+check, cycle detection for delegation beyond "can't delegate to
+yourself," additional Agent personas beyond CEO, a `/dashboard/agents`
+page covering every Phase 6 surface (Goals, Executions, Profiles, Memory,
+Collaboration, and Reasoning — none has one yet), a real carrier
+(USPS/FedEx/DHL) implementation of `ShippingProviderInterface`, a real
+SMS gateway behind `SmsSender`, a `refund()` addition to
+`RedirectPaymentGatewayInterface` (Stripe/Zibal), a customer-facing
+checkout page to actually land on `commerce.payment.initiate`'s own
+`redirect_url` (no storefront exists yet — this platform is MCP/API +
+Admin Dashboard only), plus the still-open Phase 5 items (a Dashboard UI
+for every Phase 5 resource, folding Cart-level automatic discounts into
+the real checkout total, a real file-upload endpoint for Bulk Operations
+imports, a "subscription expiring soon" notification) and the
 longer-standing infrastructure items below.
 
 ## Cross-cutting / Infrastructure Track (ongoing, not phase-bound)

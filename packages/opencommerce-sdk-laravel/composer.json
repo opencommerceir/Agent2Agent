@@ -1,0 +1,44 @@
+{
+    "name": "opencommerce/sdk-laravel",
+    "description": "Laravel wrapper for the OpenCommerce Platform PHP SDK — auto-resolves a configured MCPClient from config/opencommerce.php, plus an OpenCommerce facade.",
+    "type": "library",
+    "license": "MIT",
+    "version": "1.0.0",
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../opencommerce-sdk"
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "illuminate/support": "^10.0 || ^11.0 || ^12.0",
+        "opencommerce/sdk": "^1.0"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^8.0 || ^9.0 || ^10.0",
+        "phpunit/phpunit": "^10.0 || ^11.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "OpenCommerce\\SDK\\Laravel\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "OpenCommerce\\SDK\\Laravel\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenCommerce\\SDK\\Laravel\\OpenCommerceServiceProvider"
+            ],
+            "aliases": {
+                "OpenCommerce": "OpenCommerce\\SDK\\Laravel\\Facades\\OpenCommerce"
+            }
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

@@ -57,7 +57,7 @@ Cart → pricing calculation → coupon validation → PaymentGatewayInterface::
 
 This is why `payments.order_id` is never null — a declined charge never reaches a point where either an Order or a Payment row is created.
 
-`MockPaymentGateway` is the only payment gateway implementation; it always succeeds unless `simulate_failure: true` is explicitly passed — a clean way to test the decline path without any real network mocking.
+`MockPaymentGateway` is still the only implementation of *this* synchronous `PaymentGatewayInterface::charge()` contract (the one `commerce.checkout.process` uses) — it always succeeds unless `simulate_failure: true` is explicitly passed, a clean way to test the decline path without any real network mocking. As of §7.37 (see file 21), there's also a second, parallel, **redirect-based** payment path with two real implementations — Zibal (Iranian) and Stripe (international) — built behind a separate `RedirectPaymentGatewayInterface`/`PaymentGatewayRegistry` pair specifically because a real gateway's "redirect the buyer, then verify server-to-server" flow doesn't fit this synchronous `charge()` shape at all. Both paths coexist unchanged; `MockPaymentGateway` and this synchronous flow are untouched by that addition.
 
 ## Stage 6 — Real connectors (WooCommerce)
 

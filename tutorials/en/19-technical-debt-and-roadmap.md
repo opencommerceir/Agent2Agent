@@ -18,12 +18,16 @@ Around 18 Actions across every module are fully built and tested, but have no MC
 - Automatic Cart-level discounts (file 11) still don't reach the real Checkout total — only through an explicit coupon.
 - Subscription revenue doesn't yet reach Reporting/Analytics reports, since `SubscriptionInvoice.orderId` is always null.
 - There's still no "subscription expiring soon" notification — only payment failure has a wired notification.
+- `RefundPaymentAction` still never calls a real gateway's own refund API (neither Zibal's nor Stripe's) — a pre-existing gap the real payment gateways work didn't change.
+- This platform still has no customer-facing checkout page — only MCP/API + the Admin Dashboard. The `redirect_url` that `commerce.payment.initiate` returns is waiting on a future frontend to actually put it in front of a real buyer.
+- `Money`'s "amount is always the smallest currency unit" convention doesn't hold for zero-decimal currencies (Rial, Yen, Won) — handled explicitly in exactly one place (`resources/views/payments/confirmed.blade.php`), not across the whole Admin Dashboard/Analytics/Reporting.
 
 ## Category three: real infrastructure only simulated in dev
 
 - Real Redis isn't installed in this environment; `predis/predis` is a real dependency, but `CACHE_STORE=database` is currently active.
-- No live run against OpenAI/Claude/OpenRouter exists — every test uses simulated HTTP.
+- A live run against a real OpenRouter model has actually happened and is verified (with real credentials — it even caught and fixed a real `base_uri`-construction bug), but there's still no live run against real OpenAI/Claude — those two are still tested against simulated HTTP only.
 - Real test coverage hasn't been measured yet — this dev environment has neither PCOV nor Xdebug (both needed to measure coverage); only a real CI run can produce that number.
+- A live attempt against Zibal from this dev environment timed out (confirmed to be this environment's own network being unable to reach `gateway.zibal.ir`, not a code bug — Stripe and google.com both connected fine from the same environment at the same time); Stripe was actually reached with a deliberately invalid test key and got back a real 401 from `api.stripe.com` — proof the request shape is correct, just not yet a complete transaction with a real key.
 
 ## Category four: no Admin Dashboard pages for the newer modules
 
@@ -53,6 +57,9 @@ Straight from this project's own experience:
 4. **Stand up a real Redis instance and measure real CI coverage.**
 5. **Sync subscription revenue into reports/KPIs.**
 6. **Implement a real USPS/FedEx/DHL shipping connector** — `MockShippingProviderAdapter` is already a template for this.
+7. **Retry the live Zibal round-trip from a network that can actually reach it**, and get a real Stripe test key to complete one full Checkout Session end to end — both are the cheapest next real steps for file 21.
+8. **Add `refund()` to `RedirectPaymentGatewayInterface`** for Zibal/Stripe.
+9. **Build a real, customer-facing checkout page** — the natural next consumer of the `redirect_url` that `commerce.payment.initiate` already returns today.
 
 ## How to use this tutorial going forward
 

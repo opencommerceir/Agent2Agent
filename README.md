@@ -141,12 +141,9 @@ OpenCommerce provides official SDKs that enable developers to make their applica
 - **Python SDK** — `packages/opencommerce-sdk-python` (dependency-free, standard library only)
 - **Node.js / TypeScript SDK** — `packages/opencommerce-sdk-js` (`@opencommerce/sdk`, dependency-free, built on the standard `fetch` API)
 - **Go SDK** — `packages/opencommerce-sdk-go` (dependency-free, standard library only)
+- **Laravel SDK** — `packages/opencommerce-sdk-laravel` (`opencommerce/sdk-laravel`, a thin ServiceProvider + `OpenCommerce` facade that auto-resolves a configured `MCPClient` from `config/opencommerce.php` — wraps the PHP SDK above, adds no new HTTP logic of its own)
 
-All four mirror the same `MCPClient`/`discover`/`execute`/`getCapability` surface, support both the `v1` and `v2` wire envelopes transparently, and map every HTTP-level failure to a typed error/exception. See each package's own `README.md` for a 5-minute quick start, and `examples/sample-agent.{php,py,ts,go}` for a complete, runnable script in every language.
-
-**Still planned:**
-
-- Laravel SDK (a thin, Laravel-specific wrapper — Facade + ServiceProvider — around the framework-agnostic PHP SDK above)
+The first four mirror the same `MCPClient`/`discover`/`execute`/`getCapability` surface, support both the `v1` and `v2` wire envelopes transparently, and map every HTTP-level failure to a typed error/exception. See each package's own `README.md` for a 5-minute quick start, and `examples/sample-agent.{php,py,ts,go}` for a complete, runnable script in every language.
 
 ---
 
@@ -502,15 +499,18 @@ OpenCommerce follows a set of core architectural principles.
 
 ## Roadmap
 
-Phases 1 through 5 are complete. See `docs/roadmap.md` for the full
-phase/stage breakdown and `HANDOFF.md` for the detailed build log.
+Phases 1 through 6 (all 6 Stages of Phase 6 — AI Agent Orchestration) are
+complete, plus several post-Phase-6 additions (OpenRouter integration,
+the Showcase demo, the Python/Node.js/Go/Laravel SDKs, and real Zibal +
+Stripe payment gateways). See `docs/roadmap.md` for the full phase/stage
+breakdown and `HANDOFF.md` for the detailed build log.
 
 - [x] OpenCommerce Core (Identity, Auth, Organizations, Tenancy, Permissions)
 - [x] Agent Registry
 - [x] Capability Registry
 - [x] MCP Gateway (`/mcp/v1` and `/mcp/v2`)
 - [x] Universal Commerce Protocol (UCP)
-- [x] SDK Platform (PHP, Python, Node.js/TypeScript, and Go SDKs — `packages/opencommerce-sdk*`; a Laravel-specific wrapper SDK remains planned)
+- [x] SDK Platform (PHP, Python, Node.js/TypeScript, Go, and Laravel SDKs — `packages/opencommerce-sdk*`)
 - [x] Commerce Connectors (Mock + real WooCommerce)
 - [x] Event System (Domain Events across every module)
 - [x] Multi-tenant Infrastructure (shared-database, `tenant_id` isolation)
@@ -535,36 +535,44 @@ phase/stage breakdown and `HANDOFF.md` for the detailed build log.
 
 ## Project Status
 
-> ✅ **Phase 5 Complete — Advanced Commerce** · ✅ **Phase 6 Complete — AI Agent Orchestration**
+> ✅ **Phase 5 Complete — Advanced Commerce** · ✅ **Phase 6 Complete — AI Agent Orchestration** · ✅ **Real Payment Gateways (Zibal + Stripe)**
 
 OpenCommerce Platform has moved past the foundation stage: Core, MCP
 Gateway, and UCP are stable, and 11 Domain Modules are built, tested, and
 MCP-reachable — Commerce (incl. multi-warehouse inventory, variants, bulk
-operations, and subscriptions), CRM, Finance, Workflows, Loyalty,
-Reporting, Shipping, Notifications, Analytics, and the now-complete Agent
-Orchestrator (config-driven Agent Profiles, a real CEO Agent persona, a
-real LLM-based planner with automatic deterministic fallback, execution
-memory & learning, persona-to-persona delegation under the caller's own
-real permissions, and now pre/post-execution reasoning with the same
-LLM-backed-with-automatic-fallback shape, plus, in Showcase prep §7.32, a
-third LLM provider — OpenRouter, with free-model access), plus a
-bilingual Admin Dashboard for human operators and a repeatable, shareable
-`/showcase` chat UI (Showcase prep, §7.33 — see **🎬 Showcase Demo**
-above) for watching the Agent Orchestrator plan, execute, delegate, and
-reflect live against a realistic, pre-seeded store, with a real-AI
-toggle, a conversation history sidebar, and an optional passcode gate for
-sharing the link safely. 1102 automated tests pass across 124 MCP
-capabilities, with zero known regressions.
+operations, subscriptions, and now real, redirect-based Zibal + Stripe
+checkout — see **Real Payment Gateways** in the Roadmap below), CRM,
+Finance, Workflows, Loyalty, Reporting, Shipping, Notifications,
+Analytics, and the now-complete Agent Orchestrator (config-driven Agent
+Profiles, a real CEO Agent persona, a real LLM-based planner with
+automatic deterministic fallback — live-verified against a real
+OpenRouter model, not only mocked HTTP — execution memory & learning,
+persona-to-persona delegation under the caller's own real permissions,
+and pre/post-execution reasoning with the same
+LLM-backed-with-automatic-fallback shape), plus a bilingual Admin
+Dashboard for human operators and a repeatable, shareable `/showcase`
+chat UI (see **🎬 Showcase Demo** above) for watching the Agent
+Orchestrator plan, execute, delegate, and reflect live against a
+realistic, pre-seeded store, with a real-AI toggle, a conversation
+history sidebar, and an optional passcode gate for sharing the link
+safely. Five official SDKs — PHP, Python, Node.js/TypeScript, Go, and
+Laravel — give any language a documented, dependency-light path to the
+MCP Gateway (see **SDK Platform** above). 1156 automated tests pass
+across 127 MCP capabilities, with zero known regressions.
 
-Phase 6 (AI Agent Orchestration) is now fully complete, all 6 Stages.
-Whoever drives scope next is choosing where the platform goes from here —
-candidates include feeding reasoning back into planning (today it's
-explanatory only), real async delegation, semantic/vector pattern
-matching, additional Agent personas beyond CEO, and a Dashboard page
-covering everything Phase 6 built — see `docs/agent-orchestrator.md`,
+Phase 6 (AI Agent Orchestration) is fully complete, all 6 Stages, and
+several real, post-Phase-6 additions have shipped on top of it — an
+OpenRouter LLM provider (live-verified with real credentials), the
+Showcase demo, the Python/Node.js/Go/Laravel SDKs, and real Zibal +
+Stripe payment gateways. Whoever drives scope next is choosing where the
+platform goes from here — candidates include feeding reasoning back into
+planning (today it's explanatory only), real async delegation,
+semantic/vector pattern matching, a real carrier/SMS integration, and a
+customer-facing checkout page to actually land on the payment gateways'
+own `redirect_url` — see `docs/agent-orchestrator.md`,
 `docs/agent-profiles.md`, `docs/llm-planner.md`, `docs/execution-memory.md`,
-`docs/multi-agent-collaboration.md`, `docs/self-reflection.md`, and
-`docs/roadmap.md`.
+`docs/multi-agent-collaboration.md`, `docs/self-reflection.md`,
+`docs/payment-gateways.md`, and `docs/roadmap.md`.
 
 ---
 
