@@ -5,7 +5,7 @@ A complete, step-by-step tutorial of the OpenCommerce Platform project, availabl
 - 🇮🇷 **فارسی**: [`fa/00-فهرست-مطالب.md`](fa/00-فهرست-مطالب.md)
 - 🇬🇧 **English**: [`en/00-table-of-contents.md`](en/00-table-of-contents.md)
 
-Each language folder contains 20 numbered files (00–19), meant to be read in order — from the project's vision and architecture, through every module and every phase of the AI Agent Orchestrator, to a hands-on guide for installing, running, and testing the live Showcase demo.
+Each language folder contains 21 numbered files (00–20), meant to be read in order — from the project's vision and architecture, through every module and every phase of the AI Agent Orchestrator, to a hands-on guide for installing, running, and testing the live Showcase demo, and finally how others can integrate with or build on the project themselves.
 
 Both versions cover the same content and follow the same structure; pick whichever language you're more comfortable reading in.
 

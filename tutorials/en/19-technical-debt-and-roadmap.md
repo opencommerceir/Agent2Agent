@@ -1,4 +1,4 @@
-← [Install, Run and Test](18-install-run-and-test.md) | Back to: [Table of Contents](00-table-of-contents.md)
+← [Install, Run and Test](18-install-run-and-test.md) | Next: [Integration and Usage Paths](20-integration-and-usage-paths.md) →
 
 # 19. Technical Debt and the Road Ahead
 
@@ -65,8 +65,6 @@ If you're going to work on this project, here's the suggested approach:
 
 ---
 
-This is the end of the English tutorial. For deeper, more technical detail on any point, `HANDOFF.md` at the project root is always the final authority.
+One file remains: now that you've seen the full architecture, every module, the AI layer, and the known technical debt, the next file answers a completely different, practical question — **what is this project actually good for, and how can others make use of it?**
 
-The Persian version of this same tutorial lives in `tutorials/fa/`.
-
-← [Install, Run and Test](18-install-run-and-test.md) | Back to: [Table of Contents](00-table-of-contents.md)
+← [Install, Run and Test](18-install-run-and-test.md) | Next: [Integration and Usage Paths](20-integration-and-usage-paths.md) →

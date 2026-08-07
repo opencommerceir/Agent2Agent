@@ -32,6 +32,7 @@ The goal: someone with zero prior context on this project should be able to read
 | 17 | [Architecture Patterns and Gotchas](17-architecture-patterns-and-gotchas.md) | Rules to always follow |
 | 18 | [Install, Run and Test](18-install-run-and-test.md) | Getting it running on your own machine, running the demo |
 | 19 | [Technical Debt and Roadmap](19-technical-debt-and-roadmap.md) | What's still unfinished and what comes next |
+| 20 | [Integration and Usage Paths](20-integration-and-usage-paths.md) | Self-hosting vs. connecting to OpenCommerce.ir's hosted infrastructure |
 
 ---
 
@@ -45,6 +46,6 @@ The goal: someone with zero prior context on this project should be able to read
 
 One critical point to hold onto through the whole tutorial: **commerce is only the first domain, not the whole point.** The platform's **Core** must never know anything about a product, an order, a customer, or a payment — those all live in **Domain Modules**. Core only ever provides infrastructure: identity, multi-tenancy, permissions, and events.
 
-The next 19 files unpack this idea one step at a time.
+The next 20 files unpack this idea one step at a time.
 
 Start with file 01 👉 [Introduction and Vision](01-introduction-and-vision.md)
