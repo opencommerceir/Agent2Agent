@@ -3,7 +3,7 @@ requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "opencommerce-sdk"
+name = "opencommerce-platform-sdk"
 version = "1.0.0"
 description = "Python SDK for the OpenCommerce Platform MCP Gateway — lets AI Agents (and any Python code) discover and execute platform capabilities."
 readme = "README.md"
@@ -29,6 +29,7 @@ dev = ["mypy>=1.8"]
 
 [project.urls]
 Homepage = "https://opencommerce.ir"
+Repository = "https://github.com/opencommerceir/opencommerce-platform"
 
 [tool.setuptools.packages.find]
 include = ["opencommerce_sdk*"]

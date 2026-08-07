@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	opencommerce "opencommerce-sdk-go"
+	opencommerce "github.com/opencommerceir/opencommerce-platform/packages/opencommerce-sdk-go"
 )
 
 func testClient(transport *fakeTransport) *opencommerce.Client {

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	opencommerce "opencommerce-sdk-go"
+	opencommerce "github.com/opencommerceir/opencommerce-platform/packages/opencommerce-sdk-go"
 )
 
 func errorBody(code, message string) map[string]interface{} {

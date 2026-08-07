@@ -3,7 +3,7 @@ package opencommerce_test
 import (
 	"context"
 
-	opencommerce "opencommerce-sdk-go"
+	opencommerce "github.com/opencommerceir/opencommerce-platform/packages/opencommerce-sdk-go"
 )
 
 // fakeCall records one request a fakeTransport received — this SDK's

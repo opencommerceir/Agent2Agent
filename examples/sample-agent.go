@@ -1,8 +1,8 @@
 // A minimal, standalone AI Agent program — proof that a plain Go program
 // can discover and execute OpenCommerce capabilities using nothing but
-// `go get opencommerce-sdk-go` (once published; see this file's own
-// go.mod for how it's wired to the local copy inside this monorepo via a
-// replace directive).
+// `go get github.com/opencommerceir/opencommerce-platform/packages/opencommerce-sdk-go`
+// (once a version tag exists; see this file's own go.mod for how it's
+// wired to the local copy inside this monorepo via a replace directive).
 //
 // Prerequisites:
 //  1. `php artisan serve` running this app (default: http://localhost:8000)
@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"os"
 
-	opencommerce "opencommerce-sdk-go"
+	opencommerce "github.com/opencommerceir/opencommerce-platform/packages/opencommerce-sdk-go"
 )
 
 func main() {

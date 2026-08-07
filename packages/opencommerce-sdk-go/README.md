@@ -21,28 +21,26 @@ than one language finds a familiar shape everywhere.
 
 ## Module path
 
-`go.mod` currently declares `module opencommerce-sdk-go` — a local
-placeholder that resolves correctly for everything in this repository
-(`go build`, `go test`, `go vet`) and for local `replace` directives from
-another Go module. Before publishing this SDK anywhere real, update the
-`module` line in `go.mod` to its permanent import path (e.g. a real
-`github.com/<org>/opencommerce-sdk-go`), and every internal import
-statement (there are none — this package has no sub-packages) would need
-no changes either way.
+`go.mod` declares `module github.com/opencommerceir/opencommerce-platform/packages/opencommerce-sdk-go`
+(§7.36) — this SDK's real, permanent home is a subdirectory of the main
+`opencommerce-platform` monorepo, not a separate repository. Go's module
+system resolves subdirectory modules like this one automatically via
+`proxy.golang.org` once a `packages/opencommerce-sdk-go/vX.Y.Z`-prefixed
+git tag exists on this repository — no separate publish step, no
+registry account, unlike npm/PyPI.
 
 ---
 
 ## Installation
 
-Once published under its real module path:
-
 ```bash
-go get github.com/<org>/opencommerce-sdk-go
+go get github.com/opencommerceir/opencommerce-platform/packages/opencommerce-sdk-go
 ```
 
-Inside this monorepo today, add a `replace` directive in your own
-`go.mod` pointing at `../opencommerce-sdk-go` (or `packages/opencommerce-sdk-go`,
-depending on where your module lives).
+Inside this monorepo today (before any tag exists), add a `replace`
+directive in your own `go.mod` pointing at `../opencommerce-sdk-go` (or
+`packages/opencommerce-sdk-go`, depending on where your module lives) —
+see `examples/go.mod` for exactly this.
 
 ---
 
@@ -62,7 +60,7 @@ import (
 	"fmt"
 	"log"
 
-	opencommerce "opencommerce-sdk-go"
+	opencommerce "github.com/opencommerceir/opencommerce-platform/packages/opencommerce-sdk-go"
 )
 
 func main() {

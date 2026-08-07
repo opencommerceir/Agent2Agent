@@ -3,7 +3,7 @@ package opencommerce_test
 import (
 	"testing"
 
-	opencommerce "opencommerce-sdk-go"
+	opencommerce "github.com/opencommerceir/opencommerce-platform/packages/opencommerce-sdk-go"
 )
 
 func TestNewConfigAcceptsAFullyQualifiedBaseURLDirectly(t *testing.T) {

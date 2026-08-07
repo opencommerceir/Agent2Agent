@@ -20,8 +20,12 @@ language finds the same shape everywhere.
 ## Installation
 
 ```bash
-pip install opencommerce-sdk
+pip install opencommerce-platform-sdk
 ```
+
+*(Distribution name is `opencommerce-platform-sdk` — `opencommerce-sdk`
+was already registered on PyPI by an unrelated project, §7.36 — but the
+importable package is still `opencommerce_sdk`, unchanged: `import opencommerce_sdk`.)*
 
 *(Inside this monorepo, you can also just add
 `packages/opencommerce-sdk-python` to your `PYTHONPATH`, or
