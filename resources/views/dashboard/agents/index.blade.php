@@ -8,6 +8,12 @@
         <a href="{{ route('dashboard.agents.create') }}" class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">{{ t('messages.agents.create') }}</a>
     </div>
 
+    @include('dashboard.partials.help', [
+        'title' => t('messages.help.agents_index.title'),
+        'description' => t('messages.help.agents_index.description'),
+        'example' => t('messages.help.agents_index.example'),
+    ])
+
     <form method="GET" action="{{ route('dashboard.agents.index') }}" class="mb-4 max-w-xs">
         <label class="mb-1 block text-sm font-medium">{{ t('messages.agents.filter_by_tenant') }}</label>
         <select name="tenant_id" onchange="this.form.submit()" class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm">

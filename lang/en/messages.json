@@ -148,5 +148,77 @@
     "no_slow_queries": "No slow queries recorded.",
     "optimization_suggestions": "Optimization Suggestions",
     "no_suggestions": "No repeated (likely N+1) query shapes detected."
+  },
+  "help": {
+    "example_label": "Example",
+    "dashboard": {
+      "title": "About this page",
+      "description": "Shows an overview of the selected tenant's business performance: revenue, order count, average order value, customer count, conversion rate, and active loyalty accounts, plus revenue/order charts. Pick a tenant from the selector above to see its stats."
+    },
+    "tenants_index": {
+      "title": "What is a Tenant?",
+      "description": "A Tenant is an independent business on the platform — products, orders, and Agents are fully isolated between tenants. Use this page to view tenants and create new ones.",
+      "example": "Name “Digi Store”, domain “digi-store” — the domain is lowercase letters/numbers/hyphens only and cannot be changed after creation."
+    },
+    "tenants_create": {
+      "title": "Guide: creating a tenant",
+      "description": "A new tenant represents a new business/store on the platform. Once created, you can define Agents, products, and orders for it.",
+      "name_hint": "The business's display name, e.g. “Aria Digital Store”.",
+      "domain_hint": "A unique, URL-safe identifier for the tenant (no spaces), e.g. aria-digital — this cannot be edited after creation."
+    },
+    "tenants_edit": {
+      "title": "Guide: editing a tenant",
+      "description": "Only the name and status can be changed here — the domain is fixed after creation. “pending” means awaiting approval, “active” means live and usable, “suspended” means temporarily blocked for Agents."
+    },
+    "agents_index": {
+      "title": "What is an Agent?",
+      "description": "An Agent is an AI/programmatic identity that talks to the platform on a tenant's behalf over MCP — searching products, placing orders, and so on. Every Agent belongs to exactly one tenant and can be active, inactive, or suspended.",
+      "example": "Use “Filter by tenant” above to see only one tenant's Agents."
+    },
+    "agents_create": {
+      "title": "Guide: creating an Agent",
+      "description": "Before an AI system or bot can talk to a tenant over MCP, it needs an Agent defined for it.",
+      "tenant_hint": "The tenant this Agent belongs to.",
+      "organization_hint": "The numeric Organization ID inside that tenant, e.g. 1.",
+      "name_hint": "A recognizable name for the Agent, e.g. “Aria Store Sales Agent”.",
+      "type_hint": "What the Agent does: shopping (buy/sell), analytics (data analysis), customer_service (support), or custom."
+    },
+    "agents_edit": {
+      "title": "Guide: editing an Agent",
+      "description": "You can change the Agent's name and type here. Use the Suspend/Activate buttons on the Agents list to change its status."
+    },
+    "products_index": {
+      "title": "Products",
+      "description": "The selected tenant's active products, with SKU, price, and status. This page is read-only — products are created and edited through MCP or an Agent, not here."
+    },
+    "products_show": {
+      "title": "Product details",
+      "description": "Full details for one product: name, SKU (its unique inventory identifier), price, and description."
+    },
+    "orders_index": {
+      "title": "Orders",
+      "description": "Orders placed for the selected tenant. Filter by status — pending, confirmed, processing, shipped, delivered, cancelled, or refunded."
+    },
+    "orders_show": {
+      "title": "Order details",
+      "description": "Order number, status, total, and line items. You can cancel the order below as long as it hasn't reached a final status (delivered, cancelled, or refunded) yet."
+    },
+    "notifications_index": {
+      "title": "Notifications",
+      "description": "Messages the system sent automatically for events like a new order, a shipment status change, or earned loyalty points. Use the filters to narrow results by type, status, or language."
+    },
+    "settings": {
+      "title": "Tenant settings",
+      "description": "Right now the only editable setting is the tenant's default language, used for its own messages and notifications."
+    },
+    "analytics": {
+      "title": "Analytics & KPIs",
+      "description": "Calculate a KPI — e.g. revenue or conversion rate — over a time range. Results are cached for 1 hour, so repeating the same query is instant.",
+      "example": "KPI type “Revenue”, period “monthly”, plus a start/end date — the result shows as a number, currency amount, or percentage depending on the KPI. Use the CSV/PDF buttons below to download the report."
+    },
+    "performance": {
+      "title": "System performance",
+      "description": "Platform-wide operational metrics: average response time, cache hit rate, request count, memory usage, and open database connections. These numbers cover the whole platform, not a single tenant."
+    }
   }
 }

@@ -5,6 +5,11 @@
 @section('content')
     <h1 class="mb-6 text-xl font-semibold">{{ t('messages.performance.title') }}</h1>
 
+    @include('dashboard.partials.help', [
+        'title' => t('messages.help.performance.title'),
+        'description' => t('messages.help.performance.description'),
+    ])
+
     <div class="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-5">
         <div class="rounded-lg border border-gray-200 bg-white p-4">
             <div class="text-sm text-gray-500">{{ t('messages.performance.average_response_time') }}</div>

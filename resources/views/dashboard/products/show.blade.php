@@ -5,6 +5,11 @@
 @section('content')
     <h1 class="mb-6 text-xl font-semibold">{{ t('messages.products.details') }}</h1>
 
+    @include('dashboard.partials.help', [
+        'title' => t('messages.help.products_show.title'),
+        'description' => t('messages.help.products_show.description'),
+    ])
+
     <div class="max-w-lg space-y-3 rounded-lg border border-gray-200 bg-white p-6 text-sm">
         <div><span class="font-medium">{{ t('messages.products.name') }}:</span> {{ $product->name }}</div>
         <div><span class="font-medium">{{ t('messages.products.sku') }}:</span> {{ $product->sku }}</div>

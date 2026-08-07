@@ -5,6 +5,11 @@
 @section('content')
     <h1 class="mb-6 text-xl font-semibold">{{ t('messages.tenants.edit') }}</h1>
 
+    @include('dashboard.partials.help', [
+        'title' => t('messages.help.tenants_edit.title'),
+        'description' => t('messages.help.tenants_edit.description'),
+    ])
+
     <form method="POST" action="{{ route('dashboard.tenants.update', $tenant->id()) }}" class="max-w-lg space-y-4 rounded-lg border border-gray-200 bg-white p-6">
         @csrf
         @method('PUT')

@@ -5,6 +5,11 @@
 @section('content')
     <h1 class="mb-6 text-xl font-semibold">{{ t('messages.settings.title') }}</h1>
 
+    @include('dashboard.partials.help', [
+        'title' => t('messages.help.settings.title'),
+        'description' => t('messages.help.settings.description'),
+    ])
+
     <form method="GET" action="{{ route('dashboard.settings.index') }}" class="mb-4 max-w-xs">
         <label class="mb-1 block text-sm font-medium">{{ t('messages.settings.select_tenant') }}</label>
         <select name="tenant_id" onchange="this.form.submit()" class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm">

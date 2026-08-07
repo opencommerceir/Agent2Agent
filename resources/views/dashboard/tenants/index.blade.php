@@ -8,6 +8,12 @@
         <a href="{{ route('dashboard.tenants.create') }}" class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">{{ t('messages.tenants.create') }}</a>
     </div>
 
+    @include('dashboard.partials.help', [
+        'title' => t('messages.help.tenants_index.title'),
+        'description' => t('messages.help.tenants_index.description'),
+        'example' => t('messages.help.tenants_index.example'),
+    ])
+
     <div class="overflow-x-auto rounded-lg border border-gray-200 bg-white">
         <table class="w-full text-start text-sm">
             <thead class="border-b border-gray-200 bg-gray-50 text-xs uppercase text-gray-500">

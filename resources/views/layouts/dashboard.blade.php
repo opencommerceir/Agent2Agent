@@ -10,7 +10,7 @@
     <div class="flex min-h-screen">
         {{-- Sidebar --}}
         <aside
-            class="fixed inset-y-0 start-0 z-30 w-64 shrink-0 border-e border-gray-200 bg-white transition-transform md:static md:translate-x-0"
+            class="fixed inset-y-0 start-0 z-30 w-64 shrink-0 border-e border-gray-200 bg-white transition-transform md:static md:translate-x-0! md:transition-none"
             :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full rtl:translate-x-full'"
         >
             <div class="flex h-16 items-center border-b border-gray-200 px-4 text-lg font-semibold">

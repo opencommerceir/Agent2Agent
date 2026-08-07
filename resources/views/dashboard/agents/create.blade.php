@@ -5,6 +5,11 @@
 @section('content')
     <h1 class="mb-6 text-xl font-semibold">{{ t('messages.agents.create') }}</h1>
 
+    @include('dashboard.partials.help', [
+        'title' => t('messages.help.agents_create.title'),
+        'description' => t('messages.help.agents_create.description'),
+    ])
+
     <form method="POST" action="{{ route('dashboard.agents.store') }}" class="max-w-lg space-y-4 rounded-lg border border-gray-200 bg-white p-6">
         @csrf
 
@@ -16,16 +21,19 @@
                     <option value="{{ $tenant->id() }}" @selected(old('tenant_id') == $tenant->id())>{{ $tenant->name() }}</option>
                 @endforeach
             </select>
+            <p class="mt-1 text-xs text-gray-500">{{ t('messages.help.agents_create.tenant_hint') }}</p>
         </div>
 
         <div>
             <label class="mb-1 block text-sm font-medium">{{ t('messages.agents.organization_id') }}</label>
-            <input type="number" name="organization_id" value="{{ old('organization_id') }}" required class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
+            <input type="number" name="organization_id" value="{{ old('organization_id') }}" required placeholder="1" class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
+            <p class="mt-1 text-xs text-gray-500">{{ t('messages.help.agents_create.organization_hint') }}</p>
         </div>
 
         <div>
             <label class="mb-1 block text-sm font-medium">{{ t('messages.tenants.name') }}</label>
             <input type="text" name="name" value="{{ old('name') }}" required class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
+            <p class="mt-1 text-xs text-gray-500">{{ t('messages.help.agents_create.name_hint') }}</p>
         </div>
 
         <div>
@@ -35,6 +43,7 @@
                     <option value="{{ $type }}" @selected(old('type') === $type)>{{ $type }}</option>
                 @endforeach
             </select>
+            <p class="mt-1 text-xs text-gray-500">{{ t('messages.help.agents_create.type_hint') }}</p>
         </div>
 
         <div class="flex gap-3">

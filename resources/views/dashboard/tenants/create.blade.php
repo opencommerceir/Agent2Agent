@@ -5,17 +5,24 @@
 @section('content')
     <h1 class="mb-6 text-xl font-semibold">{{ t('messages.tenants.create') }}</h1>
 
+    @include('dashboard.partials.help', [
+        'title' => t('messages.help.tenants_create.title'),
+        'description' => t('messages.help.tenants_create.description'),
+    ])
+
     <form method="POST" action="{{ route('dashboard.tenants.store') }}" class="max-w-lg space-y-4 rounded-lg border border-gray-200 bg-white p-6">
         @csrf
 
         <div>
             <label class="mb-1 block text-sm font-medium">{{ t('messages.tenants.name') }}</label>
-            <input type="text" name="name" value="{{ old('name') }}" required class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
+            <input type="text" name="name" value="{{ old('name') }}" required placeholder="{{ t('messages.help.tenants_create.name_hint') }}" class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
+            <p class="mt-1 text-xs text-gray-500">{{ t('messages.help.tenants_create.name_hint') }}</p>
         </div>
 
         <div>
             <label class="mb-1 block text-sm font-medium">{{ t('messages.tenants.domain') }}</label>
-            <input type="text" name="slug" value="{{ old('slug') }}" required class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
+            <input type="text" name="slug" value="{{ old('slug') }}" required placeholder="aria-digital" class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
+            <p class="mt-1 text-xs text-gray-500">{{ t('messages.help.tenants_create.domain_hint') }}</p>
         </div>
 
         <div class="flex gap-3">

@@ -5,6 +5,12 @@
 @section('content')
     <h1 class="mb-6 text-xl font-semibold">{{ t('messages.analytics.title') }}</h1>
 
+    @include('dashboard.partials.help', [
+        'title' => t('messages.help.analytics.title'),
+        'description' => t('messages.help.analytics.description'),
+        'example' => t('messages.help.analytics.example'),
+    ])
+
     <form method="GET" action="{{ route('dashboard.analytics.index') }}" class="mb-6 grid max-w-3xl grid-cols-2 gap-4 rounded-lg border border-gray-200 bg-white p-6 sm:grid-cols-3 lg:grid-cols-5">
         <div>
             <label class="mb-1 block text-sm font-medium">{{ t('messages.settings.select_tenant') }}</label>

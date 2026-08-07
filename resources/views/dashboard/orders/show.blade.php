@@ -5,6 +5,11 @@
 @section('content')
     <h1 class="mb-6 text-xl font-semibold">{{ t('messages.orders.details') }}</h1>
 
+    @include('dashboard.partials.help', [
+        'title' => t('messages.help.orders_show.title'),
+        'description' => t('messages.help.orders_show.description'),
+    ])
+
     <div class="max-w-2xl space-y-3 rounded-lg border border-gray-200 bg-white p-6 text-sm">
         <div><span class="font-medium">{{ t('messages.orders.order_number') }}:</span> {{ $order->orderNumber }}</div>
         <div><span class="font-medium">{{ t('messages.orders.status') }}:</span> {{ $order->status }}</div>

@@ -5,6 +5,11 @@
 @section('content')
     <h1 class="mb-6 text-xl font-semibold">{{ t('messages.agents.edit') }}</h1>
 
+    @include('dashboard.partials.help', [
+        'title' => t('messages.help.agents_edit.title'),
+        'description' => t('messages.help.agents_edit.description'),
+    ])
+
     <form method="POST" action="{{ route('dashboard.agents.update', $agent->id()) }}" class="max-w-lg space-y-4 rounded-lg border border-gray-200 bg-white p-6">
         @csrf
         @method('PUT')
@@ -21,6 +26,7 @@
                     <option value="{{ $type }}" @selected(old('type', $agent->type()->value) === $type)>{{ $type }}</option>
                 @endforeach
             </select>
+            <p class="mt-1 text-xs text-gray-500">{{ t('messages.help.agents_create.type_hint') }}</p>
         </div>
 
         <div class="flex gap-3">
