@@ -116,7 +116,39 @@ class OpenRouterClientTest extends TestCase
         $this->assertSame('Bearer sk-or-test', $sentRequest->getHeaderLine('Authorization'));
         $this->assertSame('OpenCommerce Platform', $sentRequest->getHeaderLine('X-Title'));
         $this->assertNotEmpty($sentRequest->getHeaderLine('HTTP-Referer'));
-        $this->assertSame('/chat/completions', $sentRequest->getUri()->getPath());
+        // No leading slash — a real Guzzle `base_uri` merge requires the
+        // relative request path to omit it, or `$baseUrl`'s own `/api/v1`
+        // segment silently gets dropped on every real request (see the
+        // constructor's own docblock, and HANDOFF §7.34/§8.95).
+        $this->assertSame('chat/completions', $sentRequest->getUri()->getPath());
+    }
+
+    /**
+     * Every other test above injects `$http` directly, which bypasses the
+     * constructor's own `$http ??= new Client(['base_uri' => ...])`
+     * branch entirely — so none of them exercised the real `$baseUrl` +
+     * relative-path Guzzle resolution a live request actually depends on.
+     * That untested branch is exactly what silently dropped `/api/v1`
+     * from every real OpenRouter request before this fix (only caught by
+     * an actual, live call — HANDOFF §7.34/§8.95). This test reaches that
+     * branch via reflection (no network access) and resolves the real
+     * request URI the same way Guzzle does internally, so this exact
+     * regression can't come back unnoticed.
+     */
+    public function test_defaultConstructor_resolvesBaseUrlAndPathToTheFullRealEndpoint(): void
+    {
+        $client = new OpenRouterClient('sk-or-test');
+
+        $property = new \ReflectionProperty($client, 'http');
+        $property->setAccessible(true);
+        $guzzle = $property->getValue($client);
+
+        $resolved = \GuzzleHttp\Psr7\UriResolver::resolve(
+            \GuzzleHttp\Psr7\Utils::uriFor($guzzle->getConfig('base_uri')),
+            \GuzzleHttp\Psr7\Utils::uriFor('chat/completions'),
+        );
+
+        $this->assertSame('https://openrouter.ai/api/v1/chat/completions', (string) $resolved);
     }
 
     /**

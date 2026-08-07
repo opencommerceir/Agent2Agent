@@ -1,5 +1,62 @@
 # OpenCommerce Platform — Session Handoff
 
+**Status: Live OpenRouter Verification (§7.35 — after §7.34, not a Phase
+Stage) is now complete — the first time any `LLMClientInterface`
+implementation in this codebase has actually been exercised against a
+real, live third-party API rather than a Guzzle `MockHandler`, closing
+the exact gap HANDOFF §8.95 already predicted. Real credentials
+(`openai/gpt-oss-20b:free` via OpenRouter) surfaced one genuine,
+previously-unverified bug in `OpenRouterClient` within the first live
+call: Guzzle resolves a `base_uri` + a leading-slash request path per RFC
+3986 §5.3 by *replacing* the base's own path rather than appending to it,
+so `https://openrouter.ai/api/v1` + `/chat/completions` silently resolved
+to `https://openrouter.ai/chat/completions` — every real request 403'd,
+`/api/v1` dropped, on every single call this class had ever made outside
+a test double. Every existing unit test injected its own pre-built Guzzle
+client via the constructor's `$http` parameter specifically to avoid a
+real network call (the correct, deliberate testing discipline this
+codebase has always used, §7.6/§7.28/§7.32) — which also meant none of
+them ever exercised the real `base_uri`-building constructor branch this
+bug lived in. Fixed with the standard Guzzle convention (`base_uri` ends
+with `/`, the request path does not start with one) and locked in with a
+new regression test that reaches that exact branch via reflection, no
+network required. A second, real, live-verified finding: this specific
+free-tier model took anywhere from ~1s to a genuine 60s+ timeout for the
+same kind of request depending on OpenRouter's own shared free-tier
+capacity — `OpenRouterClient`'s own request timeout was widened 30s→60s
+in direct response (still bounded — `LLMPlanner`/`LLMReasoningEngine`'s
+existing, unconditional fallback to `DeterministicPlanner`/
+`SimpleReasoningEngine` on any failure, §7.28/§7.31, was never touched
+and is exactly what kept every live run below returning a real, complete
+result even on the runs that did time out). A live, direct
+`LLMPlanner::createPlan()` call against a goal with no keyword match in
+`config/agents/ceo.php` produced a genuinely novel plan
+(`commerce.customer.list` + `agent.collaboration.delegate`) that exists
+nowhere in any hardcoded `planning_rules` list — real, live proof the LLM
+is actually reasoning over the full, real 127-capability list
+(`DiscoverCapabilitiesAction`), not just a stand-in for a keyword
+lookup — the platform's own central claim, demonstrated against a real
+external model for the first time this session. A live, full
+`ExecuteGoalAction` run against the seeded Showcase demo Tenant (§7.33)
+also completed end-to-end with real results (a real sales report, a real
+KPI calculation, a real Coupon persisted) — its own plan resolved through
+the tenant's already-learned `ExecutionPattern` rather than a fresh LLM
+call (Execution Memory & Learning's own short-circuit, §7.29, running
+exactly as documented, ahead of either `PlannerInterface`
+implementation), and both `think()`/`reflect()` calls that attempt real
+reasoning correctly fell back to `SimpleReasoningEngine` on the two
+requests that did time out — an honest, real demonstration of the
+fallback safety net under genuine failure, not a scripted success. No
+application code changed outside `OpenRouterClient.php` itself; 1103
+tests passing (1102 + 1 new regression test), zero known regressions.
+`OPENROUTER_API_KEY`/`OPENROUTER_MODEL=openai/gpt-oss-20b:free` now live
+in this environment's own `.env` (git-ignored, never committed) —
+`PLANNER_TYPE`/`REASONING_TYPE` deliberately stay at their safe
+`deterministic`/`simple` defaults; live LLM use remains opt-in per
+request (the Showcase demo's own "Use real AI" toggle, or an explicit
+`config()` override), the same safe-default discipline §7.28/§7.31
+already established. See §7.35 for the full detail.**
+
 **Status: Multi-Language SDK Expansion (§7.34 — after §7.33, not a Phase
 Stage) is now complete — three new, independent, dependency-free client
 packages (`packages/opencommerce-sdk-python`, `-js` (`@opencommerce/sdk`,
@@ -8161,6 +8218,130 @@ PHP SDK.
 
 ---
 
+### 7.35 Live OpenRouter Verification (after §7.34, not a Phase Stage)
+
+**Not a Phase Stage — a small, deliberately narrow verification pass, the
+same "real, useful work outside the numbered Stage sequence" shape
+§7.13/§7.32/§7.33/§7.34 already used.** The request: actually run the
+LLM integration this codebase has carried since §7.28/§7.32 against a
+real provider, with real credentials (OpenRouter, `openai/gpt-oss-20b:free`),
+and document what real, live traffic shows — the exact verification
+HANDOFF §8.79/§8.95 had flagged as still outstanding since the day each
+was written ("no live end-to-end verification against a real API
+exists... every test is against a mock").
+
+**A real bug, found on the very first live call, before this pass ever
+reached `LLMPlanner`/`ExecuteGoalAction`.** A direct
+`OpenRouterClient::complete()` call 403'd — Guzzle's own `base_uri` +
+relative-request-path resolution follows RFC 3986 §5.3: a request path
+starting with `/` is an *absolute-path reference* and **replaces**
+`base_uri`'s own path entirely rather than appending to it. `base_uri`
+`https://openrouter.ai/api/v1` (this class's own configurable `$baseUrl`,
+its whole reason to exist, §7.32) plus the request path
+`/chat/completions` (leading slash) silently resolved to
+`https://openrouter.ai/chat/completions` — `/api/v1` dropped, on *every*
+real request this class had ever constructed outside a test double, since
+the day it shipped. `OpenAIClient` never had this bug — its own
+`base_uri` is host-only (`https://api.openai.com`, no path segment to
+lose), so an absolute-path replacement is harmless there; `OpenRouterClient`
+is the one class in this codebase where a real, configurable base path
+made the bug possible at all. Every one of `OpenRouterClientTest`'s own 7
+pre-existing tests injected a fully-constructed Guzzle `Client` directly
+via the constructor's `$http` parameter — the correct, deliberate
+"no test touches a real socket" discipline this codebase has always used
+(§7.6/§7.28) — which also meant none of them ever exercised the
+`$http ??= new Client(['base_uri' => ...])` branch this bug actually
+lived in. Fixed with the standard Guzzle convention: `base_uri` must end
+with `/`, and the request path must not start with one, so RFC 3986's
+merge rule appends instead of replacing (`rtrim($this->baseUrl, '/').'/'`
+on construction; `CHAT_COMPLETIONS_PATH` changed from `/chat/completions`
+to `chat/completions`). A new regression test,
+`test_defaultConstructor_resolvesBaseUrlAndPathToTheFullRealEndpoint()`,
+reaches that exact untested branch via `ReflectionProperty` and resolves
+the real request URI the same way Guzzle does internally — no network
+access needed, so this exact class of bug (a real branch no injected-`$http`
+test ever reaches) can't silently come back. One pre-existing test's own
+assertion (`getUri()->getPath()`) needed updating to match the corrected,
+no-leading-slash path convention.
+
+**A second, real, live-only finding: free-tier latency is genuinely
+inconsistent, not a bug.** The same kind of `completeStructured()` call
+observed anywhere from ~1s to two separate 30s+ timeouts across this
+session's own live calls — OpenRouter's own shared, rate-limited capacity
+for a `:free`-suffixed model, not this codebase's problem to fix.
+`OpenRouterClient`'s own Guzzle timeout was widened 30s → 60s in direct,
+documented response (see that constructor's own updated docblock) — a
+real, live-informed reliability improvement, not a guess; the existing,
+unconditional `LLMPlanner`/`LLMReasoningEngine` fallback to
+`DeterministicPlanner`/`SimpleReasoningEngine` on any failure (§7.28/§7.31)
+was not touched and is exactly what already keeps a slow/failed live call
+from ever becoming a hard failure for a real caller. This is real,
+live, empirical confirmation of the exact cost HANDOFF §8.78 already
+predicted from reading the request alone ("`LLMPlanner` sends the full,
+uncached capability list on every single planning call... a real,
+non-trivial prompt-size cost") — the ~20,700-character prompt
+`PlanningPromptTemplate::forGoal()` builds from all 127 currently-discoverable
+capabilities is almost certainly why a free, shared-capacity model
+struggles to answer inside 30s some of the time. Not fixed this pass
+(pruning/caching the capability list is real, separate, already-tracked
+future work, §8.78/§9) — the timeout widening is the honest, proportionate
+response available today without that larger change.
+
+**Three real, live calls, each proving a different part of the claim
+this project exists to make, not just that a network request
+succeeds:**
+
+1. A direct `OpenRouterClient::complete()` call ("what does OpenCommerce
+   do?") returned a real, coherent sentence in ~12s — basic connectivity
+   and the fix above, confirmed.
+2. A direct `LLMPlanner::createPlan()` call, constructed the same way
+   `AgentOrchestratorServiceProvider` wires it in production, against a
+   goal with no keyword match in `config/agents/ceo.php`'s own
+   `planning_rules` ("Find out how many customers we have and check if
+   any product is low on stock") returned a genuinely novel two-step plan
+   — `commerce.customer.list` + `agent.collaboration.delegate` — that
+   exists in **no** hardcoded rule anywhere in this codebase. This is the
+   real, live proof this pass exists to produce: the model is actually
+   reasoning over the full, real capability list `DiscoverCapabilitiesAction`
+   supplies, not standing in for a keyword lookup.
+3. A full, live `ExecuteGoalAction` run against the seeded Showcase demo
+   Tenant (§7.33) — `PLANNER_TYPE`/`REASONING_TYPE`/`LLM_PROVIDER`
+   overridden to `llm`/`llm`/`openrouter` for the one call, the same
+   mechanism the Showcase UI's own "Use real AI" toggle already uses —
+   completed end to end with real results: a real `report.sales.generate`
+   pull against real seeded Orders, a real `analytics.kpi.calculate`
+   figure, a real `Coupon` persisted, and a `notification.message.send`
+   attempt. Its own plan resolved through the tenant's already-learned
+   `ExecutionPattern` rather than a fresh LLM call — Execution Memory &
+   Learning's own documented short-circuit (§7.29) running exactly as
+   specified, ahead of either `PlannerInterface` implementation, since
+   this Tenant already has 2 similar, 100%-successful past Executions
+   from the Showcase seeder itself. Both `think()`/`reflect()` calls that
+   did attempt a real LLM reasoning call hit the free-tier timeout
+   documented above and correctly, silently fell back to
+   `SimpleReasoningEngine` — an honest demonstration of the fallback
+   safety net actually engaging under a genuine live failure, not a
+   scripted one.
+
+**Credentials now live in this environment's own `.env`** (git-ignored,
+confirmed via `git check-ignore`, never committed) —
+`LLM_PROVIDER=openrouter`, `OPENROUTER_API_KEY`,
+`OPENROUTER_MODEL=openai/gpt-oss-20b:free`. `PLANNER_TYPE`/`REASONING_TYPE`
+deliberately stay at their existing safe defaults
+(`deterministic`/`simple`) — this pass proves live LLM use *works*, it
+does not flip this codebase's own already-documented "safe default,
+explicit opt-in" policy (§7.28/§7.31) to attempt a real network call on
+every ordinary goal execution. Live LLM use remains reachable exactly the
+same two ways it already was: the Showcase demo's own `use_real_ai`
+toggle, or an explicit `config()`/env override for a specific run.
+
+No change to any Domain Module, `routes/mcp.php`, any MCP capability, or
+any file outside `app/Modules/AgentOrchestrator/Application/Services/OpenRouterClient.php`
+and its own test file. 1103 tests passing (1102 + 1 new regression test),
+zero known regressions.
+
+---
+
 ## 8. Known technical debt (ranked, carried over + Phase 2 additions)
 
 1. ~~**No per-tenant tax-rate configuration exists.**~~ **Resolved in
@@ -8717,11 +8898,12 @@ PHP SDK.
     is ever fed back into planning (item 90 above) would make it matter.
 94. **No Dashboard UI for Self-Reflection & Reasoning** (§7.31) — same gap
     item 69/75/84/89 already flag, now also true for reasoning traces.
-95. **No live end-to-end verification against a real OpenRouter API
-    exists** (§7.32) — the identical "real infra assumed in production,
-    verified honestly once credentials exist" shape `OpenAIClient`/
-    `ClaudeClient` already carry (§8.79); `OpenRouterClient` is real,
-    tested against mocked HTTP only.
+95. ~~**No live end-to-end verification against a real OpenRouter API
+    exists.**~~ **Resolved in §7.35** — real credentials, real calls,
+    real results (a genuine `base_uri` bug found and fixed in the
+    process, plus a documented, live-informed timeout widening).
+    `OpenAIClient`/`ClaudeClient` remain unverified against a live API
+    (§8.79) — this item only ever covered OpenRouter.
 96. **OpenRouter's own free-model list isn't tracked anywhere in this
     codebase** (§7.32) — `OPENROUTER_MODEL`'s own default
     (`meta-llama/llama-3.1-405b-instruct:free`) is a real model as of this
@@ -8825,13 +9007,20 @@ already exists:
   resource's own Controller reuses its Actions (§3 pattern #19); only the
   page itself is missing, the same gap item 69/75 already flag for
   Executions/Goals and Agent Profiles.
-- **Stand up real OpenAI/Claude/OpenRouter credentials and verify
-  `LLMPlanner`/`LLMReasoningEngine` end to end against a live API**
-  (§8.79/§8.95) — every test so far is against a mock; a real run,
-  starting with OpenRouter's own free tier (cheapest to try, §7.32), is
-  the natural next increment once credentials exist, the same "real infra
-  assumed in production, verified honestly once credentials exist" step
-  every external Connector in this codebase eventually needs.
+- **Stand up real OpenAI/Claude credentials and verify `LLMPlanner`/
+  `LLMReasoningEngine` end to end against those two providers too**
+  (§8.79) — OpenRouter's own free tier is now live-verified (§7.35,
+  closing §8.95); `OpenAIClient`/`ClaudeClient` remain tested against
+  mocked HTTP only, the same "real infra assumed in production, verified
+  honestly once credentials exist" step every external Connector in this
+  codebase eventually needs.
+- **Prune/cache `LLMPlanner`'s own capability list per call** (§8.78,
+  now empirically confirmed, not just predicted, by §7.35's own live
+  timing) — the full, uncached ~20,700-character/127-capability prompt is
+  very likely why a free, shared-capacity model timed out some of the
+  time; a real fix (relevance filtering, or caching the formatted
+  capability text between calls) would directly improve both latency and
+  reliability against any real provider, not just OpenRouter.
 - **Run all four SDK example scripts against a real `php artisan serve` +
   a real Agent token** (§7.34/§8.98) — every new SDK's own tests inject a
   fake `Transport`, and each example script's own argument-parsing path
