@@ -5,9 +5,9 @@ Phase Stage) is IN PROGRESS, not complete — the one entry in this file
 that isn't. A 22-file-per-language (`tutorials/{fa,en}/interview-qa/`)
 technical-interview prep curriculum, fully grounded in this repo's own
 real code (never generic textbook answers), generated one file pair
-(`fa`+`en`) per turn per the requester's own explicit workflow. 5 of 23
+(`fa`+`en`) per turn per the requester's own explicit workflow. 9 of 23
 files per language exist as of this entry — `00-index.md` (the curriculum
-map) through `04-database-and-performance.md`. See §7.40 itself for the
+map) through `08-ddd-strategic.md`. See §7.40 itself for the
 per-file breakdown and what remains; update that same section's own
 "completed so far" list on every future pass rather than adding a new
 numbered section per file pair. Immediately before it, §7.39 added a
@@ -8977,7 +8977,7 @@ answer hint each, and 🚩 red-flag answers that would expose a lack of
 real understanding. `00-index.md` is the full 22-file curriculum map plus
 a study-order recommendation by seniority level (Mid/Senior/Architect).
 
-**Completed so far (5 of 23 files per language — this entry will be
+**Completed so far (9 of 23 files per language — this entry will be
 updated as later files land, not duplicated per file):**
 - `01-project-storytelling.md` — 12 Q&As on introducing the project, the
   author's own real role (an honest "architect + reviewer directing an
@@ -9001,11 +9001,35 @@ updated as later files land, not duplicated per file):**
   Optimization (§7.20), the real `AddToCartAction` concurrency race
   (§7.13/§8.22), and the NULL-is-distinct unique-index caveat `variant_id`/
   `warehouse_id` both carry (§7.21/§7.22).
+- `05-api-design.md` — 12 Q&As on why the MCP Gateway isn't fully
+  RESTful, the real priority-order contradiction caught in the v1/v2
+  versioning spec (§7.19), the "no optional field" input-schema
+  limitation, `MCPExceptionHandler`'s marker-interface error mapping, the
+  recurring 3-segment capability-naming gotcha (§3 pattern #13), and
+  backward compatibility via optional trailing parameters (§3 pattern #6).
+- `06-testing-and-quality.md` — 12 Q&As on the unit-vs-feature test
+  decision rule, the two-tier HTTP mocking discipline (fake class vs.
+  Guzzle `MockHandler`), a real N+1 regression-test walkthrough, honest
+  CI/coverage limitations, the real `OpenRouterClient` `base_uri` bug
+  only live testing caught (§7.35), and verifying a refactor
+  (`FinalizeSuccessfulPaymentAction`, §7.37) via an unchanged test suite.
+- `07-ddd-tactical.md` — 12 Q&As on Entity vs. Value Object, the
+  Aggregate Root/consistency-boundary distinction, constructor invariant
+  enforcement, exactly where a Domain Event gets dispatched and why
+  (inside the Action, after a successful save, never inside the Entity),
+  avoiding an anemic domain model, and the deliberate `Money` duplication
+  across modules.
+- `08-ddd-strategic.md` — 12 Q&As on Bounded Contexts (each module is
+  one), real Context Mapping patterns this codebase actually uses
+  (Customer-Supplier via a consumer-defined interface, an Anticorruption
+  Layer in `WooCommerceProductConnector`, a deliberately rejected Shared
+  Kernel, a documented Conformist relationship in Reporting), UCP as a
+  Published Language, and the MCP Gateway as an Open Host Service.
 
-**Remaining**: files 05-22 (API design, testing, DDD tactical/strategic,
-event-driven messaging, CQRS, multi-tenancy, security, payments, the
-three business-module files, the two AI/MCP files, and the four
-interview-readiness files ending in full mock interviews) — not yet
+**Remaining**: files 09-22 (event-driven messaging, CQRS, multi-tenancy,
+security, payments, the three business-module files, the two AI/MCP
+files, and the four interview-readiness files ending in full mock
+interviews) — not yet
 built as of this entry. A future session/pass should update this same
 §7.40 entry's own "completed so far" list rather than adding a new
 numbered section per file pair, to avoid this file accumulating dozens of
