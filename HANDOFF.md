@@ -5,9 +5,9 @@ Phase Stage) is IN PROGRESS, not complete — the one entry in this file
 that isn't. A 22-file-per-language (`tutorials/{fa,en}/interview-qa/`)
 technical-interview prep curriculum, fully grounded in this repo's own
 real code (never generic textbook answers), generated one file pair
-(`fa`+`en`) per turn per the requester's own explicit workflow. 16 of 23
+(`fa`+`en`) per turn per the requester's own explicit workflow. 17 of 23
 files per language exist as of this entry — `00-index.md` (the curriculum
-map) through `15-crm-loyalty.md`. See §7.40 itself for the
+map) through `16-finance-workflows-reporting.md`. See §7.40 itself for the
 per-file breakdown and what remains; update that same section's own
 "completed so far" list on every future pass rather than adding a new
 numbered section per file pair. Immediately before it, §7.39 added a
@@ -8977,7 +8977,7 @@ answer hint each, and 🚩 red-flag answers that would expose a lack of
 real understanding. `00-index.md` is the full 22-file curriculum map plus
 a study-order recommendation by seniority level (Mid/Senior/Architect).
 
-**Completed so far (16 of 23 files per language — this entry will be
+**Completed so far (17 of 23 files per language — this entry will be
 updated as later files land, not duplicated per file):**
 - `01-project-storytelling.md` — 12 Q&As on introducing the project, the
   author's own real role (an honest "architect + reviewer directing an
@@ -9144,14 +9144,36 @@ updated as later files land, not duplicated per file):**
   #12 ("add the missing piece a request implies but doesn't list"), and a
   closing synthesis naming CRM/Loyalty as the two modules that first
   proved the Repository-Interface-only module boundary rule in practice.
+- `16-finance-workflows-reporting.md` — 12 Q&As on `GenerateInvoiceAction`
+  carrying `Order.tax` forward onto a frozen `Invoice` rather than asking
+  `TaxRateProviderInterface` to recompute it a second time, `TaxRegion`'s
+  own specificity-resolution rule (country+state beats country-wide) and
+  the two genuinely independent fallback layers stacked underneath it
+  (`NullTaxRateProvider`'s flat 9% vs. `TaxRegion::default()`), Finance's
+  own `OrderNotFoundException` as a third independent confirmation of the
+  same cross-module rule file 15 already proved, `Invoice`'s own stricter
+  `Draft→Issued→Paid` state machine and its honest no-`CreditNote`
+  reversal gap, a real trace of `WorkflowEngine`'s matching mechanics (one
+  generic Listener subscribed to every `EventType`, not one per trigger),
+  the `EventType::InventoryLow` modeled-but-unwired gap, the deliberate
+  single-comparison `WorkflowRule` condition shape (two separate rules
+  instead of a real `AND`/`OR` DSL), `WorkflowRule` action failure
+  isolation with its own honest no-automated-retry gap, why Finance/tax
+  data reaches `SalesQueryBuilder` correctly (through `Order.tax` itself)
+  while Subscription revenue never does, more MCP-capability wiring gaps
+  (`VoidInvoiceAction`, `DeactivateWorkflowAction`), a real bug story where
+  an admin-typed `"$100.00"` string silently broke an `OrderHighValue`
+  `WorkflowRule` comparison, and a closing, Part-E-wide synthesis naming
+  "the consumer always defines the interface, never the supplier" as the
+  one strategic rule underneath every cross-module example across
+  Commerce, CRM/Loyalty, and Finance/Workflows.
 
-**Remaining**: files 16-22 (the one remaining
-business-module file, the two AI/MCP files, and the four
-interview-readiness files ending in full mock interviews) — not yet
-built as of this entry. A future session/pass should update this same
-§7.40 entry's own "completed so far" list rather than adding a new
-numbered section per file pair, to avoid this file accumulating dozens of
-near-duplicate micro-entries for one ongoing piece of work.
+**Remaining**: files 17-22 (the two AI/MCP files
+and the four interview-readiness files ending in full mock interviews)
+— not yet built as of this entry. A future session/pass should update
+this same §7.40 entry's own "completed so far" list rather than adding a
+new numbered section per file pair, to avoid this file accumulating
+dozens of near-duplicate micro-entries for one ongoing piece of work.
 
 No code, tests, migrations, or capabilities changed — 1156 tests / 127
 capabilities unchanged from §7.38/§7.39; every change so far lives under
