@@ -5,9 +5,9 @@ Phase Stage) is IN PROGRESS, not complete — the one entry in this file
 that isn't. A 22-file-per-language (`tutorials/{fa,en}/interview-qa/`)
 technical-interview prep curriculum, fully grounded in this repo's own
 real code (never generic textbook answers), generated one file pair
-(`fa`+`en`) per turn per the requester's own explicit workflow. 14 of 23
+(`fa`+`en`) per turn per the requester's own explicit workflow. 15 of 23
 files per language exist as of this entry — `00-index.md` (the curriculum
-map) through `13-payments-fintech.md`. See §7.40 itself for the
+map) through `14-commerce-core.md`. See §7.40 itself for the
 per-file breakdown and what remains; update that same section's own
 "completed so far" list on every future pass rather than adding a new
 numbered section per file pair. Immediately before it, §7.39 added a
@@ -8977,7 +8977,7 @@ answer hint each, and 🚩 red-flag answers that would expose a lack of
 real understanding. `00-index.md` is the full 22-file curriculum map plus
 a study-order recommendation by seniority level (Mid/Senior/Architect).
 
-**Completed so far (14 of 23 files per language — this entry will be
+**Completed so far (15 of 23 files per language — this entry will be
 updated as later files land, not duplicated per file):**
 - `01-project-storytelling.md` — 12 Q&As on introducing the project, the
   author's own real role (an honest "architect + reviewer directing an
@@ -9096,8 +9096,31 @@ updated as later files land, not duplicated per file):**
   best-effort Zibal `verify()`/`inquiry()` field-name gap (§8.101), and
   why having no customer-facing checkout page is a confirmed scope
   boundary, not an unfinished feature (§8.103).
+- `14-commerce-core.md` — 12 Q&As tracing the real, full business flow
+  (catalog → cart → checkout → order → shipping → notification) across
+  Commerce/Loyalty/Notifications/Shipping without Commerce ever coupling
+  to any of them, the exact `PricingService` formula (tax always on
+  subtotal, never post-discount), the business (not concurrency) reason
+  behind Inventory's two-phase reserve/commit lifecycle, the honestly-named
+  `commerce.order.place`-vs-`commerce.checkout.process` pricing
+  inconsistency (§8.3), the DiscountRule Stackability-resolution rule and
+  why it deliberately never reaches checkout automatically (§8.57), the
+  two deliberately different strictness levels between
+  `CreateProductVariantAction`/`GenerateVariantCombinationsAction`, a full
+  Warehouse Transfer stock-movement walkthrough (`receiveStock()` vs.
+  `restore()`), why Bulk Operations upsert rather than throw (mirroring
+  `SyncWooCommerceProductsAction`), why Subscriptions bypass the Cart/Order
+  pipeline entirely and the real cost of that (§8.62), the
+  `Subscription::markPastDue()` self-transition bug story (moved here from
+  file 07's own forward-pointer, since Subscriptions are Commerce-module
+  content), the honest `Product.attributes['weight_grams']` gap (§8.34),
+  and a closing synthesis naming "widen an existing aggregate rather than
+  build a second parallel one" (§3 patterns #5/#6) as the one principle
+  underneath every Phase 5 feature covered. Also fixed a stale forward-pointer
+  in file 07 (question 7) that pointed the Subscription self-transition
+  story at file 16 — corrected to file 14, where it actually now lives.
 
-**Remaining**: files 14-22 (the three
+**Remaining**: files 15-22 (the two remaining
 business-module files, the two AI/MCP files, and the four
 interview-readiness files ending in full mock interviews) — not yet
 built as of this entry. A future session/pass should update this same

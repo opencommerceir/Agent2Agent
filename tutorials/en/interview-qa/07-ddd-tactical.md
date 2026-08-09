@@ -135,7 +135,7 @@ A real code example, not just a generic state-machine definition (the pre-tutori
 
 🔁 **Likely follow-ups:**
 1. "Why is this map a constant on the class itself, not a database table?" → Because it's a fixed business rule and part of the Domain logic, not data that should change at runtime — putting it in the database would move its meaning from Domain to Infrastructure.
-2. "What other Aggregates carry this same pattern?" → `WarehouseTransfer`, `DelegationRequest`, `Subscription` — each with its own transition map, with different meaning (e.g. `Subscription` even has a self-transition from `PastDue` back to `PastDue`, a real correction covered in more detail in file 16 of this handbook).
+2. "What other Aggregates carry this same pattern?" → `WarehouseTransfer`, `DelegationRequest`, `Subscription` — each with its own transition map, with different meaning (e.g. `Subscription` even has a self-transition from `PastDue` back to `PastDue`, a real correction covered in more detail in file 14 of this handbook).
 
 🚩 **Red flags:**
 Suggesting a scattered `if/elseif` chain to check transitions instead of one explicit, centralized map — that's exactly what makes it easy to forget a disallowed transition.
