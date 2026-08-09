@@ -5,9 +5,9 @@ Phase Stage) is IN PROGRESS, not complete — the one entry in this file
 that isn't. A 22-file-per-language (`tutorials/{fa,en}/interview-qa/`)
 technical-interview prep curriculum, fully grounded in this repo's own
 real code (never generic textbook answers), generated one file pair
-(`fa`+`en`) per turn per the requester's own explicit workflow. 19 of 23
+(`fa`+`en`) per turn per the requester's own explicit workflow. 20 of 23
 files per language exist as of this entry — `00-index.md` (the curriculum
-map) through `18-mcp-protocol.md`. See §7.40 itself for the
+map) through `19-tradeoffs-failures.md`. See §7.40 itself for the
 per-file breakdown and what remains; update that same section's own
 "completed so far" list on every future pass rather than adding a new
 numbered section per file pair. Immediately before it, §7.39 added a
@@ -8977,7 +8977,7 @@ answer hint each, and 🚩 red-flag answers that would expose a lack of
 real understanding. `00-index.md` is the full 22-file curriculum map plus
 a study-order recommendation by seniority level (Mid/Senior/Architect).
 
-**Completed so far (19 of 23 files per language — this entry will be
+**Completed so far (20 of 23 files per language — this entry will be
 updated as later files land, not duplicated per file):**
 - `01-project-storytelling.md` — 12 Q&As on introducing the project, the
   author's own real role (an honest "architect + reviewer directing an
@@ -9244,9 +9244,31 @@ updated as later files land, not duplicated per file):**
   Part-F-wide synthesis naming the name-addressable capability registry
   itself as the concrete mechanism behind file 17's own "Phase 6 needed
   zero Core changes" claim.
+- `19-tradeoffs-failures.md` — 12 Q&As, the first Part-G
+  (interview-readiness) file: deliberately compressed, interview-paced
+  "why not X" answers for the platform's biggest already-covered
+  technology decisions (microservices, full CQRS, real async messaging,
+  the literal MCP wire format/GraphQL, Event Sourcing, a shared `Money`
+  kernel) each citing its own deeper file rather than re-deriving the
+  argument, a debugging-*method* synthesis connecting three separately-told
+  bug stories (`OpenRouterClient`'s `base_uri` bug, the Zibal
+  network-timeout `curl` isolation, the cross-tenant cache-leak test
+  shape) into one repeated discipline, plus three genuinely new items
+  this handbook hadn't covered yet: the honest OpenRouter-live-verified-
+  vs-OpenAI/Claude-still-mock-only gap (main series file 19's own
+  Category 3), the missing Phase 5/6 Admin Dashboard pages and the real
+  "one unified `/dashboard/agents` page beats five small ones"
+  recommendation (Category 4), and the two still-open production risks
+  (`DB_PERSISTENT_CONNECTIONS` defaulting false, per-deployment not
+  per-tenant WooCommerce credentials) named directly rather than
+  implied. Closes on naming "every real trade-off states its own cost on
+  both sides" as the one discipline underneath all eleven decisions.
+  Grounded directly against main series file 19
+  (`19-technical-debt-and-roadmap.md`) for its own new material, per the
+  stricter discipline adopted after the file 16 correction.
 
-**Remaining**: files 19-22 (the four interview-readiness files ending in
-full mock interviews) — not yet built as of this entry. A future
+**Remaining**: files 20-22 (Scaling & Redesign, Full Mock Interviews,
+Behavioral & Role) — not yet built as of this entry. A future
 session/pass should update this same §7.40 entry's own "completed so
 far" list rather than adding a new numbered section per file pair, to
 avoid this file accumulating dozens of near-duplicate micro-entries for
