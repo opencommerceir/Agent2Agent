@@ -9144,29 +9144,48 @@ updated as later files land, not duplicated per file):**
   #12 ("add the missing piece a request implies but doesn't list"), and a
   closing synthesis naming CRM/Loyalty as the two modules that first
   proved the Repository-Interface-only module boundary rule in practice.
-- `16-finance-workflows-reporting.md` — 12 Q&As on `GenerateInvoiceAction`
-  carrying `Order.tax` forward onto a frozen `Invoice` rather than asking
-  `TaxRateProviderInterface` to recompute it a second time, `TaxRegion`'s
-  own specificity-resolution rule (country+state beats country-wide) and
-  the two genuinely independent fallback layers stacked underneath it
-  (`NullTaxRateProvider`'s flat 9% vs. `TaxRegion::default()`), Finance's
-  own `OrderNotFoundException` as a third independent confirmation of the
-  same cross-module rule file 15 already proved, `Invoice`'s own stricter
-  `Draft→Issued→Paid` state machine and its honest no-`CreditNote`
-  reversal gap, a real trace of `WorkflowEngine`'s matching mechanics (one
-  generic Listener subscribed to every `EventType`, not one per trigger),
-  the `EventType::InventoryLow` modeled-but-unwired gap, the deliberate
-  single-comparison `WorkflowRule` condition shape (two separate rules
-  instead of a real `AND`/`OR` DSL), `WorkflowRule` action failure
-  isolation with its own honest no-automated-retry gap, why Finance/tax
-  data reaches `SalesQueryBuilder` correctly (through `Order.tax` itself)
-  while Subscription revenue never does, more MCP-capability wiring gaps
-  (`VoidInvoiceAction`, `DeactivateWorkflowAction`), a real bug story where
-  an admin-typed `"$100.00"` string silently broke an `OrderHighValue`
-  `WorkflowRule` comparison, and a closing, Part-E-wide synthesis naming
-  "the consumer always defines the interface, never the supplier" as the
-  one strategic rule underneath every cross-module example across
-  Commerce, CRM/Loyalty, and Finance/Workflows.
+- `16-finance-workflows-reporting.md` — 12 Q&As on `CreateInvoiceAction`'s
+  real cross-module trace and the platform's **three** deliberately
+  non-unified tax-fallback chains (`CommerceTaxRateProvider`'s graceful
+  9%-or-null checkout fallback, `CreateInvoiceAction`'s own zero-tax
+  inline fallback, `finance.tax.calculate`'s strict no-fallback 404 —
+  §7.8's own "easy to conflate" warning), `TaxRegion::default()` as a
+  real, tenant-registered `"DEFAULT"` region plus the coincidental,
+  never-interchangeable name clash between Commerce's own transient
+  `TaxRate` VO and Finance's persisted `TaxRate` Entity, Finance's own
+  `OrderNotFoundException` as a further independent confirmation of the
+  same cross-module rule file 15 already proved, `InvoiceStatus`'s real
+  modeled-but-unreachable `Paid`/`Cancelled` gap (no
+  `MarkInvoicePaidAction`/`CancelInvoiceAction` exist; `Invoice::issue()`
+  is the only real transition) and why payment-reconciliation is named as
+  a third `TaxRateProviderInterface`-shaped candidate, `Workflow`'s real
+  AND-combined rule evaluation via `WorkflowEvaluator` (`WorkflowRule`/
+  `WorkflowAction` as two separate, id-less, frozen-at-creation
+  entities), `InventoryLowListener` as literally the platform's first
+  real cross-module Domain Event Listener ever (`Event::listen()` never
+  existed before it) and the `InventoryWasCommitted`-vs-`InventoryReserved`
+  event distinction, the honest, diverging fates of `CartAbandonedListener`
+  (wired for real in the Tech Debt Sprint) vs. `HighValueOrderListener`
+  (still unwired today, zero technical blocker), `WorkflowAction`'s
+  `notify_agent` gap surviving even after a real Notifications module
+  shipped, the real pre-existing `CheckInventoryAction` re-check bug
+  Workflows' own end-to-end test was the first to trip (documented, not
+  fixed, in `WorkflowsCapabilityTest`'s own docblock), the real
+  `UpdateTaxRateAction`/`UpdateWorkflowAction` MCP-wiring gaps and why a
+  Workflow has no "add a rule" operation at all, the real 2-to-3-segment
+  capability/permission renames (`workflow.create/get/list/trigger` →
+  `workflow.definition.*`/`workflow.event.trigger`), and a closing,
+  Part-E-wide synthesis naming "the consumer always defines the
+  interface, never the supplier" as the one strategic rule underneath
+  every cross-module example across Commerce, CRM/Loyalty, and
+  Finance/Workflows. **Rewritten once** after the initial pass (committed
+  under the same filename) invented several details — a full
+  `Draft→Issued→Paid`/`Void` state machine, `VoidInvoiceAction`/
+  `DeactivateWorkflowAction` as real unwired Actions, `Order.tax` simply
+  carried onto `Invoice` unchanged, independently-fired `WorkflowRule`s,
+  and a fabricated `"$100.00"`-string bug story — that didn't match
+  `HANDOFF.md` §7.8/§7.9/§8/the real capability table; caught by actually
+  reading those sections before starting file 18, not by external review.
 - `17-ai-agents-orchestrator.md` — 12 Q&As tracing a real Goal through all
   six Orchestrator stages (rule-based/LLM planning, tool calling via
   `CapabilityToolInvoker`, execution memory, multi-agent delegation,
@@ -9186,11 +9205,19 @@ updated as later files land, not duplicated per file):**
   deliberate, documented exception (not a boundary violation), both real
   things this module's own build surfaced (the `HttpExceptionInterface`
   routing bug and the credential-isolation discipline), why the
-  Orchestrator's own public MCP surface stays deliberately narrow (3
-  capabilities) despite being the platform's single biggest capability
-  *consumer*, and a closing synthesis reading Phase 6 as live proof of
+  Orchestrator's own public MCP surface — a real 11 capabilities across
+  P6.1/P6.2/P6.4/P6.5/P6.6 — gives each stage its own capability only when
+  that stage produces something externally nameable, and gives Stage 3
+  (Tool Calling) none at all since it's purely internal execution
+  plumbing, and a closing synthesis reading Phase 6 as live proof of
   "Infrastructure First, Domains Second" — Core needed zero changes to
   support a use case nobody designing it in Phase 1 ever anticipated.
+  **Question 11 corrected** after the initial pass invented 3 wrong
+  capability names (`agent.goal.get`/`.list` instead of the real
+  `agent.execution.get`/`.list`) and framed the whole surface as
+  deliberately narrow when it's actually 11 capabilities spanning nearly
+  every stage — caught the same pass as the file 16 rewrite, by checking
+  the real capability table instead of re-deriving names from prose.
 
 **Remaining**: files 18-22 (the MCP protocol file
 and the four interview-readiness files ending in full mock interviews)
