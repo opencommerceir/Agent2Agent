@@ -5,9 +5,9 @@ Phase Stage) is IN PROGRESS, not complete — the one entry in this file
 that isn't. A 22-file-per-language (`tutorials/{fa,en}/interview-qa/`)
 technical-interview prep curriculum, fully grounded in this repo's own
 real code (never generic textbook answers), generated one file pair
-(`fa`+`en`) per turn per the requester's own explicit workflow. 10 of 23
+(`fa`+`en`) per turn per the requester's own explicit workflow. 11 of 23
 files per language exist as of this entry — `00-index.md` (the curriculum
-map) through `09-event-driven-messaging.md`. See §7.40 itself for the
+map) through `10-cqrs-read-models.md`. See §7.40 itself for the
 per-file breakdown and what remains; update that same section's own
 "completed so far" list on every future pass rather than adding a new
 numbered section per file pair. Immediately before it, §7.39 added a
@@ -8977,7 +8977,7 @@ answer hint each, and 🚩 red-flag answers that would expose a lack of
 real understanding. `00-index.md` is the full 22-file curriculum map plus
 a study-order recommendation by seniority level (Mid/Senior/Architect).
 
-**Completed so far (10 of 23 files per language — this entry will be
+**Completed so far (11 of 23 files per language — this entry will be
 updated as later files land, not duplicated per file):**
 - `01-project-storytelling.md` — 12 Q&As on introducing the project, the
   author's own real role (an honest "architect + reviewer directing an
@@ -9034,9 +9034,18 @@ updated as later files land, not duplicated per file):**
   persistence with Domain Events as a side notification, never the
   source of truth, distinguished from the Ledger-shaped append-only
   entities (`PointTransaction`, `WorkflowLog`) that merely *resemble* it.
+- `10-cqrs-read-models.md` — 12 Q&As on this project's *light* CQRS (one
+  shared database, a fully separate read path — not the full
+  dual-database textbook form), the Preview-vs-Durable-Apply pattern
+  enforced at the level of every single Action (§3 pattern #4), why
+  `Report`/`ReportResult` are kept as two separate Entities, real KPI
+  caching vs. `ReportResult.expires_at`'s own honestly-unfinished intent,
+  why `CalculateKPIAction` calls Reporting's raw Query Builders and never
+  its side-effecting `Generate*ReportAction`s, and `KPIValue`'s own
+  unusual read-model shape (`value_currency` doubling as a unit tag).
 
-**Remaining**: files 10-22 (CQRS, multi-tenancy, security, payments, the
-three business-module files, the two AI/MCP files, and the four
+**Remaining**: files 11-22 (multi-tenancy, security, payments, the three
+business-module files, the two AI/MCP files, and the four
 interview-readiness files ending in full mock interviews) — not yet
 built as of this entry. A future session/pass should update this same
 §7.40 entry's own "completed so far" list rather than adding a new
