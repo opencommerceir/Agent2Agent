@@ -5,9 +5,9 @@ Phase Stage) is IN PROGRESS, not complete — the one entry in this file
 that isn't. A 22-file-per-language (`tutorials/{fa,en}/interview-qa/`)
 technical-interview prep curriculum, fully grounded in this repo's own
 real code (never generic textbook answers), generated one file pair
-(`fa`+`en`) per turn per the requester's own explicit workflow. 15 of 23
+(`fa`+`en`) per turn per the requester's own explicit workflow. 16 of 23
 files per language exist as of this entry — `00-index.md` (the curriculum
-map) through `14-commerce-core.md`. See §7.40 itself for the
+map) through `15-crm-loyalty.md`. See §7.40 itself for the
 per-file breakdown and what remains; update that same section's own
 "completed so far" list on every future pass rather than adding a new
 numbered section per file pair. Immediately before it, §7.39 added a
@@ -8977,7 +8977,7 @@ answer hint each, and 🚩 red-flag answers that would expose a lack of
 real understanding. `00-index.md` is the full 22-file curriculum map plus
 a study-order recommendation by seniority level (Mid/Senior/Architect).
 
-**Completed so far (15 of 23 files per language — this entry will be
+**Completed so far (16 of 23 files per language — this entry will be
 updated as later files land, not duplicated per file):**
 - `01-project-storytelling.md` — 12 Q&As on introducing the project, the
   author's own real role (an honest "architect + reviewer directing an
@@ -9119,9 +9119,34 @@ updated as later files land, not duplicated per file):**
   underneath every Phase 5 feature covered. Also fixed a stale forward-pointer
   in file 07 (question 7) that pointed the Subscription self-transition
   story at file 16 — corrected to file 14, where it actually now lives.
+- `15-crm-loyalty.md` — 12 Q&As on why `Ticket::changeStatus()` is stricter
+  than `Order::changeStatus()` (no same-status no-op, a fixed forward-only
+  `SEQUENCE`) and the real support-desk reasoning behind it, CRM's own
+  `CustomerNotFoundException` (never Commerce's concrete exception) as a
+  further, independent confirmation of the Repository-Interface-only
+  cross-module rule, the `customer_tag` pivot's deliberate lack of an
+  Eloquent `belongsToMany` relation to Commerce's `Customer` Model (a plain
+  query-builder insert instead, closing the same coupling gap one layer
+  below the Domain), a real `ticket_comments.agent_id`/
+  `customer_notes.agent_id` non-nullable-FK test gotcha contrasted with
+  `carts.owner_id`'s deliberately loose typing, why `loyalty.points.earn`
+  silently provisions a `LoyaltyAccount` while `loyalty.account.get` stays
+  a strict 404, the `loyalty.points.redeem` price-then-balance validation
+  order (422 `InvalidPointsException` before 409
+  `InsufficientPointsException`), `ExpirePointsAction`'s own honestly-named
+  "simplified FIFO, not a true per-lot ledger" trade-off and who it favors,
+  the `RewardType::FreeProduct`/`FreeShipping` modeled-but-unreachable gap
+  (the same shape `TransferStatus::InTransit` already carries), why
+  `OrderPlacedListener` needs zero Commerce Repository dependency (it
+  receives the full `Order` Entity already) unlike `InventoryLowListener`,
+  four fully-tested CRM Actions with no MCP capability wired yet,
+  `TagNotFoundException` as a real, named instance of HANDOFF's own pattern
+  #12 ("add the missing piece a request implies but doesn't list"), and a
+  closing synthesis naming CRM/Loyalty as the two modules that first
+  proved the Repository-Interface-only module boundary rule in practice.
 
-**Remaining**: files 15-22 (the two remaining
-business-module files, the two AI/MCP files, and the four
+**Remaining**: files 16-22 (the one remaining
+business-module file, the two AI/MCP files, and the four
 interview-readiness files ending in full mock interviews) — not yet
 built as of this entry. A future session/pass should update this same
 §7.40 entry's own "completed so far" list rather than adding a new
