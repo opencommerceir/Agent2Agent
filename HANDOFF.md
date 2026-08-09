@@ -5,9 +5,9 @@ Phase Stage) is IN PROGRESS, not complete — the one entry in this file
 that isn't. A 22-file-per-language (`tutorials/{fa,en}/interview-qa/`)
 technical-interview prep curriculum, fully grounded in this repo's own
 real code (never generic textbook answers), generated one file pair
-(`fa`+`en`) per turn per the requester's own explicit workflow. 11 of 23
+(`fa`+`en`) per turn per the requester's own explicit workflow. 12 of 23
 files per language exist as of this entry — `00-index.md` (the curriculum
-map) through `10-cqrs-read-models.md`. See §7.40 itself for the
+map) through `11-multi-tenancy.md`. See §7.40 itself for the
 per-file breakdown and what remains; update that same section's own
 "completed so far" list on every future pass rather than adding a new
 numbered section per file pair. Immediately before it, §7.39 added a
@@ -8977,7 +8977,7 @@ answer hint each, and 🚩 red-flag answers that would expose a lack of
 real understanding. `00-index.md` is the full 22-file curriculum map plus
 a study-order recommendation by seniority level (Mid/Senior/Architect).
 
-**Completed so far (11 of 23 files per language — this entry will be
+**Completed so far (12 of 23 files per language — this entry will be
 updated as later files land, not duplicated per file):**
 - `01-project-storytelling.md` — 12 Q&As on introducing the project, the
   author's own real role (an honest "architect + reviewer directing an
@@ -9043,8 +9043,25 @@ updated as later files land, not duplicated per file):**
   why `CalculateKPIAction` calls Reporting's raw Query Builders and never
   its side-effecting `Generate*ReportAction`s, and `KPIValue`'s own
   unusual read-model shape (`value_currency` doubling as a unit tag).
+- `11-multi-tenancy.md` — 12 Q&As going one layer above file 04's own
+  schema-level multi-tenancy coverage: tracing exactly where a request's
+  `tenant_id` originates (the authenticated Agent's own row, never
+  anything the caller states), the real Analytics correction that dropped
+  a caller-supplied `tenant_id` input from 3 capabilities (§7.18), why a
+  cross-tenant id lookup returns 404 never 403, why `permissions` is the
+  one table with no `tenant_id` at all (tied to `demo:reset`'s own
+  cascade-delete mechanism, §7.33), the two deliberately-never-composed
+  RBAC systems (tenant-scoped Agent permissions vs. platform-level
+  `User`/`UserRole`, §7.17), the `DB_PERSISTENT_CONNECTIONS` cross-tenant
+  connection-leak risk (§7.20), an honest, reasoned (not HANDOFF-tracked)
+  observation about per-Agent vs. per-Tenant rate-limit fairness, the
+  real per-deployment-not-per-tenant WooCommerce/gateway credential gap
+  (§8.14), and an Architect-level database-per-tenant migration walkthrough
+  closing on why the explicit-`tenant_id`-parameter discipline (§3 pattern
+  #1) makes that migration a Repository connection-resolution change, not
+  a Domain/Application rewrite.
 
-**Remaining**: files 11-22 (multi-tenancy, security, payments, the three
+**Remaining**: files 12-22 (security, payments, the three
 business-module files, the two AI/MCP files, and the four
 interview-readiness files ending in full mock interviews) — not yet
 built as of this entry. A future session/pass should update this same
