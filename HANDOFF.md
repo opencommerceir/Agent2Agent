@@ -5,9 +5,9 @@ Phase Stage) is IN PROGRESS, not complete — the one entry in this file
 that isn't. A 22-file-per-language (`tutorials/{fa,en}/interview-qa/`)
 technical-interview prep curriculum, fully grounded in this repo's own
 real code (never generic textbook answers), generated one file pair
-(`fa`+`en`) per turn per the requester's own explicit workflow. 13 of 23
+(`fa`+`en`) per turn per the requester's own explicit workflow. 14 of 23
 files per language exist as of this entry — `00-index.md` (the curriculum
-map) through `12-security.md`. See §7.40 itself for the
+map) through `13-payments-fintech.md`. See §7.40 itself for the
 per-file breakdown and what remains; update that same section's own
 "completed so far" list on every future pass rather than adding a new
 numbered section per file pair. Immediately before it, §7.39 added a
@@ -8977,7 +8977,7 @@ answer hint each, and 🚩 red-flag answers that would expose a lack of
 real understanding. `00-index.md` is the full 22-file curriculum map plus
 a study-order recommendation by seniority level (Mid/Senior/Architect).
 
-**Completed so far (13 of 23 files per language — this entry will be
+**Completed so far (14 of 23 files per language — this entry will be
 updated as later files land, not duplicated per file):**
 - `01-project-storytelling.md` — 12 Q&As on introducing the project, the
   author's own real role (an honest "architect + reviewer directing an
@@ -9078,8 +9078,26 @@ updated as later files land, not duplicated per file):**
   the seeded default Dashboard admin credential and `UserRole::Operator`
   granting identical access to `Admin` today — closing on a security-review
   prioritization question synthesizing files 11 and 12 together.
+- `13-payments-fintech.md` — 12 Q&As on why money is always an integer
+  smallest-currency-unit (HANDOFF gotcha #4) and its one real exception
+  (zero-decimal currencies like IRR, §8.104), the real sync-vs-async
+  architectural fork `RedirectPaymentGatewayInterface` required (§7.37),
+  why `PaymentSession` exists as its own Entity to protect
+  `payments.order_id`'s non-nullable invariant, the `tracking_reference`
+  Anticorruption-Layer mechanism keeping the API gateway-agnostic, how
+  `FinalizeSuccessfulPaymentAction`'s extraction naturally resolved a
+  previously-named transaction-boundary debt item (old §8.10), the one
+  shared `/payments/{gateway}/callback` route, Stripe's fast-200
+  retry-storm-avoidance webhook semantics (distinct from file 12's own
+  replay-defense coverage), the honest no-automated-reconciliation and
+  never-refunds-via-a-real-gateway gaps, a live-verification methodology
+  walkthrough (Stripe's real 401 vs. Zibal's own network-unreachable
+  timeout, proven via a bare `curl`, §8.100), the honestly-flagged
+  best-effort Zibal `verify()`/`inquiry()` field-name gap (§8.101), and
+  why having no customer-facing checkout page is a confirmed scope
+  boundary, not an unfinished feature (§8.103).
 
-**Remaining**: files 13-22 (payments, the three
+**Remaining**: files 14-22 (the three
 business-module files, the two AI/MCP files, and the four
 interview-readiness files ending in full mock interviews) — not yet
 built as of this entry. A future session/pass should update this same
