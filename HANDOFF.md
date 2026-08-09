@@ -5,9 +5,9 @@ Phase Stage) is IN PROGRESS, not complete — the one entry in this file
 that isn't. A 22-file-per-language (`tutorials/{fa,en}/interview-qa/`)
 technical-interview prep curriculum, fully grounded in this repo's own
 real code (never generic textbook answers), generated one file pair
-(`fa`+`en`) per turn per the requester's own explicit workflow. 18 of 23
+(`fa`+`en`) per turn per the requester's own explicit workflow. 19 of 23
 files per language exist as of this entry — `00-index.md` (the curriculum
-map) through `17-ai-agents-orchestrator.md`. See §7.40 itself for the
+map) through `18-mcp-protocol.md`. See §7.40 itself for the
 per-file breakdown and what remains; update that same section's own
 "completed so far" list on every future pass rather than adding a new
 numbered section per file pair. Immediately before it, §7.39 added a
@@ -8977,7 +8977,7 @@ answer hint each, and 🚩 red-flag answers that would expose a lack of
 real understanding. `00-index.md` is the full 22-file curriculum map plus
 a study-order recommendation by seniority level (Mid/Senior/Architect).
 
-**Completed so far (18 of 23 files per language — this entry will be
+**Completed so far (19 of 23 files per language — this entry will be
 updated as later files land, not duplicated per file):**
 - `01-project-storytelling.md` — 12 Q&As on introducing the project, the
   author's own real role (an honest "architect + reviewer directing an
@@ -9218,13 +9218,39 @@ updated as later files land, not duplicated per file):**
   deliberately narrow when it's actually 11 capabilities spanning nearly
   every stage — caught the same pass as the file 16 rewrite, by checking
   the real capability table instead of re-deriving names from prose.
+- `18-mcp-protocol.md` — 12 Q&As, written after adopting a stricter
+  grounding discipline (check `HANDOFF.md`'s own real sections/capability
+  table directly, not just prior interview-qa prose) following the file
+  16 correction: whether this platform speaks the official MCP wire
+  format at all (honestly, no — plain HTTP+JSON following the
+  discover-then-execute idea, not JSON-RPC/stdio), the real
+  Discovery-is-documentation-only/Execution-is-where-authorization-
+  actually-happens security boundary (including that `LLMPlanner` sees
+  the unfiltered capability list, same as raw Discovery), the real
+  3-segment capability-naming reject/rename table
+  (`crm.ticket.comment.add` -> `crm.comment.create`, etc.), the real
+  handler-vs-description two-step registration gotcha and its actual
+  cause (`ServiceProvider::boot()` running before `RefreshDatabase`
+  migrates), why the fully-tested but never-engaged header/query
+  version-detection tiers are kept (and how `AbstractMCPGatewayController`
+  itself traces back to v2's own arrival), the Agent Orchestrator's dual
+  HTTP-surface/MCP-capability pattern reusing the same Actions, why 3 of
+  5 SDKs are dependency-free specifically because the Gateway is plain
+  HTTP+JSON, the Level-1-direct-call-vs-Level-2-goal-driven distinction,
+  a mechanical walk through exactly which class checks existence vs.
+  permission, why zero business logic lives in the Gateway itself and the
+  real coupling cost of violating that, MCP-as-Open-Host-Service vs.
+  UCP-as-Published-Language disambiguated concisely, and a closing
+  Part-F-wide synthesis naming the name-addressable capability registry
+  itself as the concrete mechanism behind file 17's own "Phase 6 needed
+  zero Core changes" claim.
 
-**Remaining**: files 18-22 (the MCP protocol file
-and the four interview-readiness files ending in full mock interviews)
-— not yet built as of this entry. A future session/pass should update
-this same §7.40 entry's own "completed so far" list rather than adding a
-new numbered section per file pair, to avoid this file accumulating
-dozens of near-duplicate micro-entries for one ongoing piece of work.
+**Remaining**: files 19-22 (the four interview-readiness files ending in
+full mock interviews) — not yet built as of this entry. A future
+session/pass should update this same §7.40 entry's own "completed so
+far" list rather than adding a new numbered section per file pair, to
+avoid this file accumulating dozens of near-duplicate micro-entries for
+one ongoing piece of work.
 
 No code, tests, migrations, or capabilities changed — 1156 tests / 127
 capabilities unchanged from §7.38/§7.39; every change so far lives under
