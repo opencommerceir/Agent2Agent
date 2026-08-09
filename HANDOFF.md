@@ -5,9 +5,9 @@ Phase Stage) is IN PROGRESS, not complete — the one entry in this file
 that isn't. A 22-file-per-language (`tutorials/{fa,en}/interview-qa/`)
 technical-interview prep curriculum, fully grounded in this repo's own
 real code (never generic textbook answers), generated one file pair
-(`fa`+`en`) per turn per the requester's own explicit workflow. 17 of 23
+(`fa`+`en`) per turn per the requester's own explicit workflow. 18 of 23
 files per language exist as of this entry — `00-index.md` (the curriculum
-map) through `16-finance-workflows-reporting.md`. See §7.40 itself for the
+map) through `17-ai-agents-orchestrator.md`. See §7.40 itself for the
 per-file breakdown and what remains; update that same section's own
 "completed so far" list on every future pass rather than adding a new
 numbered section per file pair. Immediately before it, §7.39 added a
@@ -8977,7 +8977,7 @@ answer hint each, and 🚩 red-flag answers that would expose a lack of
 real understanding. `00-index.md` is the full 22-file curriculum map plus
 a study-order recommendation by seniority level (Mid/Senior/Architect).
 
-**Completed so far (17 of 23 files per language — this entry will be
+**Completed so far (18 of 23 files per language — this entry will be
 updated as later files land, not duplicated per file):**
 - `01-project-storytelling.md` — 12 Q&As on introducing the project, the
   author's own real role (an honest "architect + reviewer directing an
@@ -9167,8 +9167,32 @@ updated as later files land, not duplicated per file):**
   "the consumer always defines the interface, never the supplier" as the
   one strategic rule underneath every cross-module example across
   Commerce, CRM/Loyalty, and Finance/Workflows.
+- `17-ai-agents-orchestrator.md` — 12 Q&As tracing a real Goal through all
+  six Orchestrator stages (rule-based/LLM planning, tool calling via
+  `CapabilityToolInvoker`, execution memory, multi-agent delegation,
+  self-reflection), why the deterministic Planner and `LLMPlanner` are
+  deliberately kept side by side rather than one replacing the other, a
+  full retelling of the real `OpenRouterClient` `base_uri`/RFC-3986 bug
+  from the LLM-integration angle, why tool calling gets zero more access
+  than a direct MCP call (the identical `CapabilityExecutionService` path,
+  proven by `CapabilityToolInvokerTest` needing to be a real feature
+  test), `Execution`'s own Ledger shape and its honest
+  substring-matching-not-semantic-search limitation, the full
+  persona-is-not-a-real-identity correction story behind capability-based
+  delegation, the `AgentMessage`-vs-Delegation-event light/heavy payload
+  split made concrete, `ReasoningEngineInterface`'s own honestly-scoped
+  "purely explanatory, doesn't feed back into planning" limitation, why
+  the Orchestrator's direct dependency on Core's own Actions is a
+  deliberate, documented exception (not a boundary violation), both real
+  things this module's own build surfaced (the `HttpExceptionInterface`
+  routing bug and the credential-isolation discipline), why the
+  Orchestrator's own public MCP surface stays deliberately narrow (3
+  capabilities) despite being the platform's single biggest capability
+  *consumer*, and a closing synthesis reading Phase 6 as live proof of
+  "Infrastructure First, Domains Second" — Core needed zero changes to
+  support a use case nobody designing it in Phase 1 ever anticipated.
 
-**Remaining**: files 17-22 (the two AI/MCP files
+**Remaining**: files 18-22 (the MCP protocol file
 and the four interview-readiness files ending in full mock interviews)
 — not yet built as of this entry. A future session/pass should update
 this same §7.40 entry's own "completed so far" list rather than adding a
