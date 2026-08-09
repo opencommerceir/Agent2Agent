@@ -5,9 +5,9 @@ Phase Stage) is IN PROGRESS, not complete — the one entry in this file
 that isn't. A 22-file-per-language (`tutorials/{fa,en}/interview-qa/`)
 technical-interview prep curriculum, fully grounded in this repo's own
 real code (never generic textbook answers), generated one file pair
-(`fa`+`en`) per turn per the requester's own explicit workflow. 12 of 23
+(`fa`+`en`) per turn per the requester's own explicit workflow. 13 of 23
 files per language exist as of this entry — `00-index.md` (the curriculum
-map) through `11-multi-tenancy.md`. See §7.40 itself for the
+map) through `12-security.md`. See §7.40 itself for the
 per-file breakdown and what remains; update that same section's own
 "completed so far" list on every future pass rather than adding a new
 numbered section per file pair. Immediately before it, §7.39 added a
@@ -8977,7 +8977,7 @@ answer hint each, and 🚩 red-flag answers that would expose a lack of
 real understanding. `00-index.md` is the full 22-file curriculum map plus
 a study-order recommendation by seniority level (Mid/Senior/Architect).
 
-**Completed so far (12 of 23 files per language — this entry will be
+**Completed so far (13 of 23 files per language — this entry will be
 updated as later files land, not duplicated per file):**
 - `01-project-storytelling.md` — 12 Q&As on introducing the project, the
   author's own real role (an honest "architect + reviewer directing an
@@ -9060,8 +9060,26 @@ updated as later files land, not duplicated per file):**
   closing on why the explicit-`tenant_id`-parameter discipline (§3 pattern
   #1) makes that migration a Repository connection-resolution change, not
   a Domain/Application rewrite.
+- `12-security.md` — 12 Q&As on the two structurally separate
+  authentication mechanisms (Agent Bearer token vs. Dashboard `User`
+  session, and why CSRF only applies to the latter), the hash-then-lookup
+  pattern protecting Agent tokens plus why it deliberately uses a fast
+  hash rather than `HashedPassword`'s own bcrypt, concrete OWASP
+  "Broken Access Control"/"Cryptographic Failures" examples grounded in
+  real code (`hash_equals()` in both the Showcase passcode gate and
+  `StripeWebhookVerifier`), the replay/downgrade-attack reasoning behind
+  Stripe's own timestamp-tolerance + multi-signature + `v0`-decoy
+  handling (§7.37), why `PaymentSessionRepositoryInterface::findByIdUnscoped()`
+  is a deliberate, safe exception to file 11's own tenant-scoping rule
+  (server-side `verify()` re-checks everything, never trusts the caller),
+  the structural secrets-management discipline (no class calls
+  `config()`/`env()` internally, every credential resolved once in its
+  owning `ServiceProvider::register()`), and two honestly-named gaps —
+  the seeded default Dashboard admin credential and `UserRole::Operator`
+  granting identical access to `Admin` today — closing on a security-review
+  prioritization question synthesizing files 11 and 12 together.
 
-**Remaining**: files 12-22 (security, payments, the three
+**Remaining**: files 13-22 (payments, the three
 business-module files, the two AI/MCP files, and the four
 interview-readiness files ending in full mock interviews) — not yet
 built as of this entry. A future session/pass should update this same
