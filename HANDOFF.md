@@ -1,5 +1,23 @@
 # OpenCommerce Platform — Session Handoff
 
+**Status: Bilingual Interview Q&A Handbook (§7.40 — after §7.39, not a
+Phase Stage) is IN PROGRESS, not complete — the one entry in this file
+that isn't. A 22-file-per-language (`tutorials/{fa,en}/interview-qa/`)
+technical-interview prep curriculum, fully grounded in this repo's own
+real code (never generic textbook answers), generated one file pair
+(`fa`+`en`) per turn per the requester's own explicit workflow. 5 of 23
+files per language exist as of this entry — `00-index.md` (the curriculum
+map) through `04-database-and-performance.md`. See §7.40 itself for the
+per-file breakdown and what remains; update that same section's own
+"completed so far" list on every future pass rather than adding a new
+numbered section per file pair. Immediately before it, §7.39 added a
+separate, complete, 26-file bilingual "pre-tutorial"
+(`tutorials/{fa,en}/pre-tutorial/`) covering every foundational technical
+term the main 00-22 tutorial series assumes — DDD, MCP, LLM/Agent
+vocabulary, and more — each grounded the same "📍 in this project" way.
+Neither pass touched any application code — 1156 tests / 127 capabilities
+unchanged. See §7.39/§7.40 for the full detail.**
+
 **Status: Laravel SDK + Documentation Sync (§7.38 — after §7.37, not a
 Phase Stage) is now complete — the still-planned Laravel SDK
 (`packages/opencommerce-sdk-laravel`, `opencommerce/sdk-laravel`) named in
@@ -8900,6 +8918,102 @@ part of the main suite" shape every prior SDK in this codebase already
 established (§7.34). 8 new tests in the new package's own independent
 suite, all passing, confirmed by actually running them, not assumed from
 reading the code.
+
+---
+
+### 7.39 Bilingual Pre-Tutorial (after §7.38, not a Phase Stage)
+
+**Not a Phase Stage — pure documentation, no code change at all.** The
+request: the existing `tutorials/{fa,en}/00-22` series assumes the reader
+already knows foundational software-engineering and AI/LLM vocabulary
+(API, DDD, LLM, Agent, MCP as a general concept, ...) — a real gap for
+anyone newer to the field trying to use it, since that series explains
+*this project*, not the concepts it's built from. Added
+`tutorials/{fa,en}/pre-tutorial/` (13 files each, 26 total): 12 topic
+chapters (web/API fundamentals, databases & performance, software
+architecture & design principles, DDD, common design patterns,
+Laravel/backend infrastructure, security & multi-tenancy, software
+testing, AI/LLMs & agents, the MCP protocol, online payments & fintech,
+professional engineering/business concepts) plus an index, each term
+following a fixed three-part structure — a plain-language definition, why
+it matters, and a "📍 in this project" pointer to the exact real file/class
+where that concept is actually used, so the definition is never abstract.
+Wired into both main `00` indices and `tutorials/README.md` as an
+explicitly optional starting point — the existing 00-22 series is
+completely unmodified in content, only its own index files gained one
+new pointer line each.
+
+**Same session, a second, unrelated content addition**: `tutorials/{fa,en}/22-*`
+(monetization) already existed as the last file in the main series
+(§7.38's own predecessor pass); this pre-tutorial pass didn't touch it —
+recorded here only to avoid a future reader assuming file 22's own
+numbering left room for confusion with the new `pre-tutorial/` subfolder,
+which uses its own independent 00-12 numbering specifically so it never
+collides with the main series' own file numbers.
+
+No code, tests, migrations, or capabilities changed — 1156 tests / 127
+capabilities unchanged from §7.38.
+
+---
+
+### 7.40 Bilingual Interview Q&A Handbook (after §7.39, in progress)
+
+**Not a Phase Stage, and — unlike every other entry in this file — not
+yet complete as of this writing.** The request: a technical-interview
+prep handbook, fully grounded in this repository's own real code and this
+file's own decisions, covering everything from "introduce this project"
+through DDD, testing, AI orchestration, and full mock interviews — a
+22-file curriculum (per language) explicitly scoped and sequenced by the
+requester up front, generated incrementally, one file pair (`fa`+`en`) per
+turn, each committed and pushed as its own step rather than held until
+the whole set is done.
+
+**New**: `tutorials/{fa,en}/interview-qa/`. Every entry follows a fixed,
+requested format — 🎯 what the interviewer is really testing (the hidden
+intent behind the question), ✅ a model answer written in a confident
+senior-engineer voice that cites a real file/class/decision (never a
+generic textbook answer), 🔁 likely follow-up questions with a short
+answer hint each, and 🚩 red-flag answers that would expose a lack of
+real understanding. `00-index.md` is the full 22-file curriculum map plus
+a study-order recommendation by seniority level (Mid/Senior/Architect).
+
+**Completed so far (5 of 23 files per language — this entry will be
+updated as later files land, not duplicated per file):**
+- `01-project-storytelling.md` — 12 Q&As on introducing the project, the
+  author's own real role (an honest "architect + reviewer directing an
+  AI coding assistant under a documented correction discipline" framing,
+  not a false "I typed every line" claim, matching the same honesty this
+  file's own §7.1-§7.38 narrative already models), tech-stack rationale,
+  and project history.
+- `02-overall-architecture.md` — 12 Q&As including a full, real MCP
+  request trace (Controller → auth → rate-limit → authorize → validate →
+  execute → Domain → Infrastructure → response envelope) and the
+  Reporting module's own documented CQRS exception.
+- `03-laravel-and-design-patterns.md` — 12 Q&As on the Service Container
+  (`bind()` vs. `singleton()`, with the real `ConnectorRegistry`
+  rebind-in-tests gotcha this file's own §4 item 11 already names),
+  Repository/Factory/Strategy/Registry/Observer/Facade as they actually
+  appear in this codebase, and where Middleware is deliberately *not*
+  used (rate limiting) and why.
+- `04-database-and-performance.md` — 12 Q&As including the real
+  cross-tenant cache-key leak this file's own §7.20 narrative already
+  documents, the two invalid indexes rejected during Performance
+  Optimization (§7.20), the real `AddToCartAction` concurrency race
+  (§7.13/§8.22), and the NULL-is-distinct unique-index caveat `variant_id`/
+  `warehouse_id` both carry (§7.21/§7.22).
+
+**Remaining**: files 05-22 (API design, testing, DDD tactical/strategic,
+event-driven messaging, CQRS, multi-tenancy, security, payments, the
+three business-module files, the two AI/MCP files, and the four
+interview-readiness files ending in full mock interviews) — not yet
+built as of this entry. A future session/pass should update this same
+§7.40 entry's own "completed so far" list rather than adding a new
+numbered section per file pair, to avoid this file accumulating dozens of
+near-duplicate micro-entries for one ongoing piece of work.
+
+No code, tests, migrations, or capabilities changed — 1156 tests / 127
+capabilities unchanged from §7.38/§7.39; every change so far lives under
+`tutorials/{fa,en}/interview-qa/`.
 
 ---
 
