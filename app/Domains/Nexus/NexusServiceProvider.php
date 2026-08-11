@@ -2,18 +2,22 @@
 
 namespace App\Domains\Nexus;
 
+use App\Domains\Nexus\Business\Domain\Repositories\BusinessRepositoryInterface;
+use App\Domains\Nexus\Business\Infrastructure\Repositories\EloquentBusinessRepository;
 use Illuminate\Support\ServiceProvider;
 
 /**
- * Registers Nexus's own infrastructure (config, routes, views, migrations).
- * Phase 0 only — no domain bindings yet, those land as each domain under
- * app/Domains/Nexus/* gets real Application/Infrastructure code.
+ * Registers Nexus's own infrastructure (config, routes, views, migrations)
+ * plus each domain's repository bindings, the same "one provider per
+ * module" shape Core's own CoreServiceProvider uses.
  */
 class NexusServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
         $this->mergeConfigFrom(config_path('nexus/platform.php'), 'nexus.platform');
+
+        $this->app->bind(BusinessRepositoryInterface::class, EloquentBusinessRepository::class);
     }
 
     public function boot(): void
