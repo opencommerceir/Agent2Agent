@@ -80,3 +80,19 @@
 **کامیت:** `feat(nexus): add Catalog domain (products/services)`.
 
 ---
+
+## Phase 1 / M5 — هماهنگ‌سازی دیزاین‌سیستم Jarvis با docs/claude/ui-system-design.md
+
+بین Phase 0 و شروع Phase 1، فایل `docs/claude/ui-system-design.md` (سند رسمی‌تر و کامل‌تر دیزاین‌سیستم) به پروژه اضافه شد که با نسخه ساده Phase 0 اختلاف داشت (نام توکن‌ها، مقدار پس‌زمینه، فونت‌ها، وضعیت‌های `x-agent-pulse`). این مرحله `resources/css/nexus.css` و کامپوننت‌ها را دقیقاً با همان سند هماهنگ کرد:
+
+- توکن‌ها بازنویسی شدند: `--color-nexus-dark` (`#0A0E27`، جایگزین `nexus-bg` قبلی)، `--color-nexus-glass`، `--color-nexus-text`/`text-muted`، `--color-nexus-surface-1`/`2`، `--color-nexus-success`/`warning`/`error`، `--radius-sm/md/lg` (۸/۱۴/۲۰px).
+- فونت: `Space Grotesk` (هدینگ) + `JetBrains Mono` (داده/کد) جایگزین Instrument Sans — فقط به‌عنوان fallback stack در CSS، بدون `<link>` به Google Fonts (دقیقاً همان الگوی Phase 0: بدون وابستگی شبکه جدید).
+- کی‌فریم‌های `pulse-glow`/`data-stream`/`breathe`/`draw-line` + گارد `prefers-reduced-motion`.
+- `x-nexus-panel`: props جدید `glow` (cyan/purple/none) و `corner` (round/cut، با `clip-path` واقعی) و `interactive` اضافه شد؛ `title` prop قبلی حفظ شد. `x-agent-pulse`: واژگان وضعیت به ۵ حالت سند (`idle|thinking|active|warning|error`) تغییر کرد. دو کامپوننت جدید ساخته شد: `x-status-badge` و `x-metric-card`. `x-negotiation-line`/`x-command-palette` عمداً ساخته نشدند — چیزی در Phase 1 از آن‌ها استفاده نمی‌کند.
+- همه ویوهای موجود (`welcome`, `layouts/app`, `business/{register,login,dashboard}`) به توکن‌های جدید سوییچ شدند.
+
+**تأیید:** `npm run build` تمیز، ۴۳ تست Nexus بدون تغییر پاس، بازدید دستی از `/nexus`, `/nexus/business/register`, `/nexus/business/login` (۲۰۰ + کلاس‌های جدید در HTML رندرشده + بررسی CSS کامپایل‌شده برای وجود توکن‌ها/کی‌فریم‌ها).
+
+**کامیت:** `feat(nexus): reconcile Jarvis design system with docs/claude/ui-system-design.md`.
+
+---
