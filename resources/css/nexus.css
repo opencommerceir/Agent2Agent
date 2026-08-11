@@ -1,0 +1,42 @@
+@import 'tailwindcss';
+
+@source '../../app/Domains/Nexus/**/*.php';
+@source '../views/nexus/**/*.blade.php';
+@source '../views/components/nexus-*.blade.php';
+@source '../views/components/agent-pulse.blade.php';
+@source '../views/components/data-stream.blade.php';
+
+/*
+|--------------------------------------------------------------------------
+| Jarvis Theme Tokens
+|--------------------------------------------------------------------------
+|
+| Kept in a separate entry from resources/css/app.css on purpose — Nexus
+| pages opt into this stylesheet via @vite(['resources/css/nexus.css', ...])
+| instead of app.css, so the legacy Dashboard/Showcase styling is never
+| touched. Default values mirror config/nexus/platform.php's `theme` block
+| (kept in sync by hand; Blade can read the PHP config, CSS can't).
+|
+*/
+@theme {
+    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+
+    --color-nexus-cyan: #00f0ff;
+    --color-nexus-purple: #a855f7;
+    --color-nexus-bg: #05060a;
+    --color-nexus-surface: #0d0f17;
+    --color-nexus-border: rgb(0 240 255 / 0.18);
+}
+
+@utility nexus-glass {
+    background-color: rgb(13 15 23 / 0.55);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--color-nexus-border);
+    box-shadow: 0 0 40px -12px rgb(0 240 255 / 0.25);
+}
+
+@utility nexus-glow-text {
+    text-shadow: 0 0 12px rgb(0 240 255 / 0.6);
+}

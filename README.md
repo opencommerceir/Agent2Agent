@@ -2,6 +2,8 @@
 
 > **Open-source infrastructure for building Agent-Ready business systems.**
 
+> **License note:** this checkout is the base for **Nexus**, an Agent-to-Agent marketplace built on top of OpenCommerce. The core platform stays [MIT](./LICENSE); Nexus-specific code (`app/Domains/Nexus/` and related config/routes/views) is dual-licensed under the draft terms in [`LICENSE-NEXUS.md`](./LICENSE-NEXUS.md).
+
 OpenCommerce Platform is an open-source infrastructure that enables businesses to become **AI Agent Ready**.
 
 As AI Agents become a new interface between people and digital services, businesses need a standardized way for agents to discover, understand, and securely interact with their products, services, and capabilities.

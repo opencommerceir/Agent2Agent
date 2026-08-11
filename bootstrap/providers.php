@@ -1,6 +1,7 @@
 <?php
 
 use App\Core\CoreServiceProvider;
+use App\Domains\Nexus\NexusServiceProvider;
 use App\Modules\AgentOrchestrator\AgentOrchestratorServiceProvider;
 use App\Modules\Analytics\AnalyticsServiceProvider;
 use App\Modules\Commerce\CommerceServiceProvider;
@@ -17,20 +18,22 @@ use App\Providers\AppServiceProvider;
 return [
     AppServiceProvider::class,
     CoreServiceProvider::class,
-    CommerceServiceProvider::class,
-    CRMServiceProvider::class,
-    FinanceServiceProvider::class,
-    WorkflowsServiceProvider::class,
-    LoyaltyServiceProvider::class,
-    ReportingServiceProvider::class,
-    // Registered after Reporting — Analytics' own CalculateKPIAction
-    // depends directly on Reporting's Infrastructure\Queries\* Query
-    // Builders (plain autowired concrete classes, not bound here either
-    // way), a readability choice mirroring Notifications' own comment
-    // below, not a correctness requirement (register() always runs for
-    // every provider before any boot()).
-    AnalyticsServiceProvider::class,
-    ShippingServiceProvider::class,
+    // Disabled — Nexus Phase 0: superseded by app/Domains/Nexus/Business + Marketplace.
+    // CommerceServiceProvider::class,
+    // Disabled — Nexus Phase 0: superseded by app/Domains/Nexus/Business.
+    // CRMServiceProvider::class,
+    // Disabled — Nexus Phase 0: superseded by app/Domains/Nexus/Credit.
+    // FinanceServiceProvider::class,
+    // Disabled — Nexus Phase 0: superseded by app/Domains/Nexus/Negotiation + Contract.
+    // WorkflowsServiceProvider::class,
+    // Disabled — Nexus Phase 0: superseded by app/Domains/Nexus/Reputation.
+    // LoyaltyServiceProvider::class,
+    // Disabled — Nexus Phase 0: superseded by app/Domains/Nexus/Analytics.
+    // ReportingServiceProvider::class,
+    // Disabled — Nexus Phase 0: superseded by app/Domains/Nexus/Analytics.
+    // AnalyticsServiceProvider::class,
+    // Disabled — Nexus Phase 0: no Nexus equivalent yet (not a marketplace concern).
+    // ShippingServiceProvider::class,
     // Registered after Commerce/Loyalty/Shipping — Notifications' own
     // Listeners depend on Domain Events those providers' modules
     // dispatch; Laravel runs every provider's register() before any
@@ -48,4 +51,5 @@ return [
     // a readability choice, not a correctness requirement.
     AgentOrchestratorServiceProvider::class,
     DemoServiceProvider::class,
+    NexusServiceProvider::class,
 ];
