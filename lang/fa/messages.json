@@ -254,6 +254,23 @@
         "company": "شرکت",
         "individual": "شخص حقیقی"
       },
+      "dashboard": {
+        "status": {
+          "pending": "در انتظار تأیید",
+          "verified": "تأیید شده"
+        },
+        "agent": "ایجنت شما",
+        "agent_pending": "ایجنت هنوز ساخته نشده",
+        "agent_pending_description": "ایجنت شما به‌محض تأیید کسب‌وکار توسط ادمین به‌صورت خودکار ساخته می‌شود.",
+        "agent_no_personality": "هنوز شخصیتی تنظیم نشده است",
+        "catalog": "کاتالوگ",
+        "products": "محصولات",
+        "services": "خدمات",
+        "credit": "کردیت",
+        "credit_balance": "موجودی",
+        "negotiations": "مذاکرات",
+        "active_negotiations": "فعال"
+      },
       "industry": {
         "retail": "خرده‌فروشی",
         "wholesale": "عمده‌فروشی",

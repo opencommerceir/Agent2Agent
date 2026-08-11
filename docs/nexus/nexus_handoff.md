@@ -96,3 +96,19 @@
 **کامیت:** `feat(nexus): reconcile Jarvis design system with docs/claude/ui-system-design.md`.
 
 ---
+
+## Phase 1 / M6 — Business Dashboard واقعی
+
+**تصمیم کلیدی:** `GetBusinessDashboardAction` (یک read-model محض، بدون هیچ mutation) در دامنه جدید `Analytics` نکسوس ساخته شد — دقیقاً همان نقشی که `GetDashboardStatsAction` ماژول Analytics پایه برای `DashboardController` هسته بازی می‌کند (Controller → یک Action متمرکز، نه چند repository call پراکنده). این Action به‌طور آگاهانه از سه دامنه (Business/Agent/Catalog) می‌خواند — چون فقط خواندن است و هیچ نوشتنی رخ نمی‌دهد، ناقض قانون Inter-Module Communication نیست (آن قانون درباره‌ی وابستگی سمت نوشتن/منطق تجاری است، نه read model نمایشی).
+
+موجودی کردیت و مذاکرات فعال چون هنوز دامنه‌های Credit/Negotiation (Phase 2/3) وجود ندارند، به‌صورت صادقانه `null` برمی‌گردند و در ویو به‌صورت «—» نمایش داده می‌شوند — نه عدد ساختگی صفر.
+
+**فایل‌های اصلی:** `app/Domains/Nexus/Analytics/Application/Actions/GetBusinessDashboardAction.php`، `BusinessDashboardController` کامل شد، `resources/views/nexus/business/dashboard.blade.php` بازنویسی کامل (وضعیت Agent با `x-agent-pulse`، شمارش کاتالوگ و پلیس‌هولدرهای کردیت/مذاکره با `x-metric-card`، برچسب تأیید با `x-status-badge`).
+
+**تست End-to-End دستی (نه فقط PHPUnit):** ثبت‌نام واقعی → داشبورد «Agent هنوز ساخته نشده» + شمارش صفر → تأیید ادمین → داشبورد «Test Company» + وضعیت Verified + Agent واقعی با Core Agent/Token واقعی → افزودن محصول → شمارش کاتالوگ آپدیت شد به ۱. حین این تست یک باگ واقعی پیدا و رفع شد: دیتابیس dev (`database/database.sqlite`) از قبل از M1 migrate نشده بود؛ `php artisan migrate` اجرا شد.
+
+**تست خودکار:** ۵ تست جدید (۳ Feature روی `GetBusinessDashboardAction`، ۲ Feature روی `BusinessDashboardController` قبل/بعد از تأیید) — همه پاس. کل تست‌های Nexus: ۴۸ پاس.
+
+**کامیت:** `feat(nexus): build real Business Dashboard (Agent status, catalog counts)`.
+
+---

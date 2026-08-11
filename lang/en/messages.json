@@ -254,6 +254,23 @@
         "company": "Company",
         "individual": "Individual"
       },
+      "dashboard": {
+        "status": {
+          "pending": "Pending approval",
+          "verified": "Verified"
+        },
+        "agent": "Your Agent",
+        "agent_pending": "Agent not created yet",
+        "agent_pending_description": "Your Agent is created automatically once your business is verified by an admin.",
+        "agent_no_personality": "No personality configured yet",
+        "catalog": "Catalog",
+        "products": "Products",
+        "services": "Services",
+        "credit": "Credit",
+        "credit_balance": "Balance",
+        "negotiations": "Negotiations",
+        "active_negotiations": "Active"
+      },
       "industry": {
         "retail": "Retail",
         "wholesale": "Wholesale",

@@ -2,19 +2,27 @@
 
 namespace App\Domains\Nexus\Business\Interfaces\Http\Controllers;
 
+use App\Domains\Nexus\Analytics\Application\Actions\GetBusinessDashboardAction;
+use App\Domains\Nexus\Business\Infrastructure\Models\BusinessOwner;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 
-/**
- * Placeholder for M2 (just proves the 'business.auth' guard works
- * end-to-end); M6 replaces the view with the full Jarvis dashboard
- * (Agent status, catalog summary, credit/negotiation placeholders).
- */
 class BusinessDashboardController extends Controller
 {
+    public function __construct(
+        private readonly GetBusinessDashboardAction $getBusinessDashboard,
+    ) {
+    }
+
     public function index(): View
     {
-        return view('nexus::business.dashboard', ['owner' => Auth::guard('business')->user()]);
+        /** @var BusinessOwner $owner */
+        $owner = Auth::guard('business')->user();
+
+        return view('nexus::business.dashboard', [
+            'owner' => $owner,
+            ...$this->getBusinessDashboard->execute($owner->business_id),
+        ]);
     }
 }
