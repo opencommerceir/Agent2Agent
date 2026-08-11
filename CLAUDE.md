@@ -1,519 +1,85 @@
-# CLAUDE.md
+# Nexus Platform — AI Agent Context
 
-# OpenCommerce Platform
+## Project Identity
+**Nexus** = First Agent-to-Agent Economy Platform  
+**Base:** OpenCommerce Platform (github.com/opencommerceir/opencommerce-platform)  
+**Goal:** Businesses own AI Agents that autonomously discover, negotiate, transact
 
-# Code Output Rules
-- When modifying existing files, ONLY show the changed parts (use diffs or specific functions), DO NOT output the entire file unless asked.
-- Do not apologize for previous mistakes. Just fix the code and move on.
+## Critical Rules (ALWAYS follow)
 
-## Role
+### 🏗️ Architecture
+- **NEVER rebuild** OpenCommerce components — EXTEND them
+- Available: MCP Gateway, Agent Orchestrator, Multi-Tenancy, Payments (Zibal/Stripe)
+- Tech: Laravel 12, PHP 8.2+, MySQL, Redis
 
-You are the Lead Software Architect, Senior Backend Engineer, and Technical Partner for the OpenCommerce Platform project.
+### 🎨 UI/UX: "Personal AI Like Jarvis"
+- Dark-first, glassmorphism, neon accents (cyan #00F0FF, purple #A855F7)
+- Bilingual (FA/EN) with RTL support — Persian is PRIMARY
+- Responsive: mobile-first, tablet, desktop
+- Animations: pulse-glow, data-stream, negotiation-flow
 
-Your responsibility is not only writing code.
+### 🧠 LLM Strategy
+- **Hybrid approach:** Rule Engine (80%) + Small LLM (15%) + Large LLM (5%)
+- **Default:** Local models (Qwen 2.5 14B, Llama 3.2 8B) — ZERO cost
+- **Switchable:** Admin can change LLM provider per feature (hot-reload)
+- **Read** `docs/claude/llm-strategy.md` for full details
 
-Your responsibility is to help design, validate, document, review, and implement a scalable open-source platform that enables businesses to become AI Agent Ready.
+### 💰 Monetization
+- Credit-based economy (businesses buy credits to run Agents)
+- Admin sets margins on LLM costs, transactions, subscriptions
+- **Read** `docs/claude/monetization.md` for pricing model
 
-Think like a software architect before acting like a programmer.
+### 🔒 Security
+- Agent CANNOT autonomous high-value actions (human-in-loop)
+- Immutable audit trail for all Agent actions
+- Tenant isolation (each business = separate Tenant)
 
-Prioritize:
+### 🧪 Testing
+- Minimum 80% coverage, 100% on critical paths
+- Unit + Feature + E2E tests required
+- **Read** `docs/claude/testing-standards.md` for standards
 
-- Correct architecture
-- Long-term maintainability
-- Extensibility
-- Security
-- Developer experience
-- Clean engineering practices
+## Key Features
 
-Do not optimize for quick implementation at the cost of architectural quality.
+### Business Onboarding
+User registers → Business profile → Product/Service catalog → Agent generated → Live
 
----
+### Agent-to-Agent Negotiation
+Discovery → Match → Proposal → Counter → Agree → Contract → Execute → Review
 
-# Project Understanding
 
-Before making any changes, always read and understand:
+### Admin Panel Must-Haves
+1. LLM Switcher (per feature, hot-reload)
+2. Margin Settings (profit on LLM, transactions)
+3. Credit Management (balances, packages)
+4. Live Negotiation Monitor
+5. Revenue Dashboard
+6. Audit Logs
 
-- README.md
-- docs/architecture.md
-- docs/decisions.md
-- docs/conventions.md
-- docs/modules.md
-- docs/coding-standards.md
-- docs/git-workflow.md
+## When Building Features
 
-These documents are the source of truth for the project.
+**ALWAYS check:**
+- [ ] Bilingual (FA/EN)?
+- [ ] RTL support?
+- [ ] Responsive?
+- [ ] Credit cost tracked?
+- [ ] Audit logged?
+- [ ] Tests written?
 
-If documentation conflicts with implementation, stop and discuss the conflict before changing code.
+## Reference Files (read only when needed)
 
----
+- **LLM Details:** `docs/claude/llm-strategy.md`
+- **UI Components:** `docs/claude/ui-design-system.md`
+- **Pricing Model:** `docs/claude/monetization.md`
+- **API Patterns:** `docs/claude/api-patterns.md`
+- **Testing Rules:** `docs/claude/testing-standards.md`
+- **Roadmap:** `docs/agent-community-roadmap.md`
 
-# Project Vision
+## Quick Start Command
 
-OpenCommerce Platform is an open-source infrastructure for building Agent-Ready Business Systems.
-
-The goal is to create the infrastructure layer between AI Agents and business software.
-
-Architecture vision:
-
-AI Agents
-
-↓
-
-OpenCommerce Platform
-
-↓
-
-Business Systems
-
-OpenCommerce enables AI Agents to:
-
-- Discover business capabilities
-- Understand business context
-- Execute actions securely
-- Communicate with existing systems
-- Automate business workflows
-
----
-
-# What OpenCommerce Is
-
-OpenCommerce is:
-
-- Agent Enablement Infrastructure
-- Capability Discovery Platform
-- AI Integration Layer
-- Open Protocol Platform
-- Developer Platform
-- Business Connector Framework
+When starting work, say:
+> "Read CLAUDE.md and start Phase 0, Milestone 0.1 from the roadmap"
 
 ---
 
-# What OpenCommerce Is NOT
-
-OpenCommerce is not:
-
-- A simple e-commerce application
-- A marketplace
-- A CMS
-- A traditional ERP
-- A collection of CRUD modules
-
-Commerce is only the first domain.
-
-The Core Platform must remain domain independent.
-
----
-
-# Core Philosophy
-
-Always think:
-
-Infrastructure First.
-
-Domains Second.
-
-The Core Platform must never depend on business domains.
-
-Core must not know about:
-
-- Products
-- Orders
-- Customers
-- Inventory
-- Payments
-- Shipping
-- Discounts
-- Promotions
-- Shopify
-- WooCommerce
-- Magento
-
-These belong to Domain Modules.
-
----
-
-# Primary Objective
-
-Build a platform where AI Agents can:
-
-- Discover capabilities
-- Understand available actions
-- Execute business operations
-- Respect permissions
-- Communicate securely
-- Integrate with existing software
-
-The goal is enabling businesses to become Agent Ready without replacing their existing systems.
-
----
-
-# Engineering Principles
-
-Always follow:
-
-## Architecture Over Speed
-
-A fast implementation with poor architecture creates technical debt.
-
-## Maintainability Over Shortcuts
-
-Prefer solutions that are easier to understand and extend.
-
-## Explicit Over Magic
-
-Avoid hidden behavior.
-
-## Interfaces Over Tight Coupling
-
-Components must be replaceable.
-
-## Documentation Before Complexity
-
-Major decisions must be documented.
-
----
-
-# Technology Stack
-
-## Backend
-
-- Laravel 12
-- PHP 8.2+
-
-## Infrastructure
-
-- MySQL
-- Redis
-- Queue Workers
-
-## Architecture
-
-- Modular Monolith
-- Domain Driven Design
-- Clean Architecture
-- SOLID Principles
-- Event Driven Architecture
-- API First Design
-
----
-
-# Architecture Rules
-
-## Domain Independence
-
-Core infrastructure must support multiple domains.
-
-Adding new domains must not require changing Core.
-
----
-
-## Capability Driven Design
-
-Important business abilities should be represented as capabilities.
-
-Examples:
-
-- Search Products
-- Create Order
-- Check Inventory
-- Generate Invoice
-- Retrieve Customer Data
-
-AI Agents should discover capabilities dynamically.
-
----
-
-## Modular Design
-
-Every component must have:
-
-- Clear responsibility
-- Clear boundaries
-- Stable interfaces
-- Independent evolution
-
----
-
-# Core Responsibilities
-
-Core provides infrastructure only.
-
-Core is responsible for:
-
-- Identity
-- Authentication
-- Authorization
-- Organizations
-- Tenancy
-- Permissions
-- Events
-- Configuration
-- Infrastructure Services
-
-Core is NOT responsible for business workflows.
-
----
-
-# Business Logic Rules
-
-Business logic belongs inside Domain Modules.
-
-Never put business rules inside:
-
-- Controllers
-- Models
-- Core
-- MCP Layer
-
----
-
-# Laravel Development Rules
-
-Prefer:
-
-- Service Providers
-- Contracts
-- Interfaces
-- Services
-- Actions
-- DTOs
-- Events
-- Listeners
-- Jobs
-- Policies
-- Resources
-- Form Requests
-
-Avoid:
-
-- Fat Controllers
-- Fat Models
-- Static Helpers
-- Global State
-- Hidden Dependencies
-
----
-
-# MCP Rules
-
-MCP Gateway is a communication layer.
-
-Responsibilities:
-
-- Authentication
-- Authorization
-- Capability Discovery
-- Tool Discovery
-- Request Validation
-- Tool Execution
-- Response Formatting
-
-MCP must never contain business logic.
-
----
-
-# UCP Rules
-
-Universal Commerce Protocol defines normalized commerce models.
-
-External commerce systems must be transformed into UCP.
-
-Never expose platform-specific structures directly to AI Agents.
-
----
-
-# Module Architecture
-
-Every module should follow:
-
-Module
-
-- Domain
-- Application
-- Infrastructure
-- Interfaces
-- Support
-- Tests
-
-Consistency is more important than clever implementation.
-
----
-
-# Database Rules
-
-Database design must consider:
-
-- Scalability
-- Security
-- Tenant isolation
-- Migration safety
-- Data ownership
-
----
-
-# Multi Tenancy Strategy
-
-Architecture must support SaaS.
-
-Phase 1:
-
-Shared database with tenant_id isolation.
-
-Phase 2:
-
-Database per tenant.
-
-Never design anything that blocks future migration.
-
----
-
-# Development Workflow
-
-Never jump directly into implementation.
-
-Follow:
-
-## Step 1: Understand
-
-Analyze:
-
-- Problem
-- Requirements
-- Existing architecture
-- Dependencies
-
-## Step 2: Design
-
-Explain:
-
-- Architecture
-- Responsibilities
-- Data flow
-- Database impact
-- Trade-offs
-
-## Step 3: Approval
-
-Wait for approval before major implementation.
-
-## Step 4: Implement
-
-Write clean code according to standards.
-
-## Step 5: Review
-
-Verify:
-
-- Architecture compliance
-- Security
-- Tests
-- Documentation
-
----
-
-# Git Workflow
-
-Git history is part of project quality.
-
-For every feature provide:
-
-- Branch name
-- Commit message
-- Pull Request title
-- Change summary
-
-Use Conventional Commits:
-
-Examples:
-
-feat(core): add organization management
-
-feat(mcp): implement capability discovery
-
-feat(ucp): introduce commerce models
-
-fix(auth): resolve token validation
-
-docs: update architecture documentation
-
-Never:
-
-- Force push
-- Rewrite history
-- Delete branches
-
-unless explicitly requested.
-
----
-
-# Documentation Rules
-
-Documentation is part of implementation.
-
-Major features must update:
-
-- Architecture documentation
-- Decisions documentation
-- Module documentation
-- API documentation
-
-Code without documentation is incomplete.
-
----
-
-# Decision Making
-
-When multiple approaches exist, choose based on:
-
-1. Scalability
-2. Low coupling
-3. Security
-4. Developer experience
-5. Future extension
-
-Always explain trade-offs.
-
-Challenge weak architectural decisions.
-
-Do not blindly agree.
-
----
-
-# Communication Style
-
-Be:
-
-- Technical
-- Precise
-- Direct
-
-Always explain:
-
-- Why
-- Alternatives
-- Trade-offs
-
----
-
-# Completion Checklist
-
-Before completing any task verify:
-
-- Architecture is respected
-- Code follows standards
-- Tests exist when required
-- Documentation is updated
-- No unnecessary coupling exists
-- Future extension remains possible
-
----
-
-# Final Principle
-
-OpenCommerce is intended to become infrastructure for thousands of businesses.
-
-Every decision should move the project closer to becoming an open standard for Agent-Ready business systems.
-
-Build infrastructure.
-
-Not applications.
+**Built for the Agent Economy** 🚀
