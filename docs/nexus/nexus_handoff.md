@@ -65,3 +65,18 @@
 **کامیت:** `feat(nexus): add Agent domain with auto-creation on business verification`.
 
 ---
+
+## Phase 1 / M4 — Catalog Domain (Product/Service)
+
+**تصمیم‌های کلیدی:**
+- `Money` VO مخصوص Nexus (کپی مستقل، دقیقاً مثل الگوی موجود در `app/Modules/{Commerce,Analytics,Finance,Shipping}` که هرکدام نسخه خودشان را دارند — یک Money مشترک خودش یک وابستگی مستقیم بین ماژول‌ها می‌شد). ستون‌های `price_amount`/`price_currency` دقیقاً همان قرارداد smallest-currency-unit جدول `products` هسته (Commerce) را دنبال می‌کنند.
+- roadmap یک اکشن به اسم «UpdateCatalog» نام می‌برد؛ چون Product و Service شکل فیلد متفاوت دارند (stock_quantity در برابر duration_minutes) و قرارداد کل پروژه «هر Action = یک نوع Entity» است، به‌جایش `UpdateProductAction`/`UpdateServiceAction` پیاده‌سازی شد — این انحراف از نام دقیق roadmap عمداً و مستند است. `SearchCatalogAction` همان‌طور که اسمش می‌گوید واقعاً روی هر دو نوع باهم کار می‌کند.
+- Variants محصول (که roadmap اشاره می‌کند) در Phase 1 پیاده نشد — هیچ‌کدام از ۴ اکشن نام‌برده‌شده به آن نیاز ندارد؛ ستون `attributes` (JSON) جای نگهداری داده‌های سفارشی صنعت/محصول تا وقتی زیرسیستم واقعی variant لازم شود.
+
+**فایل‌های اصلی:** `app/Domains/Nexus/Catalog/{Domain,Application,Infrastructure}/**` (`Product`, `Service`, `Money`)، دو migration (`nexus_products`, `nexus_services`)، `tests/{Unit,Feature}/Nexus/Catalog/**`.
+
+**تست:** 15 تست جدید (8 Unit: Money + Product + Service، 7 Feature: Add/Update × 2 نوع + Search با و بدون query + ایزوله‌بودن بین دو Business) — همه پاس. کل تست‌های Nexus: 43 پاس.
+
+**کامیت:** `feat(nexus): add Catalog domain (products/services)`.
+
+---

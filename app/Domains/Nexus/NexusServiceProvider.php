@@ -8,6 +8,10 @@ use App\Domains\Nexus\Agent\Infrastructure\Repositories\EloquentAgentRepository;
 use App\Domains\Nexus\Business\Domain\Events\BusinessWasVerified;
 use App\Domains\Nexus\Business\Domain\Repositories\BusinessRepositoryInterface;
 use App\Domains\Nexus\Business\Infrastructure\Repositories\EloquentBusinessRepository;
+use App\Domains\Nexus\Catalog\Domain\Repositories\ProductRepositoryInterface;
+use App\Domains\Nexus\Catalog\Domain\Repositories\ServiceRepositoryInterface;
+use App\Domains\Nexus\Catalog\Infrastructure\Repositories\EloquentProductRepository;
+use App\Domains\Nexus\Catalog\Infrastructure\Repositories\EloquentServiceRepository;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
@@ -24,6 +28,8 @@ class NexusServiceProvider extends ServiceProvider
 
         $this->app->bind(BusinessRepositoryInterface::class, EloquentBusinessRepository::class);
         $this->app->bind(AgentRepositoryInterface::class, EloquentAgentRepository::class);
+        $this->app->bind(ProductRepositoryInterface::class, EloquentProductRepository::class);
+        $this->app->bind(ServiceRepositoryInterface::class, EloquentServiceRepository::class);
     }
 
     public function boot(): void
