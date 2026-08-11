@@ -112,3 +112,48 @@
 **کامیت:** `feat(nexus): build real Business Dashboard (Agent status, catalog counts)`.
 
 ---
+
+## ⚠️ حادثه ریموت گیت (بین M6 و M7)
+
+کاربر متوجه شد که تا این لحظه هیچ کامیتی push نشده بود، و ریپازیتوری واقعی مقصد را اعلام کرد: **https://github.com/opencommerceir/Agent2Agent**. بررسی نشان داد:
+- هیچ push اشتباهی به جای دیگر انجام نشده بود — تمام ۸ کامیت (docs + Phase 0 + M1 تا M6) فقط لوکال روی `main` بودند.
+- تنها remote موجود `upstream` بود (تغییرنام‌یافته از `origin` در Phase 0 دقیقاً برای جلوگیری از push اشتباهی به opencommerce-platform) — هیچ push‌ای به آن هم نخورده بود.
+- ریپازیتوری Agent2Agent وجود داشت ولی کاملاً خالی بود (چون آدرسش تا این لحظه به من داده نشده بود).
+
+**رفع شد:** ریموت `origin` روی `https://github.com/opencommerceir/Agent2Agent.git` اضافه شد و هر ۸ کامیت با `git push -u origin main` push شدند. از این به بعد هر کامیت جدید (شروع از M7) به‌صورت خودکار به همین ریپازیتوری push می‌شود.
+
+---
+
+## Phase 1 / M7 — تأیید نهایی
+
+- `php artisan migrate --force` روی دیتابیس dev: همه migration های جدید (`businesses`, `business_owners`, `nexus_agents`, `nexus_products`, `nexus_services`) تمیز اجرا شدند.
+- `php artisan test` کامل: **921 pass / 283 fail** — بدون رگرشن (baseline قبل از Phase 1: 873 pass / 283 fail؛ ۴۸ تست جدید Nexus همگی pass).
+- تست End-to-End دستی دوم (روی دیتابیس تازه migrate‌شده، سناریوی کامل و تمیز): ثبت‌نام کسب‌وکار «Sara Store» → داشبورد pending با Agent نساخته → تأیید ادمین → افزودن ۱ محصول + ۱ خدمت → داشبورد: نام صحیح، وضعیت Verified، شمارش کاتالوگ ۱/۱ — همه درست.
+- `git log --oneline` روی `origin/main`: ۸ کامیت (این را M7 به ۹ می‌رساند).
+
+**کامیت:** `docs(nexus): Phase 1 complete — final handoff summary`.
+
+---
+
+## 🎯 خلاصه Phase 1 (Business & Agent Core) — تکمیل شد
+
+| دامنه | Entity ها | Action ها | تست |
+|---|---|---|---|
+| Business | `Business` | Register, Verify, UpdateProfile | ۱۱ |
+| Business Auth | `BusinessOwner` | (guard جدید `business`) | ۹ |
+| Agent | `Agent` (Nexus) | CreateForBusiness, UpdatePersonality, SetAuthorityLimits | ۱۰ |
+| Catalog | `Product`, `Service`, `Money` | AddProduct, AddService, UpdateProduct, UpdateService, SearchCatalog | ۱۵ |
+| Analytics (جزئی) | — | GetBusinessDashboard | ۳ |
+| Dashboard | — | (کنترلر) | ۲ |
+| **مجموع** | | | **۴۸ (پاس)** |
+
+تصمیمات معماری ماندگار برای فازهای بعدی:
+1. احراز هویت هر نقش جدید (Business owner) باید گارد/جدول مستقل خودش را بگیرد، نه توسعه `UserRole` هسته.
+2. ارتباط بین دامنه‌های Nexus باید Event-driven باشد مگر برای read model های محض (مثل داشبورد) که خواندن مستقیم از چند repository قابل قبول است.
+3. فیلدهای دوزبانه = ستون‌های `{field}_fa`/`{field}_en`.
+4. هر دامنه Money/VOهای خودش را می‌سازد، مشترک نمی‌شود.
+5. وقتی نام یک Action در roadmap با قرارداد «هر Action یک نوع Entity» تناقض دارد، انحراف مستند و توضیح داده می‌شود (نمونه: UpdateCatalog → UpdateProduct/UpdateService).
+
+**آماده برای Phase 2 (Negotiation Engine)** طبق `docs/nexus-roadmap.md`.
+
+---
