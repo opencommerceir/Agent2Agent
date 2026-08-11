@@ -220,5 +220,63 @@
       "title": "System performance",
       "description": "Platform-wide operational metrics: average response time, cache hit rate, request count, memory usage, and open database connections. These numbers cover the whole platform, not a single tenant."
     }
+  },
+  "nexus": {
+    "business": {
+      "registered": "Your business was registered and is pending admin approval.",
+      "register": {
+        "title": "Register your business",
+        "owner_section": "Your account",
+        "owner_name": "Full name",
+        "email": "Email",
+        "password": "Password",
+        "password_confirmation": "Confirm password",
+        "business_section": "Business profile",
+        "name_fa": "Business name (Persian)",
+        "name_en": "Business name (English)",
+        "type": "Business type",
+        "industry": "Industry",
+        "logo": "Logo (optional)",
+        "documents": "Verification documents (optional)",
+        "submit": "Register",
+        "have_account": "Already have an account?"
+      },
+      "login": {
+        "title": "Business login",
+        "email": "Email",
+        "password": "Password",
+        "remember": "Remember me",
+        "submit": "Log in",
+        "no_account": "Don't have a business account yet?",
+        "invalid_credentials": "These credentials do not match our records."
+      },
+      "type": {
+        "company": "Company",
+        "individual": "Individual"
+      },
+      "industry": {
+        "retail": "Retail",
+        "wholesale": "Wholesale",
+        "manufacturing": "Manufacturing",
+        "food_beverage": "Food & Beverage",
+        "construction": "Construction",
+        "real_estate": "Real Estate",
+        "technology": "Technology",
+        "healthcare": "Healthcare",
+        "education": "Education",
+        "transportation_logistics": "Transportation & Logistics",
+        "agriculture": "Agriculture",
+        "textile_apparel": "Textile & Apparel",
+        "automotive": "Automotive",
+        "finance_insurance": "Finance & Insurance",
+        "hospitality_tourism": "Hospitality & Tourism",
+        "professional_services": "Professional Services",
+        "media_advertising": "Media & Advertising",
+        "energy": "Energy",
+        "mining": "Mining",
+        "telecommunications": "Telecommunications",
+        "other": "Other"
+      }
+    }
   }
 }

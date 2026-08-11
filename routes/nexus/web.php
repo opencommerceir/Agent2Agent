@@ -1,5 +1,9 @@
 <?php
 
+use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessDashboardController;
+use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessLoginController;
+use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessLogoutController;
+use App\Domains\Nexus\Business\Interfaces\Http\Controllers\RegisterBusinessController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -16,11 +20,24 @@ use Illuminate\Support\Facades\Route;
 | does not apply it automatically the way passing a file as `web:` to
 | withRouting() would.
 |
-| Phase 0: infrastructure only. Business domains add their own route
-| groups here as they land.
-|
 */
 
 Route::middleware('web')->group(function () {
     Route::get('/nexus', fn () => view('nexus::welcome'))->name('nexus.welcome');
+
+    // Business portal (Phase 1, M2) — its own 'business' guard, fully
+    // independent of the admin Dashboard's 'auth'/'guest'/'admin'.
+    Route::prefix('nexus/business')->name('nexus.business.')->group(function () {
+        Route::middleware('business.guest:business')->group(function () {
+            Route::get('/register', [RegisterBusinessController::class, 'create'])->name('register');
+            Route::post('/register', [RegisterBusinessController::class, 'store'])->name('register.store');
+            Route::get('/login', [BusinessLoginController::class, 'create'])->name('login');
+            Route::post('/login', [BusinessLoginController::class, 'store'])->name('login.store');
+        });
+
+        Route::middleware('business.auth:business')->group(function () {
+            Route::post('/logout', BusinessLogoutController::class)->name('logout');
+            Route::get('/dashboard', [BusinessDashboardController::class, 'index'])->name('dashboard');
+        });
+    });
 });

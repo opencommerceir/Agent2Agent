@@ -220,5 +220,63 @@
       "title": "عملکرد سیستم",
       "description": "شاخص‌های عملیاتی کل پلتفرم را نشان می‌دهد: میانگین زمان پاسخ، نرخ برخورد کش (Cache Hit Rate)، تعداد درخواست‌ها، مصرف حافظه و تعداد اتصالات باز پایگاه‌داده. این آمار مربوط به کل پلتفرم است، نه یک مستأجر خاص."
     }
+  },
+  "nexus": {
+    "business": {
+      "registered": "کسب‌وکار شما ثبت شد و در انتظار تأیید ادمین است.",
+      "register": {
+        "title": "ثبت‌نام کسب‌وکار",
+        "owner_section": "حساب کاربری شما",
+        "owner_name": "نام و نام خانوادگی",
+        "email": "ایمیل",
+        "password": "رمز عبور",
+        "password_confirmation": "تکرار رمز عبور",
+        "business_section": "پروفایل کسب‌وکار",
+        "name_fa": "نام کسب‌وکار (فارسی)",
+        "name_en": "نام کسب‌وکار (انگلیسی)",
+        "type": "نوع کسب‌وکار",
+        "industry": "صنعت",
+        "logo": "لوگو (اختیاری)",
+        "documents": "مدارک تأیید هویت (اختیاری)",
+        "submit": "ثبت‌نام",
+        "have_account": "قبلاً حساب دارید؟"
+      },
+      "login": {
+        "title": "ورود کسب‌وکار",
+        "email": "ایمیل",
+        "password": "رمز عبور",
+        "remember": "مرا به خاطر بسپار",
+        "submit": "ورود",
+        "no_account": "هنوز حساب کسب‌وکار ندارید؟",
+        "invalid_credentials": "این اطلاعات با سوابق ما مطابقت ندارد."
+      },
+      "type": {
+        "company": "شرکت",
+        "individual": "شخص حقیقی"
+      },
+      "industry": {
+        "retail": "خرده‌فروشی",
+        "wholesale": "عمده‌فروشی",
+        "manufacturing": "تولید و ساخت",
+        "food_beverage": "غذا و نوشیدنی",
+        "construction": "ساخت‌وساز",
+        "real_estate": "املاک",
+        "technology": "فناوری",
+        "healthcare": "سلامت و درمان",
+        "education": "آموزش",
+        "transportation_logistics": "حمل‌ونقل و لجستیک",
+        "agriculture": "کشاورزی",
+        "textile_apparel": "نساجی و پوشاک",
+        "automotive": "خودرو",
+        "finance_insurance": "مالی و بیمه",
+        "hospitality_tourism": "هتلداری و گردشگری",
+        "professional_services": "خدمات حرفه‌ای",
+        "media_advertising": "رسانه و تبلیغات",
+        "energy": "انرژی",
+        "mining": "معدن",
+        "telecommunications": "مخابرات",
+        "other": "سایر"
+      }
+    }
   }
 }

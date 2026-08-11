@@ -3,10 +3,12 @@
 use App\Core\Exceptions\MCPExceptionHandler;
 use App\Http\Middleware\Authenticate;
 use App\Http\Middleware\CompressResponse;
+use App\Http\Middleware\EnsureBusinessOwnerIsAuthenticated;
 use App\Http\Middleware\EnsureShowcaseAccess;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\RecordPerformanceMetrics;
 use App\Http\Middleware\RedirectIfAuthenticated;
+use App\Http\Middleware\RedirectIfBusinessOwnerIsAuthenticated;
 use App\Http\Middleware\SetCDNHeaders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -33,6 +35,12 @@ return Application::configure(basePath: dirname(__DIR__))
             // for `/showcase/*`, completely independent of the 3 aliases
             // above (no real User/Agent identity behind it).
             'showcase.access' => EnsureShowcaseAccess::class,
+            // Nexus Business portal (Phase 1, M2) — same shape as
+            // 'auth'/'guest' above, one guard down. Always applied with
+            // the ':business' guard parameter (e.g. 'business.auth:business')
+            // since the app's default guard stays 'web'.
+            'business.auth' => EnsureBusinessOwnerIsAuthenticated::class,
+            'business.guest' => RedirectIfBusinessOwnerIsAuthenticated::class,
         ]);
 
         // Phase 4 Stage 8 (Performance Optimization, §7.20). Global —

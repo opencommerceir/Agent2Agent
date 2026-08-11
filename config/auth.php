@@ -1,6 +1,7 @@
 <?php
 
 use App\Core\Infrastructure\Models\User;
+use App\Domains\Nexus\Business\Infrastructure\Models\BusinessOwner;
 
 return [
 
@@ -42,6 +43,16 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        // Nexus's own Business-owner portal (Phase 1, M2) — fully
+        // independent of the 'web' guard above: Core's User/UserRole are
+        // platform-level (Dashboard operators only), so a Business owner
+        // gets its own guard/provider/identity table rather than a third
+        // UserRole case that would put a Nexus concept inside Core.
+        'business' => [
+            'driver' => 'session',
+            'provider' => 'business_owners',
+        ],
     ],
 
     /*
@@ -71,6 +82,11 @@ return [
         //     'driver' => 'database',
         //     'table' => 'users',
         // ],
+
+        'business_owners' => [
+            'driver' => 'eloquent',
+            'model' => BusinessOwner::class,
+        ],
     ],
 
     /*
