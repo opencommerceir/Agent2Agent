@@ -2,8 +2,13 @@
 
 namespace App\Domains\Nexus;
 
+use App\Domains\Nexus\Agent\Application\Listeners\CreateAgentOnBusinessVerifiedListener;
+use App\Domains\Nexus\Agent\Domain\Repositories\AgentRepositoryInterface;
+use App\Domains\Nexus\Agent\Infrastructure\Repositories\EloquentAgentRepository;
+use App\Domains\Nexus\Business\Domain\Events\BusinessWasVerified;
 use App\Domains\Nexus\Business\Domain\Repositories\BusinessRepositoryInterface;
 use App\Domains\Nexus\Business\Infrastructure\Repositories\EloquentBusinessRepository;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -18,6 +23,7 @@ class NexusServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(config_path('nexus/platform.php'), 'nexus.platform');
 
         $this->app->bind(BusinessRepositoryInterface::class, EloquentBusinessRepository::class);
+        $this->app->bind(AgentRepositoryInterface::class, EloquentAgentRepository::class);
     }
 
     public function boot(): void
@@ -28,5 +34,7 @@ class NexusServiceProvider extends ServiceProvider
 
         $this->loadViewsFrom(resource_path('views/nexus'), 'nexus');
         $this->loadMigrationsFrom(database_path('migrations/nexus'));
+
+        Event::listen(BusinessWasVerified::class, CreateAgentOnBusinessVerifiedListener::class);
     }
 }

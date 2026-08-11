@@ -51,3 +51,17 @@
 **کامیت:** `feat(nexus): add Business auth guard and registration/login portal`.
 
 ---
+
+## Phase 1 / M3 — Agent Domain
+
+**تصمیم کلیدی:** `Agent` جدید Nexus (شخصیت/لحن/محدودیت اختیار/استراتژی) کاملاً از `Agent` هسته (فقط identity + bearer token، صفر فیلد رفتاری) و از `AgentProfile` ماژول AgentOrchestrator (جدول keyword→capability استاتیک بر اساس `config/agents/`) جداست — هیچ‌کدام این فیلدها را ندارند یا نباید داشته باشند. `CreateAgentForBusinessAction` هم ردیف Nexus را می‌سازد و هم با `RegisterAgentAction`/`GenerateAgentTokenAction` موجود هسته، یک Agent+Token واقعی Core می‌سازد (`core_agent_id` ذخیره می‌شود) — یعنی Agent از روز اول اعتبارنامه واقعی MCP دارد، بدون ساخت یک مکانیزم auth دوم.
+
+**ارتباط Business → Agent کاملاً Event-driven:** `CreateAgentOnBusinessVerifiedListener` به `BusinessWasVerified` (از M1) گوش می‌دهد و tenantId/organizationId/نام‌ها را مستقیماً از خود Entity داخل رویداد می‌خواند — دامنه Agent هیچ وابستگی مستقیمی به `BusinessRepositoryInterface` ندارد (طبق قانون Inter-Module Communication در `docs/modules.md`).
+
+**فایل‌های اصلی:** `app/Domains/Nexus/Agent/{Domain,Application,Infrastructure}/**`، `database/migrations/nexus/..._create_nexus_agents_table.php`، listener ثبت‌شده در `NexusServiceProvider::boot()`، `tests/{Unit,Feature}/Nexus/Agent/**`.
+
+**تست:** 10 تست جدید (5 Unit روی Entity، 5 Feature شامل تست یکپارچه‌ی واقعی «تأیید Business ⇒ ساخت خودکار Agent با Core Agent/Token واقعی») — همه پاس. کل تست‌های Nexus: 28 پاس.
+
+**کامیت:** `feat(nexus): add Agent domain with auto-creation on business verification`.
+
+---
