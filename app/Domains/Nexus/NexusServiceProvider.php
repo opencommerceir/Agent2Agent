@@ -16,6 +16,10 @@ use App\Domains\Nexus\Catalog\Domain\Repositories\ServiceRepositoryInterface;
 use App\Domains\Nexus\Catalog\Infrastructure\Repositories\EloquentProductRepository;
 use App\Domains\Nexus\Catalog\Infrastructure\Repositories\EloquentServiceRepository;
 use App\Domains\Nexus\Marketplace\Application\Actions\SearchMarketplaceAction;
+use App\Domains\Nexus\Negotiation\Domain\Repositories\NegotiationMessageRepositoryInterface;
+use App\Domains\Nexus\Negotiation\Domain\Repositories\NegotiationRepositoryInterface;
+use App\Domains\Nexus\Negotiation\Infrastructure\Repositories\EloquentNegotiationMessageRepository;
+use App\Domains\Nexus\Negotiation\Infrastructure\Repositories\EloquentNegotiationRepository;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
@@ -34,6 +38,8 @@ class NexusServiceProvider extends ServiceProvider
         $this->app->bind(AgentRepositoryInterface::class, EloquentAgentRepository::class);
         $this->app->bind(ProductRepositoryInterface::class, EloquentProductRepository::class);
         $this->app->bind(ServiceRepositoryInterface::class, EloquentServiceRepository::class);
+        $this->app->bind(NegotiationRepositoryInterface::class, EloquentNegotiationRepository::class);
+        $this->app->bind(NegotiationMessageRepositoryInterface::class, EloquentNegotiationMessageRepository::class);
     }
 
     public function boot(): void

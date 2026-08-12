@@ -191,3 +191,19 @@
 **کامیت:** `feat(nexus): wire nexus.marketplace.search as a real MCP capability`.
 
 ---
+
+## Phase 2 / M3 — هسته دامنه Negotiation
+
+**اولین aggregate واقعاً cross-tenant پروژه.** همه repositoryهای موجود (Commerce, Finance, Agent, Catalog) دقیقاً با یک `tenant_id` scope می‌شوند. یک معامله بین Agent دو Business متفاوت ذاتاً بین دو Tenant مشترک است — پس `negotiations` هر دو طرف را صریح ذخیره می‌کند (`initiator_business_id`+`initiator_tenant_id`, `counterparty_business_id`+`counterparty_tenant_id`) و `NegotiationRepositoryInterface::findVisibleTo()` بر اساس «آیا این Business یکی از دو طرف است؟» اجازه دسترسی می‌دهد، نه یک `WHERE tenant_id = ?`.
+
+**State machine:** دقیقاً الگوی `Subscription` (ماژول Commerce) — نگاشت صریح `ALLOWED_TRANSITIONS` + یک `transitionTo()` نگهبان که همه متدهای عمومی از آن عبور می‌کنند. `accept()`/`reject()` از هر سه حالت Proposed/Countered/PendingApproval قابل فراخوانی‌اند (همان الگوی چند-حالت-مبدأ `Subscription::cancelImmediately()`). `Expired` مدل‌سازی شده ولی هیچ متدی این فاز به آن transition نمی‌کند — دقیقاً همان gap مستندشده‌ی `Subscription::Expired` خودش (نه سهل‌انگاری، یک precedent مستقیم در همین کدبیس).
+
+**تصحیح نسبت به پلن اولیه:** پلن گفته بود «`counter()`/`accept()` هر دو باید authority_limits را چک کنند» — در پیاده‌سازی این را محدود به فقط `accept()` کردم، چون یک پیشنهاد متقابل (`counter`) هیچ تعهدی ایجاد نمی‌کند، فقط قبول‌کردن (`accept`) یک معامله را نهایی می‌کند؛ و آستانه، محدودیت اختیار **خودِ Agent قبول‌کننده** است (نه طرف مقابل) — یعنی «آیا من مجازم خودم را متعهد به این معامله کنم؟»، نه قضاوت درباره طرف مقابل.
+
+**فایل‌های اصلی:** `app/Domains/Nexus/Negotiation/{Domain,Application,Infrastructure}/**`، `database/migrations/nexus/..._create_negotiations_table.php`، `..._create_negotiation_messages_table.php`.
+
+**تست:** ۲۶ تست جدید (۱۷ Unit روی state machine + VOها، ۹ Feature روی ۴ Action با داده واقعی cross-tenant) — همه پاس. یک باگ واقعی در حین نوشتن تست پیدا و رفع شد: `Event::fake()` بدون آرگومان در ابتدای تست، لیسنر واقعی `BusinessWasVerified` (که Agent را می‌سازد) را هم خاموش می‌کرد؛ راه‌حل: `Event::fake([NegotiationWasAccepted::class])` به‌جای fake کلی.
+
+**کامیت:** `feat(nexus): add Negotiation domain core (state machine, terms, propose/counter/accept/reject)`.
+
+---
