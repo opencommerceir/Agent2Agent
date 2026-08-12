@@ -34,5 +34,6 @@ class DatabaseSeeder extends Seeder
         $this->call(NotificationsCapabilitiesSeeder::class);
         $this->call(AnalyticsCapabilitiesSeeder::class);
         $this->call(AgentOrchestratorCapabilitiesSeeder::class);
+        $this->call(NexusMarketplaceCapabilitiesSeeder::class);
     }
 }

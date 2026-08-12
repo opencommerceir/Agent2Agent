@@ -23,6 +23,13 @@ class EloquentAgentRepository implements AgentRepositoryInterface
         return $model ? $this->toEntity($model) : null;
     }
 
+    public function findByCoreAgentId(int $coreAgentId): ?AgentEntity
+    {
+        $model = AgentModel::query()->where('core_agent_id', $coreAgentId)->first();
+
+        return $model ? $this->toEntity($model) : null;
+    }
+
     public function save(AgentEntity $agent): AgentEntity
     {
         $model = $agent->id()

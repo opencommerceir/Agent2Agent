@@ -2,6 +2,9 @@
 
 namespace App\Domains\Nexus;
 
+use App\Core\Application\DTOs\AuthContext;
+use App\Core\Application\Services\CapabilityHandlerRegistry;
+use App\Domains\Nexus\Agent\Application\Actions\ResolveActingBusinessAction;
 use App\Domains\Nexus\Agent\Application\Listeners\CreateAgentOnBusinessVerifiedListener;
 use App\Domains\Nexus\Agent\Domain\Repositories\AgentRepositoryInterface;
 use App\Domains\Nexus\Agent\Infrastructure\Repositories\EloquentAgentRepository;
@@ -12,6 +15,7 @@ use App\Domains\Nexus\Catalog\Domain\Repositories\ProductRepositoryInterface;
 use App\Domains\Nexus\Catalog\Domain\Repositories\ServiceRepositoryInterface;
 use App\Domains\Nexus\Catalog\Infrastructure\Repositories\EloquentProductRepository;
 use App\Domains\Nexus\Catalog\Infrastructure\Repositories\EloquentServiceRepository;
+use App\Domains\Nexus\Marketplace\Application\Actions\SearchMarketplaceAction;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
@@ -42,5 +46,29 @@ class NexusServiceProvider extends ServiceProvider
         $this->loadMigrationsFrom(database_path('migrations/nexus'));
 
         Event::listen(BusinessWasVerified::class, CreateAgentOnBusinessVerifiedListener::class);
+
+        $this->registerMcpCapabilityHandlers();
+    }
+
+    /**
+     * Wires each Nexus MCP capability's real handler into the Capability
+     * Registry — the registry metadata itself is seeded separately
+     * (database/seeders/Nexus*CapabilitiesSeeder.php), since
+     * RefreshDatabase migrates *after* providers boot (same reasoning
+     * CommerceServiceProvider's own wiring follows).
+     */
+    private function registerMcpCapabilityHandlers(): void
+    {
+        $handlers = $this->app->make(CapabilityHandlerRegistry::class);
+
+        $handlers->register('nexus.marketplace.search', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->app->make(ResolveActingBusinessAction::class)->execute($context->agentId);
+
+            return $this->app->make(SearchMarketplaceAction::class)->execute(
+                callingBusinessId: $callingBusinessId,
+                query: $input['query'] ?? null,
+                industry: $input['industry'] ?? null,
+            );
+        });
     }
 }

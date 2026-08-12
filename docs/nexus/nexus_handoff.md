@@ -177,3 +177,17 @@
 **کامیت:** `feat(nexus): add Marketplace domain (search/recommendations/rank suppliers)`.
 
 ---
+
+## Phase 2 / M2 — اولین MCP Capability واقعی Nexus (`nexus.marketplace.search`)
+
+اولین اثبات end-to-end که کل زنجیره MCP برای Nexus کار می‌کند: manifest → Seeder ایدمپوتنت (`NexusMarketplaceCapabilitiesSeeder`، اضافه‌شده به `DatabaseSeeder`) → `CapabilityHandlerRegistry::register()` در `NexusServiceProvider::boot()` → `SearchMarketplaceAction`.
+
+**مسئله جدید:** هندلر MCP فقط `AuthContext->agentId` (شناسه Core Agent) را دارد، نه اینکه کدام Business Nexus در حال تماس است. راه‌حل: متد جدید `AgentRepositoryInterface::findByCoreAgentId()` + یک Action مشترک `App\Domains\Nexus\Agent\Application\Actions\ResolveActingBusinessAction` که هر capability جدید Nexus (از جمله Negotiation در M4) از آن استفاده می‌کند — به‌جای تکرار همین منطق در هر closure.
+
+**تصمیم:** `nexus.marketplace.search` یک permission واقعی (`nexus.marketplace.read`) می‌خواهد، نه لیست خالی — با اینکه جستجو ریسک پایینی دارد، برای سازگاری با قرارداد موجود پلتفرم (هیچ capability موجودی با `requiredPermissions` خالی ثبت نشده) همین الگو حفظ شد.
+
+**تست:** ۲ تست Feature جدید — یکی با توکن Bearer واقعی یک Agent واقعی (از مسیر رویداد-محور M3 فاز ۱ ساخته شده، نه mock) کل چرخه `/mcp/v1/execute` را طی می‌کند و نتیجه cross-tenant واقعی می‌گیرد؛ دیگری بدون permission رد می‌شود (403). کل تست‌های Marketplace: ۸ پاس.
+
+**کامیت:** `feat(nexus): wire nexus.marketplace.search as a real MCP capability`.
+
+---
