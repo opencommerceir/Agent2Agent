@@ -12,6 +12,9 @@
                 </div>
                 <div class="flex items-center gap-3">
                     <x-status-badge :status="$business->isVerified() ? 'success' : 'warning'" :label="t('messages.nexus.business.dashboard.status.'.$business->verificationStatus()->value)" />
+                    <a href="{{ route('nexus.growth.referrals.index') }}" class="rounded-md border border-nexus-purple/40 px-3 py-1.5 text-sm text-nexus-purple hover:bg-nexus-purple/10">
+                        {{ t('messages.nexus.growth.referrals.title') }}
+                    </a>
                     <form method="POST" action="{{ route('nexus.business.logout') }}">
                         @csrf
                         <button type="submit" class="rounded-md border border-nexus-border px-3 py-1.5 text-sm text-nexus-text hover:bg-nexus-surface-1">

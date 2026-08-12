@@ -2,7 +2,10 @@
 
 namespace Tests\Feature\Nexus\Business;
 
+use App\Domains\Nexus\Business\Application\Actions\VerifyBusinessAction;
 use App\Domains\Nexus\Business\Infrastructure\Models\BusinessOwner;
+use App\Domains\Nexus\Growth\Domain\Repositories\ReferralCodeRepositoryInterface;
+use App\Domains\Nexus\Growth\Domain\Repositories\ReferralSignupRepositoryInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -80,6 +83,56 @@ class RegisterBusinessControllerTest extends TestCase
         $response = $this->get(route('nexus.business.register'));
 
         $response->assertRedirect(route('nexus.business.dashboard'));
+    }
+
+    public function test_create_withRefQueryParam_prefillsHiddenFieldAndStore_recordsReferralSignup(): void
+    {
+        $referrer = app(\App\Domains\Nexus\Business\Application\Actions\RegisterBusinessAction::class)->execute(
+            'معرف', 'Referrer Co',
+            \App\Domains\Nexus\Business\Domain\ValueObjects\BusinessType::Company,
+            \App\Domains\Nexus\Business\Domain\ValueObjects\Industry::Retail,
+        );
+        app(VerifyBusinessAction::class)->execute($referrer->id);
+        $code = app(ReferralCodeRepositoryInterface::class)->findByBusinessId($referrer->id);
+
+        $createResponse = $this->get(route('nexus.business.register', ['ref' => $code->code()]));
+        $createResponse->assertSee($code->code(), false);
+
+        $this->post(route('nexus.business.register.store'), [
+            'owner_name' => 'Ali Rezaei',
+            'email' => 'ali@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+            'name_fa' => 'شرکت آزمایشی',
+            'name_en' => 'Test Company',
+            'type' => 'company',
+            'industry' => 'technology',
+            'referral_code' => $code->code(),
+        ]);
+
+        $newBusiness = BusinessOwner::query()->where('email', 'ali@example.com')->firstOrFail();
+        $signup = app(ReferralSignupRepositoryInterface::class)->findByRefereeId($newBusiness->business_id);
+
+        $this->assertNotNull($signup);
+        $this->assertSame($referrer->id, $signup->referrerBusinessId());
+    }
+
+    public function test_store_withUnknownReferralCode_stillRegistersSuccessfully(): void
+    {
+        $response = $this->post(route('nexus.business.register.store'), [
+            'owner_name' => 'Ali Rezaei',
+            'email' => 'ali@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+            'name_fa' => 'شرکت آزمایشی',
+            'name_en' => 'Test Company',
+            'type' => 'company',
+            'industry' => 'technology',
+            'referral_code' => 'REF-BOGUS1',
+        ]);
+
+        $response->assertRedirect(route('nexus.business.dashboard'));
+        $this->assertDatabaseHas('business_owners', ['email' => 'ali@example.com']);
     }
 
     private function registerBusinessForOwnerFixture(): int

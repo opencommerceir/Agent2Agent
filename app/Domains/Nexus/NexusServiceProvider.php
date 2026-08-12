@@ -32,6 +32,13 @@ use App\Domains\Nexus\Credit\Domain\Repositories\CreditTransactionRepositoryInte
 use App\Domains\Nexus\Credit\Infrastructure\Repositories\EloquentCreditBalanceRepository;
 use App\Domains\Nexus\Credit\Infrastructure\Repositories\EloquentCreditPurchaseSessionRepository;
 use App\Domains\Nexus\Credit\Infrastructure\Repositories\EloquentCreditTransactionRepository;
+use App\Domains\Nexus\Growth\Application\Actions\GetReferralStatusAction;
+use App\Domains\Nexus\Growth\Application\Listeners\GrantReferralRewardOnBusinessVerifiedListener;
+use App\Domains\Nexus\Growth\Application\Listeners\IssueReferralCodeOnBusinessVerifiedListener;
+use App\Domains\Nexus\Growth\Domain\Repositories\ReferralCodeRepositoryInterface;
+use App\Domains\Nexus\Growth\Domain\Repositories\ReferralSignupRepositoryInterface;
+use App\Domains\Nexus\Growth\Infrastructure\Repositories\EloquentReferralCodeRepository;
+use App\Domains\Nexus\Growth\Infrastructure\Repositories\EloquentReferralSignupRepository;
 use App\Domains\Nexus\Llm\Application\Services\LLMProviderRegistry;
 use App\Domains\Nexus\Llm\Domain\Repositories\LLMUsageLogRepositoryInterface;
 use App\Domains\Nexus\Llm\Infrastructure\Providers\AnthropicLLMProvider;
@@ -87,6 +94,8 @@ class NexusServiceProvider extends ServiceProvider
         $this->app->bind(CreditTransactionRepositoryInterface::class, EloquentCreditTransactionRepository::class);
         $this->app->bind(CreditPurchaseSessionRepositoryInterface::class, EloquentCreditPurchaseSessionRepository::class);
         $this->app->bind(LLMUsageLogRepositoryInterface::class, EloquentLLMUsageLogRepository::class);
+        $this->app->bind(ReferralCodeRepositoryInterface::class, EloquentReferralCodeRepository::class);
+        $this->app->bind(ReferralSignupRepositoryInterface::class, EloquentReferralSignupRepository::class);
 
         // Nexus's own PaymentGatewayRegistry singleton — CommerceServiceProvider
         // (where these adapter classes originally live) is disabled since
@@ -111,6 +120,8 @@ class NexusServiceProvider extends ServiceProvider
 
         Event::listen(BusinessWasVerified::class, CreateAgentOnBusinessVerifiedListener::class);
         Event::listen(BusinessWasVerified::class, GrantStartingCreditsOnBusinessVerifiedListener::class);
+        Event::listen(BusinessWasVerified::class, IssueReferralCodeOnBusinessVerifiedListener::class);
+        Event::listen(BusinessWasVerified::class, GrantReferralRewardOnBusinessVerifiedListener::class);
         Event::listen(NegotiationWasAccepted::class, GenerateContractOnNegotiationAcceptedListener::class);
         Event::listen(ContractWasGenerated::class, HoldEscrowOnContractGeneratedListener::class);
 
@@ -197,6 +208,12 @@ class NexusServiceProvider extends ServiceProvider
             $balance = $this->app->make(GetCreditBalanceAction::class)->execute($callingBusinessId);
 
             return $balance->toArray();
+        });
+
+        $handlers->register('nexus.referral.status', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            return $this->app->make(GetReferralStatusAction::class)->execute($callingBusinessId)->toArray();
         });
 
         $this->registerNegotiationCapabilityHandlers($handlers);

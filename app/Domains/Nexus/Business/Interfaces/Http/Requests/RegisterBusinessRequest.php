@@ -34,6 +34,7 @@ class RegisterBusinessRequest extends FormRequest
             'logo' => ['nullable', 'image', 'max:2048'],
             'documents' => ['nullable', 'array'],
             'documents.*' => ['file', 'max:5120'],
+            'referral_code' => ['nullable', 'string', 'max:16'],
         ];
     }
 }

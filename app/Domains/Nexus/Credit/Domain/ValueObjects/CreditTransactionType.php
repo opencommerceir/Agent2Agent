@@ -12,4 +12,5 @@ enum CreditTransactionType: string
     case Deduction = 'deduction';
     case Refund = 'refund';
     case AdminGrant = 'admin_grant';
+    case ReferralBonus = 'referral_bonus';
 }

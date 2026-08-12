@@ -239,7 +239,8 @@
         "logo": "Logo (optional)",
         "documents": "Verification documents (optional)",
         "submit": "Register",
-        "have_account": "Already have an account?"
+        "have_account": "Already have an account?",
+        "referred_by": "You were invited with referral code :code."
       },
       "login": {
         "title": "Business login",
@@ -293,6 +294,25 @@
         "mining": "Mining",
         "telecommunications": "Telecommunications",
         "other": "Other"
+      }
+    },
+    "growth": {
+      "referrals": {
+        "title": "Referrals",
+        "your_code": "Your referral code",
+        "copy_link": "Copy invite link",
+        "how_it_works": "Share your code — when a business you invite registers and gets verified, you both earn credits.",
+        "tier1_count": "Businesses you referred",
+        "tier1_rewarded": "Rewarded",
+        "tier2_count": "Second-tier network (referred by your referrals)",
+        "table_name": "Business",
+        "table_status": "Status",
+        "table_date": "Joined",
+        "empty": "You haven't referred anyone yet.",
+        "status": {
+          "pending": "Pending verification",
+          "rewarded": "Rewarded"
+        }
       }
     },
     "negotiation": {

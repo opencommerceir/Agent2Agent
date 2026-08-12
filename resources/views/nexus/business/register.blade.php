@@ -17,6 +17,13 @@
 
             <form method="POST" action="{{ route('nexus.business.register.store') }}" enctype="multipart/form-data" class="space-y-6">
                 @csrf
+                <input type="hidden" name="referral_code" value="{{ old('referral_code', $referralCode ?? '') }}">
+
+                @if ($referralCode ?? old('referral_code'))
+                    <div class="rounded-md border border-nexus-purple/40 bg-nexus-purple/10 px-4 py-3 text-sm text-nexus-purple">
+                        {{ t('messages.nexus.business.register.referred_by', ['code' => $referralCode ?? old('referral_code')]) }}
+                    </div>
+                @endif
 
                 <fieldset class="space-y-3">
                     <legend class="text-sm font-semibold uppercase tracking-wide text-nexus-cyan">{{ t('messages.nexus.business.register.owner_section') }}</legend>

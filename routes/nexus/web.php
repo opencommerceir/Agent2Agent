@@ -6,6 +6,7 @@ use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessLogoutControl
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\RegisterBusinessController;
 use App\Domains\Nexus\Credit\Interfaces\Http\Controllers\CreditPurchaseCallbackController;
 use App\Domains\Nexus\Credit\Interfaces\Http\Controllers\CreditPurchaseController;
+use App\Domains\Nexus\Growth\Interfaces\Http\Controllers\ReferralController;
 use App\Domains\Nexus\Negotiation\Interfaces\Http\Controllers\NegotiationViewerController;
 use Illuminate\Support\Facades\Route;
 
@@ -71,5 +72,11 @@ Route::middleware('web')->group(function () {
         // held against the auto-generated Contract.
         Route::post('/{negotiation}/escrow/release', [NegotiationViewerController::class, 'releaseEscrow'])->name('escrow.release');
         Route::post('/{negotiation}/escrow/dispute', [NegotiationViewerController::class, 'disputeEscrow'])->name('escrow.dispute');
+    });
+
+    // Viral Growth Engine (Phase 5) — its own prefix/name, same
+    // 'business.auth' guard as the rest of the business-facing portal.
+    Route::middleware('business.auth:business')->prefix('nexus/growth')->name('nexus.growth.')->group(function () {
+        Route::get('/referrals', [ReferralController::class, 'index'])->name('referrals.index');
     });
 });

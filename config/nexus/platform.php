@@ -151,6 +151,42 @@ return [
             'nexus.negotiation.reject' => (int) env('NEXUS_COST_NEGOTIATION_REJECT', 2),
             'contract.generate' => (int) env('NEXUS_COST_CONTRACT_GENERATE', 50),
             'contract.escrow.hold' => (int) env('NEXUS_COST_ESCROW_HOLD', 100),
+            // Phase 5 — small, deliberately nonzero: nexus.growth.referral.status
+            // stays free (checking your own standing must never be gated,
+            // same reasoning as nexus.credit.balance), but sending an
+            // invite reaches an external inbox and costs real deliverability
+            // risk, so a flat fee discourages spam the same way every other
+            // outbound-effect capability in this table already is priced.
+            'nexus.invite.send' => (int) env('NEXUS_COST_GROWTH_INVITE_SEND', 5),
+            'nexus.coalition.create' => (int) env('NEXUS_COST_GROWTH_COALITION_CREATE', 10),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Growth (Phase 5 — Viral Growth Engine)
+    |--------------------------------------------------------------------------
+    |
+    | Not in docs/claude/monetization.md (that document predates Phase 5) —
+    | these are new, reasoned-from-scratch defaults documented here and in
+    | docs/nexus/nexus_handoff.md rather than invented silently. Referral
+    | rewards are credited (GrantReferralRewardOnBusinessVerifiedListener),
+    | never spent, so they live in their own `growth` section instead of
+    | `credit.action_costs` (which is exclusively CostGate's price list for
+    | outgoing spend).
+    |
+    */
+    'growth' => [
+        'referral' => [
+            // Two-sided (docs/nexus-roadmap.md Phase 5: "پاداش کردیت
+            // دوطرفه") — referrer earns more than the referee since they
+            // did the work of bringing in real business.
+            'referrer_reward_credits' => (int) env('NEXUS_GROWTH_REFERRER_REWARD', 200),
+            'referee_reward_credits' => (int) env('NEXUS_GROWTH_REFEREE_REWARD', 100),
+            // Multi-tier: one hop past the direct referrer, deliberately
+            // smaller and deliberately not recursive further (roadmap says
+            // "Multi-tier tracking", not "unbounded chain").
+            'tier2_reward_credits' => (int) env('NEXUS_GROWTH_TIER2_REWARD', 50),
         ],
     ],
 
