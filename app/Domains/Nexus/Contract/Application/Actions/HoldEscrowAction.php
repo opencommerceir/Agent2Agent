@@ -2,6 +2,7 @@
 
 namespace App\Domains\Nexus\Contract\Application\Actions;
 
+use App\Domains\Nexus\Admin\Application\Services\MarginSettingsService;
 use App\Domains\Nexus\Contract\Domain\Entities\Contract;
 use App\Domains\Nexus\Contract\Domain\Entities\Escrow;
 use App\Domains\Nexus\Contract\Domain\Repositories\EscrowRepositoryInterface;
@@ -18,15 +19,16 @@ use App\Domains\Nexus\Credit\Application\Actions\SpendCreditsForActionAction;
  *
  * The 0.5% half of "Payment processing: 100cr + 0.5%" is the *other*
  * component — not more credits, but the real-money platform_fee snapshot
- * (`platformFeePercent`) Escrow itself carries, read from
- * config('nexus.platform.margin.transaction_fee_percent') for now
- * (Phase 3/M5 retrofits this to MarginSettingsService for hot-reload).
+ * (`platformFeePercent`) Escrow itself carries, read through
+ * MarginSettingsService (Phase 3/M5) so an admin's later margin change
+ * is reflected immediately, with no restart — never config() directly.
  */
 final class HoldEscrowAction
 {
     public function __construct(
         private readonly EscrowRepositoryInterface $escrows,
         private readonly SpendCreditsForActionAction $costGate,
+        private readonly MarginSettingsService $marginSettings,
     ) {
     }
 
@@ -44,7 +46,7 @@ final class HoldEscrowAction
             businessBId: $contract->businessBId(),
             grossAmount: $grossAmount,
             currency: $terms['priceCurrency'],
-            platformFeePercent: (float) config('nexus.platform.margin.transaction_fee_percent', 0.0),
+            platformFeePercent: $this->marginSettings->transactionFeePercent(),
         );
 
         return $this->escrows->save($escrow);

@@ -4,6 +4,8 @@ namespace App\Domains\Nexus;
 
 use App\Core\Application\DTOs\AuthContext;
 use App\Core\Application\Services\CapabilityHandlerRegistry;
+use App\Domains\Nexus\Admin\Domain\Repositories\PlatformSettingRepositoryInterface;
+use App\Domains\Nexus\Admin\Infrastructure\Repositories\EloquentPlatformSettingRepository;
 use App\Domains\Nexus\Agent\Application\Actions\ResolveActingBusinessAction;
 use App\Domains\Nexus\Agent\Application\Listeners\CreateAgentOnBusinessVerifiedListener;
 use App\Domains\Nexus\Agent\Domain\Repositories\AgentRepositoryInterface;
@@ -63,6 +65,7 @@ class NexusServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(config_path('nexus/platform.php'), 'nexus.platform');
 
+        $this->app->bind(PlatformSettingRepositoryInterface::class, EloquentPlatformSettingRepository::class);
         $this->app->bind(BusinessRepositoryInterface::class, EloquentBusinessRepository::class);
         $this->app->bind(AgentRepositoryInterface::class, EloquentAgentRepository::class);
         $this->app->bind(ProductRepositoryInterface::class, EloquentProductRepository::class);

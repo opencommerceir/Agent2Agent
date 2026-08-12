@@ -363,6 +363,14 @@
       }
     },
     "admin": {
+      "margin_settings": {
+        "title": "تنظیمات حاشیه سود",
+        "llm_cost_markup_percent": "حاشیهٔ هزینهٔ LLM (٪)",
+        "transaction_fee_percent": "کارمزد تراکنش (٪)",
+        "subscription_markup_percent": "حاشیهٔ اشتراک (٪)",
+        "negotiation_fee_percent": "کارمزد موفقیت مذاکره (٪)",
+        "saved": "تنظیمات حاشیه سود ذخیره شد — بلافاصله اعمال می‌شود."
+      },
       "escrows": {
         "title": "امانی‌های معترض‌شده",
         "empty": "هیچ امانی معترض‌شده‌ای وجود ندارد.",

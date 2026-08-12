@@ -6,6 +6,7 @@ use App\Http\Controllers\Dashboard\AgentController;
 use App\Http\Controllers\Dashboard\AnalyticsController;
 use App\Http\Controllers\Dashboard\DashboardController;
 use App\Http\Controllers\Dashboard\NexusEscrowController;
+use App\Http\Controllers\Dashboard\NexusMarginSettingsController;
 use App\Http\Controllers\Dashboard\NotificationController;
 use App\Http\Controllers\Dashboard\OrderController;
 use App\Http\Controllers\Dashboard\PerformanceController;
@@ -104,6 +105,9 @@ Route::middleware('auth')->group(function () {
         Route::prefix('nexus')->name('nexus.')->group(function () {
             Route::get('/escrows', [NexusEscrowController::class, 'index'])->name('escrows.index');
             Route::post('/escrows/{escrow}/refund', [NexusEscrowController::class, 'refund'])->name('escrows.refund');
+
+            Route::get('/margin-settings', [NexusMarginSettingsController::class, 'index'])->name('margin-settings.index');
+            Route::put('/margin-settings', [NexusMarginSettingsController::class, 'update'])->name('margin-settings.update');
         });
     });
 });

@@ -390,3 +390,23 @@
 **کامیت:** `feat(nexus): add Escrow (state-tracking layer over Contract deal value)`.
 
 ---
+
+## Phase 3 / M5 — Admin Margin Settings (hot-reload واقعی)
+
+**یافتهٔ کلیدی پیش از کدنویسی (تأیید هر دو Explore agent Phase 3):** در کل کدبیس هیچ مکانیزم settings قابل hot-reload وجود نداشت — نه جدول DB-backed، نه هیچ override زمان‌اجرا روی `config()`. الگوی موجود `SettingsController` هسته فقط یک ستون واقعی روی مدل `Tenant` می‌نویسد (`default_language`)، نه یک سیستم key/value عمومی. پس این مرحله باید از صفر ساخته می‌شد — دقیقاً همان چیزی که پلن پیش‌بینی کرده بود.
+
+**`PlatformSetting`** یک انتیتی key/value ساده در دامنهٔ جدید `Admin` (اسکلت Phase 0، تا این لحظه کاملاً خالی) است. **`MarginSettingsService`** خودِ مکانیزم hot-reload است: هر خواندن از `Cache::rememberForever()` عبور می‌کند (کلید per-setting)، و اگر ردیف override در DB نباشد، به `config('nexus.platform.margin.*')` سقوط می‌کند (نصب تازه بدون هیچ اقدام ادمین کار می‌کند)؛ هر نوشتن بلافاصله همان کلید کش را `Cache::forget()` می‌کند — واقعاً بدون هیچ ری‌استارت یا `php artisan config:cache`، برخلاف `config()` استاتیک خودِ لاراول (که همین دلیل وجود این سرویس است، نه فقط نوشتن مستقیم در فایل config).
+
+**Retrofit مستند در پلن:** `HoldEscrowAction` (M4) قبلاً مستقیماً `config('nexus.platform.margin.transaction_fee_percent')` می‌خواند — همان‌طور که در docblock خودش نوشته شده بود، این مرحله آن را به `MarginSettingsService::transactionFeePercent()` سوییچ کرد. تست جدید ثابت می‌کند یک override ادمین (نه فقط config) واقعاً روی Escrow بعدی اعمال می‌شود.
+
+**تصمیم معماری کنترلر:** به‌جای اکشن‌های pass-through اضافه (`GetMarginSettingsAction`/`UpdateMarginSettingsAction`)، `NexusMarginSettingsController` مستقیماً به `MarginSettingsService` وابسته است — چون این سرویس خودش همان شکل درستِ لایهٔ Application را دارد (get/set)، پیچیدن یک Action دور آن فقط لایهٔ اضافه بدون فایده بود.
+
+**مسیر:** `GET/PUT /dashboard/nexus/margin-settings` زیر گروه موجود `auth`+`admin` پلتفرم پایه (نه `business.auth`) — این یک نگرانی سطح اپراتور پلتفرم است، همان مرز معماری‌ای که Phase 1/M1 برای `User`/`UserRole` هسته تعیین کرد.
+
+**فایل‌های اصلی:** `app/Domains/Nexus/Admin/{Domain,Application,Infrastructure}/**`، `database/migrations/nexus/..._create_nexus_platform_settings_table.php`، `app/Http/Controllers/Dashboard/NexusMarginSettingsController.php`، به‌روزرسانی `HoldEscrowAction`/`NexusServiceProvider`.
+
+**تست:** ۸ تست جدید (۴ روی `MarginSettingsService` خودش — fallback به config، اثر فوری `set()` بدون پاک‌کردن کش، دیدپذیری از یک instance تازه، عدم تکرار ردیف روی `set()` دوم؛ ۳ روی کنترلر ادمین؛ ۱ تست جدید در `HoldEscrowOnContractGeneratedListenerTest` که ثابت می‌کند override ادمین بر config غالب است) — همه پاس. کل تست‌های Nexus: ۱۸۳ پاس. سوییت کامل: ۱۰۵۶ pass / ۲۸۳ fail (بدون رگرشن).
+
+**کامیت:** `feat(nexus): add hot-reloadable Admin Margin Settings`.
+
+---

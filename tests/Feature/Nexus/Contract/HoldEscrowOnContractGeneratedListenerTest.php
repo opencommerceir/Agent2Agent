@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Nexus\Contract;
 
+use App\Domains\Nexus\Admin\Application\Services\MarginSettingsService;
 use App\Domains\Nexus\Business\Application\Actions\RegisterBusinessAction;
 use App\Domains\Nexus\Business\Application\Actions\VerifyBusinessAction;
 use App\Domains\Nexus\Business\Application\DTOs\BusinessData;
@@ -74,6 +75,26 @@ class HoldEscrowOnContractGeneratedListenerTest extends TestCase
         $balance = app(CreditBalanceRepositoryInterface::class)->findByBusinessId($buyer->id);
         // 100000 - 20 (propose) - 2 (accept) - 50 (contract.generate) - 100 (escrow.hold)
         $this->assertSame(100000 - 20 - 2 - 50 - 100, $balance->balance());
+    }
+
+    public function test_acceptingANegotiation_usesAnAdminOverriddenMarginSetting_notConfig(): void
+    {
+        config(['nexus.platform.margin.transaction_fee_percent' => 0.5]);
+        app(MarginSettingsService::class)->set('transaction_fee_percent', 2.0);
+        $buyer = $this->verifiedBusiness('Buyer Co');
+        $seller = $this->verifiedBusiness('Seller Co');
+
+        $negotiation = app(InitiateNegotiationAction::class)->execute(
+            $buyer->id, $seller->id, CatalogItemType::Product, 1,
+            new NegotiationTerms(Money::fromAmount(1_000_000, 'IRT'), 1, null),
+        );
+        app(AcceptDealAction::class)->execute($negotiation->id, $buyer->id);
+
+        $contract = app(ContractRepositoryInterface::class)->findByNegotiationId($negotiation->id);
+        $escrow = app(EscrowRepositoryInterface::class)->findByContractId($contract->id());
+
+        $this->assertSame(2.0, $escrow->platformFeePercent());
+        $this->assertSame(20_000, $escrow->platformFeeAmount());
     }
 
     public function test_rejectingANegotiation_holdsNoEscrow(): void

@@ -363,6 +363,14 @@
       }
     },
     "admin": {
+      "margin_settings": {
+        "title": "Margin Settings",
+        "llm_cost_markup_percent": "LLM cost markup (%)",
+        "transaction_fee_percent": "Transaction fee (%)",
+        "subscription_markup_percent": "Subscription markup (%)",
+        "negotiation_fee_percent": "Negotiation success fee (%)",
+        "saved": "Margin settings saved — takes effect immediately."
+      },
       "escrows": {
         "title": "Disputed Escrows",
         "empty": "No disputed escrows.",
