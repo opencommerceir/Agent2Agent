@@ -4,6 +4,7 @@ namespace Tests\Feature\Nexus\Llm;
 
 use App\Domains\Nexus\Admin\Application\Services\MarginSettingsService;
 use App\Domains\Nexus\Admin\Domain\Repositories\PlatformSettingRepositoryInterface;
+use App\Domains\Nexus\Llm\Application\Services\LLMBudgetGuard;
 use App\Domains\Nexus\Llm\Application\Services\LLMProviderRegistry;
 use App\Domains\Nexus\Llm\Application\Services\LLMRouter;
 use App\Domains\Nexus\Llm\Application\Services\LLMSettingsService;
@@ -110,7 +111,13 @@ class LLMRouterTest extends TestCase
         $settings->setFeatureProvider(LLMFeature::Reasoning, $primaryProvider);
         $settings->setFallbackChain($fallbackChain);
 
-        return new LLMRouter($registry, $settings, app(LLMUsageLogRepositoryInterface::class), app(MarginSettingsService::class));
+        return new LLMRouter(
+            $registry,
+            $settings,
+            app(LLMUsageLogRepositoryInterface::class),
+            app(MarginSettingsService::class),
+            app(LLMBudgetGuard::class),
+        );
     }
 
     public function test_route_primarySucceeds_returnsResponseAndLogsOneAttempt(): void

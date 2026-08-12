@@ -5,6 +5,7 @@ namespace App\Domains\Nexus\Llm\Application\Services;
 use App\Domains\Nexus\Admin\Application\Services\MarginSettingsService;
 use App\Domains\Nexus\Llm\Domain\Entities\LLMUsageLog;
 use App\Domains\Nexus\Llm\Domain\Exceptions\AllLLMProvidersFailedException;
+use App\Domains\Nexus\Llm\Domain\Exceptions\BudgetLimitExceededException;
 use App\Domains\Nexus\Llm\Domain\Exceptions\LLMProviderNotFoundException;
 use App\Domains\Nexus\Llm\Domain\Exceptions\LLMProviderRequestFailedException;
 use App\Domains\Nexus\Llm\Domain\Repositories\LLMUsageLogRepositoryInterface;
@@ -45,6 +46,7 @@ final class LLMRouter
         private readonly LLMSettingsService $settings,
         private readonly LLMUsageLogRepositoryInterface $usageLogs,
         private readonly MarginSettingsService $margin,
+        private readonly LLMBudgetGuard $budget,
     ) {
     }
 
@@ -65,7 +67,7 @@ final class LLMRouter
 
         try {
             return $this->attempt($primaryId, $feature, $messages, $options, $businessId, $agentId, fromFallback: false);
-        } catch (LLMProviderNotFoundException|LLMProviderRequestFailedException $primaryException) {
+        } catch (LLMProviderNotFoundException|LLMProviderRequestFailedException|BudgetLimitExceededException $primaryException) {
             if (! (bool) config('nexus.platform.llm.behavior.enable_fallback', true)) {
                 throw $primaryException;
             }
@@ -86,7 +88,7 @@ final class LLMRouter
 
             try {
                 return $this->attempt($candidateId, $feature, $messages, $options, $businessId, $agentId, fromFallback: true);
-            } catch (LLMProviderNotFoundException|LLMProviderRequestFailedException) {
+            } catch (LLMProviderNotFoundException|LLMProviderRequestFailedException|BudgetLimitExceededException) {
                 continue;
             }
         }
@@ -102,6 +104,7 @@ final class LLMRouter
      *
      * @throws LLMProviderNotFoundException
      * @throws LLMProviderRequestFailedException
+     * @throws BudgetLimitExceededException
      */
     private function attempt(
         string $providerId,
@@ -115,8 +118,10 @@ final class LLMRouter
         $startedAt = microtime(true);
 
         try {
-            $response = $this->providers->get($providerId)->chat($messages, $options);
-        } catch (LLMProviderNotFoundException|LLMProviderRequestFailedException $e) {
+            $provider = $this->providers->get($providerId);
+            $this->budget->assertWithinBudget($agentId, $businessId, $providerId, $provider->estimateCost($messages));
+            $response = $provider->chat($messages, $options);
+        } catch (LLMProviderNotFoundException|LLMProviderRequestFailedException|BudgetLimitExceededException $e) {
             $this->recordAttempt(
                 businessId: $businessId,
                 agentId: $agentId,
