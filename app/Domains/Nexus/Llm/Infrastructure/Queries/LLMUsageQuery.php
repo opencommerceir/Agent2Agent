@@ -33,4 +33,47 @@ final class LLMUsageQuery
             ->where('created_at', '>=', Carbon::now()->startOfMonth())
             ->sum('charged_cost_usd');
     }
+
+    /**
+     * Backs the Admin LLM Switcher's "over budget" banner (Phase 4/M7) —
+     * a reduced version of llm-strategy.md §12's full monitoring
+     * dashboard (per-provider/per-feature charts): just "is anyone over
+     * right now", computed on page load rather than persisted/alerted.
+     * Fetches per-agent sums in PHP rather than `groupBy()->having()->exists()`
+     * to avoid grouped-query/exists() interaction differences across DB
+     * drivers.
+     */
+    public function anyAgentOverDailyBudget(int $dailyBudgetIrt, float $usdToIrtRate): bool
+    {
+        if ($dailyBudgetIrt <= 0 || $usdToIrtRate <= 0) {
+            return false;
+        }
+
+        $maxSpentUsd = LLMUsageLog::query()
+            ->whereNotNull('agent_id')
+            ->where('created_at', '>=', Carbon::today())
+            ->selectRaw('agent_id, SUM(charged_cost_usd) as total')
+            ->groupBy('agent_id')
+            ->get()
+            ->max('total');
+
+        return $maxSpentUsd !== null && ($maxSpentUsd * $usdToIrtRate) > $dailyBudgetIrt;
+    }
+
+    public function anyBusinessOverMonthlyBudget(int $monthlyBudgetIrt, float $usdToIrtRate): bool
+    {
+        if ($monthlyBudgetIrt <= 0 || $usdToIrtRate <= 0) {
+            return false;
+        }
+
+        $maxSpentUsd = LLMUsageLog::query()
+            ->whereNotNull('business_id')
+            ->where('created_at', '>=', Carbon::now()->startOfMonth())
+            ->selectRaw('business_id, SUM(charged_cost_usd) as total')
+            ->groupBy('business_id')
+            ->get()
+            ->max('total');
+
+        return $maxSpentUsd !== null && ($maxSpentUsd * $usdToIrtRate) > $monthlyBudgetIrt;
+    }
 }

@@ -392,6 +392,23 @@
         "negotiation_fee_percent": "کارمزد موفقیت مذاکره (٪)",
         "saved": "تنظیمات حاشیه سود ذخیره شد — بلافاصله اعمال می‌شود."
       },
+      "llm_settings": {
+        "title": "ارائه‌دهندگان LLM",
+        "feature_providers": "ارائه‌دهنده هر قابلیت",
+        "feature_reasoning": "استدلال",
+        "feature_negotiation": "مذاکره",
+        "feature_classification": "دسته‌بندی",
+        "feature_fallback": "جایگزین",
+        "fallback_chain": "زنجیرهٔ جایگزین (شناسه‌های ارائه‌دهنده با کاما، به ترتیب)",
+        "cost_control": "بودجه",
+        "daily_budget_per_agent_irt": "بودجهٔ روزانه هر ایجنت (تومان)",
+        "monthly_budget_per_business_irt": "بودجهٔ ماهانه هر کسب‌وکار (تومان)",
+        "test_connection": "تست اتصال",
+        "test_connection_success": "موفق",
+        "test_connection_failure": "ناموفق",
+        "over_budget_banner": "یک یا چند ایجنت/کسب‌وکار در حال حاضر از بودجهٔ LLM تعیین‌شده عبور کرده‌اند.",
+        "saved": "تنظیمات LLM ذخیره شد — بلافاصله اعمال می‌شود."
+      },
       "escrows": {
         "title": "امانی‌های معترض‌شده",
         "empty": "هیچ امانی معترض‌شده‌ای وجود ندارد.",

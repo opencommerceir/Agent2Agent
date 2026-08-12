@@ -392,6 +392,23 @@
         "negotiation_fee_percent": "Negotiation success fee (%)",
         "saved": "Margin settings saved — takes effect immediately."
       },
+      "llm_settings": {
+        "title": "LLM Providers",
+        "feature_providers": "Provider per feature",
+        "feature_reasoning": "Reasoning",
+        "feature_negotiation": "Negotiation",
+        "feature_classification": "Classification",
+        "feature_fallback": "Fallback",
+        "fallback_chain": "Fallback chain (comma-separated provider ids, in order)",
+        "cost_control": "Budget",
+        "daily_budget_per_agent_irt": "Daily budget per agent (IRT)",
+        "monthly_budget_per_business_irt": "Monthly budget per business (IRT)",
+        "test_connection": "Test",
+        "test_connection_success": "OK",
+        "test_connection_failure": "Failed",
+        "over_budget_banner": "One or more agents/businesses are currently over their configured LLM budget.",
+        "saved": "LLM settings saved — takes effect immediately."
+      },
       "escrows": {
         "title": "Disputed Escrows",
         "empty": "No disputed escrows.",
