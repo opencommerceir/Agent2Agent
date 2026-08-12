@@ -24,6 +24,13 @@ use InvalidArgumentException;
  * reuses Business::isVerified() (Phase 1) rather than a second concept of
  * "verified," TopRated/GoldPartner are pure threshold checks over the
  * same numbers already computed here.
+ *
+ * Phase 6/M3 adds a dispute penalty AFTER the three weighted components
+ * are summed (not baked into the weights themselves) — a capped
+ * deduction per DisputeCase actually ruled against this Business
+ * (ReputationQuery::disputesLostCount(), never merely "was involved in a
+ * dispute" — raising or receiving one that resolves in your favor costs
+ * nothing), floored at 0.
  */
 final class CalculateReputationScoreAction
 {
@@ -48,6 +55,7 @@ final class CalculateReputationScoreAction
         $ratingSummary = $this->reputation->ratingSummary($businessId);
         $completedDeals = $this->reputation->completedDealsCount($businessId);
         $longevityMonths = $this->reputation->longevityMonths($businessId, $business->createdAt());
+        $disputesLost = $this->reputation->disputesLostCount($businessId);
 
         $successRateComponent = $successRate * $weights['success_rate'];
         $ratingComponent = $ratingSummary['count'] > 0
@@ -55,7 +63,12 @@ final class CalculateReputationScoreAction
             : 0.0;
         $longevityComponent = min($longevityMonths / max($longevityFullMonths, 1), 1.0) * $weights['longevity'];
 
-        $score = (int) round($successRateComponent + $ratingComponent + $longevityComponent);
+        $penalty = min(
+            $disputesLost * (int) config('nexus.platform.reputation.dispute_penalty_per_loss'),
+            (int) config('nexus.platform.reputation.dispute_penalty_max'),
+        );
+
+        $score = max(0, (int) round($successRateComponent + $ratingComponent + $longevityComponent) - $penalty);
 
         $badges = $this->deriveBadges($business->isVerified(), $score, $ratingSummary, $completedDeals);
 
@@ -67,6 +80,7 @@ final class CalculateReputationScoreAction
             reviewCount: $ratingSummary['count'],
             completedDeals: $completedDeals,
             longevityMonths: $longevityMonths,
+            disputesLost: $disputesLost,
             badges: $badges,
         );
     }

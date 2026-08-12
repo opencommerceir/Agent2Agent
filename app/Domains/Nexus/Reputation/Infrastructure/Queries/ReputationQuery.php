@@ -2,6 +2,7 @@
 
 namespace App\Domains\Nexus\Reputation\Infrastructure\Queries;
 
+use App\Domains\Nexus\Contract\Infrastructure\Models\DisputeCase;
 use App\Domains\Nexus\Contract\Infrastructure\Models\Escrow;
 use App\Domains\Nexus\Negotiation\Infrastructure\Models\Negotiation;
 use App\Domains\Nexus\Reputation\Infrastructure\Models\Review;
@@ -71,6 +72,24 @@ class ReputationQuery
         return Escrow::query()
             ->where('status', 'released')
             ->where(fn ($q) => $q->where('business_a_id', $businessId)->orWhere('business_b_id', $businessId))
+            ->count();
+    }
+
+    /**
+     * Resolved DisputeCases ruled against this Business — businessAId is
+     * always the Negotiation's initiator/buyer (HoldEscrowAction's own
+     * docblock establishes this), businessBId the seller, both denormalized
+     * straight onto DisputeCase from Escrow. 'refund_buyer' means the
+     * seller (businessB) lost; 'release_seller' means the buyer
+     * (businessA) lost — whichever side the arbiter did NOT rule for.
+     */
+    public function disputesLostCount(int $businessId): int
+    {
+        return DisputeCase::query()
+            ->where('status', 'resolved')
+            ->where(fn ($q) => $q
+                ->where(fn ($q2) => $q2->where('resolution', 'refund_buyer')->where('business_b_id', $businessId))
+                ->orWhere(fn ($q2) => $q2->where('resolution', 'release_seller')->where('business_a_id', $businessId)))
             ->count();
     }
 

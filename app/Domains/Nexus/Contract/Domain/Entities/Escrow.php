@@ -35,7 +35,13 @@ final class Escrow
      */
     private const ALLOWED_TRANSITIONS = [
         'held' => [EscrowStatus::Released, EscrowStatus::Disputed],
-        'disputed' => [EscrowStatus::Refunded],
+        // Phase 6/M3 — an arbiter can resolve a dispute either way:
+        // Refunded (buyer wins, RefundEscrowAction's original path) or
+        // Released (seller wins — ArbitrateDisputeAction reuses release()
+        // rather than adding a same-shaped sibling method, since the only
+        // difference is which prior state allowed it, which
+        // ALLOWED_TRANSITIONS already governs).
+        'disputed' => [EscrowStatus::Refunded, EscrowStatus::Released],
     ];
 
     private function __construct(

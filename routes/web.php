@@ -5,6 +5,7 @@ use App\Core\Interfaces\HTTP\Controllers\Auth\LogoutController;
 use App\Http\Controllers\Dashboard\AgentController;
 use App\Http\Controllers\Dashboard\AnalyticsController;
 use App\Http\Controllers\Dashboard\DashboardController;
+use App\Http\Controllers\Dashboard\NexusDisputeController;
 use App\Http\Controllers\Dashboard\NexusEscrowController;
 use App\Http\Controllers\Dashboard\NexusGrowthController;
 use App\Http\Controllers\Dashboard\NexusLlmSettingsController;
@@ -108,6 +109,12 @@ Route::middleware('auth')->group(function () {
         Route::prefix('nexus')->name('nexus.')->group(function () {
             Route::get('/escrows', [NexusEscrowController::class, 'index'])->name('escrows.index');
             Route::post('/escrows/{escrow}/refund', [NexusEscrowController::class, 'refund'])->name('escrows.refund');
+
+            // Dispute Resolution (Phase 6/M3) — evidence/mediation/arbitration
+            // queue layered on top of the Escrow dispute flag above.
+            Route::get('/disputes', [NexusDisputeController::class, 'index'])->name('disputes.index');
+            Route::post('/disputes/{dispute}/mediate', [NexusDisputeController::class, 'mediate'])->name('disputes.mediate');
+            Route::post('/disputes/{dispute}/arbitrate', [NexusDisputeController::class, 'arbitrate'])->name('disputes.arbitrate');
 
             Route::get('/margin-settings', [NexusMarginSettingsController::class, 'index'])->name('margin-settings.index');
             Route::put('/margin-settings', [NexusMarginSettingsController::class, 'update'])->name('margin-settings.update');

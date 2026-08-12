@@ -430,6 +430,13 @@
         "rating": "Rating",
         "comment_placeholder": "Your comment (optional)",
         "submit": "Submit review"
+      },
+      "dispute": {
+        "title": "Dispute case",
+        "status": "Status",
+        "you": "You",
+        "note_placeholder": "Write your evidence or explanation",
+        "submit_evidence": "Submit evidence"
       }
     },
     "reputation": {
@@ -538,6 +545,21 @@
         "reason": "Reason",
         "refund": "Mark refunded",
         "refunded": "Escrow marked as refunded."
+      },
+      "disputes": {
+        "title": "Dispute Resolution",
+        "empty": "No cases in this status.",
+        "status": {
+          "open": "Open",
+          "mediation": "In Mediation"
+        },
+        "negotiation": "Negotiation",
+        "opened_by": "Opened by",
+        "move_to_mediation": "Move to mediation",
+        "moved_to_mediation": "Case moved to mediation.",
+        "refund_buyer": "Rule for buyer (refund)",
+        "release_seller": "Rule for seller (release)",
+        "arbitrated": "Case arbitrated and closed."
       }
     }
   }

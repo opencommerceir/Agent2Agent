@@ -7,7 +7,11 @@ use App\Domains\Nexus\Business\Application\Actions\VerifyBusinessAction;
 use App\Domains\Nexus\Business\Application\DTOs\BusinessData;
 use App\Domains\Nexus\Business\Domain\ValueObjects\BusinessType;
 use App\Domains\Nexus\Business\Domain\ValueObjects\Industry;
+use App\Domains\Nexus\Contract\Application\Actions\ArbitrateDisputeAction;
+use App\Domains\Nexus\Contract\Application\Actions\DisputeEscrowAction;
 use App\Domains\Nexus\Contract\Application\Actions\ReleaseEscrowAction;
+use App\Domains\Nexus\Contract\Domain\Repositories\DisputeCaseRepositoryInterface;
+use App\Domains\Nexus\Contract\Domain\Repositories\EscrowRepositoryInterface;
 use App\Domains\Nexus\Credit\Application\Actions\GrantCreditsAction;
 use App\Domains\Nexus\Credit\Domain\ValueObjects\CreditTransactionType;
 use App\Domains\Nexus\Negotiation\Application\Actions\AcceptDealAction;
@@ -104,6 +108,31 @@ class CalculateReputationScoreActionTest extends TestCase
         $this->assertSame(5.0, $result->averageRating);
         $this->assertSame(1, $result->completedDeals);
         $this->assertGreaterThan(0, $result->score);
+    }
+
+    public function test_execute_afterLostDispute_appliesPenalty(): void
+    {
+        $buyer = $this->verifiedBusiness('Buyer Co');
+        $seller = $this->verifiedBusiness('Seller Co');
+        $negotiation = app(InitiateNegotiationAction::class)->execute(
+            $buyer->id, $seller->id, CatalogItemType::Product, 1,
+            new NegotiationTerms(Money::fromAmount(1_000_000, 'IRT'), 1, null),
+        );
+        app(AcceptDealAction::class)->execute($negotiation->id, $buyer->id);
+        app(DisputeEscrowAction::class)->execute($negotiation->id, $buyer->id, 'never delivered');
+        $escrow = app(EscrowRepositoryInterface::class)->findByNegotiationId($negotiation->id);
+        $disputeCase = app(DisputeCaseRepositoryInterface::class)->findByEscrowId($escrow->id());
+        // 'refund_buyer' rules against the seller.
+        app(ArbitrateDisputeAction::class)->execute($disputeCase->id(), 'refund_buyer');
+
+        $sellerScore = app(CalculateReputationScoreAction::class)->execute($seller->id);
+        $buyerScore = app(CalculateReputationScoreAction::class)->execute($buyer->id);
+
+        $this->assertSame(1, $sellerScore->disputesLost);
+        $this->assertSame(0, $buyerScore->disputesLost);
+        // successRate is still 1.0 for the seller (Accepted, per Negotiation
+        // status) — only the dispute penalty should hold the score down.
+        $this->assertLessThan($buyerScore->score, $sellerScore->score);
     }
 
     public function test_execute_forNonExistentBusiness_throws(): void

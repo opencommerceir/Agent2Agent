@@ -19,10 +19,14 @@ use App\Domains\Nexus\Catalog\Infrastructure\Repositories\EloquentProductReposit
 use App\Domains\Nexus\Catalog\Infrastructure\Repositories\EloquentServiceRepository;
 use App\Domains\Nexus\Contract\Application\Listeners\GenerateContractOnNegotiationAcceptedListener;
 use App\Domains\Nexus\Contract\Application\Listeners\HoldEscrowOnContractGeneratedListener;
+use App\Domains\Nexus\Contract\Application\Listeners\OpenDisputeCaseOnEscrowDisputedListener;
 use App\Domains\Nexus\Contract\Domain\Events\ContractWasGenerated;
+use App\Domains\Nexus\Contract\Domain\Events\EscrowWasDisputed;
 use App\Domains\Nexus\Contract\Domain\Repositories\ContractRepositoryInterface;
+use App\Domains\Nexus\Contract\Domain\Repositories\DisputeCaseRepositoryInterface;
 use App\Domains\Nexus\Contract\Domain\Repositories\EscrowRepositoryInterface;
 use App\Domains\Nexus\Contract\Infrastructure\Repositories\EloquentContractRepository;
+use App\Domains\Nexus\Contract\Infrastructure\Repositories\EloquentDisputeCaseRepository;
 use App\Domains\Nexus\Contract\Infrastructure\Repositories\EloquentEscrowRepository;
 use App\Domains\Nexus\Credit\Application\Actions\GetCreditBalanceAction;
 use App\Domains\Nexus\Credit\Application\Listeners\GrantStartingCreditsOnBusinessVerifiedListener;
@@ -110,6 +114,7 @@ class NexusServiceProvider extends ServiceProvider
         $this->app->bind(NegotiationMessageRepositoryInterface::class, EloquentNegotiationMessageRepository::class);
         $this->app->bind(ContractRepositoryInterface::class, EloquentContractRepository::class);
         $this->app->bind(EscrowRepositoryInterface::class, EloquentEscrowRepository::class);
+        $this->app->bind(DisputeCaseRepositoryInterface::class, EloquentDisputeCaseRepository::class);
         $this->app->bind(CreditBalanceRepositoryInterface::class, EloquentCreditBalanceRepository::class);
         $this->app->bind(CreditTransactionRepositoryInterface::class, EloquentCreditTransactionRepository::class);
         $this->app->bind(CreditPurchaseSessionRepositoryInterface::class, EloquentCreditPurchaseSessionRepository::class);
@@ -149,6 +154,7 @@ class NexusServiceProvider extends ServiceProvider
         Event::listen(NegotiationWasAccepted::class, GenerateContractOnNegotiationAcceptedListener::class);
         Event::listen(NegotiationWasAccepted::class, CompleteCoalitionOnNegotiationAcceptedListener::class);
         Event::listen(ContractWasGenerated::class, HoldEscrowOnContractGeneratedListener::class);
+        Event::listen(EscrowWasDisputed::class, OpenDisputeCaseOnEscrowDisputedListener::class);
 
         // Real Payment Gateways (Phase 3/M3) — same Connector Pattern
         // CommerceServiceProvider's own (dead, since Commerce is disabled)

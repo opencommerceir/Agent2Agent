@@ -249,6 +249,12 @@ return [
             'gold_partner_min_score' => (int) env('NEXUS_REPUTATION_GOLD_PARTNER_MIN_SCORE', 800),
             'gold_partner_min_deals' => (int) env('NEXUS_REPUTATION_GOLD_PARTNER_MIN_DEALS', 10),
         ],
+
+        // Phase 6/M3 — a dispute an arbiter actually ruled against you,
+        // not merely one you were involved in (raising/receiving a
+        // dispute that gets resolved in your favor costs nothing).
+        'dispute_penalty_per_loss' => (int) env('NEXUS_REPUTATION_DISPUTE_PENALTY_PER_LOSS', 50),
+        'dispute_penalty_max' => (int) env('NEXUS_REPUTATION_DISPUTE_PENALTY_MAX', 300),
     ],
 
     /*

@@ -16,13 +16,14 @@ final class ReputationScoreData
         public readonly int $reviewCount,
         public readonly int $completedDeals,
         public readonly int $longevityMonths,
+        public readonly int $disputesLost,
         /** @var list<string> */
         public readonly array $badges,
     ) {
     }
 
     /**
-     * @return array{businessId: int, score: int, successRate: float, averageRating: float, reviewCount: int, completedDeals: int, longevityMonths: int, badges: list<string>}
+     * @return array{businessId: int, score: int, successRate: float, averageRating: float, reviewCount: int, completedDeals: int, longevityMonths: int, disputesLost: int, badges: list<string>}
      */
     public function toArray(): array
     {
@@ -34,6 +35,7 @@ final class ReputationScoreData
             'reviewCount' => $this->reviewCount,
             'completedDeals' => $this->completedDeals,
             'longevityMonths' => $this->longevityMonths,
+            'disputesLost' => $this->disputesLost,
             'badges' => $this->badges,
         ];
     }

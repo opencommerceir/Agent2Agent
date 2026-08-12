@@ -78,6 +78,30 @@
             </x-nexus-panel>
         @endif
 
+        @if ($disputeCase)
+            <x-nexus-panel :title="t('messages.nexus.negotiation.dispute.title')">
+                <p class="mb-2 text-xs text-nexus-text-muted">{{ t('messages.nexus.negotiation.dispute.status') }}: {{ t('messages.nexus.admin.disputes.status.'.$disputeCase->status()->value) }}</p>
+
+                @if ($disputeCase->evidence() !== [])
+                    <div class="mb-3 space-y-1 rounded-md bg-nexus-bg/40 p-2 text-xs text-nexus-text-muted">
+                        @foreach ($disputeCase->evidence() as $entry)
+                            <p>{{ $entry['businessId'] === $actingBusinessId ? t('messages.nexus.negotiation.dispute.you') : $otherPartyName }}: {{ $entry['note'] }}</p>
+                        @endforeach
+                    </div>
+                @endif
+
+                @if ($disputeCase->status()->value !== 'resolved')
+                    <form method="POST" action="{{ route('nexus.negotiations.dispute.evidence', $negotiation->id) }}" class="space-y-2">
+                        @csrf
+                        <textarea name="note" rows="2" class="block w-full rounded-md border border-nexus-border bg-nexus-surface-1 px-3 py-1.5 text-sm text-nexus-text" placeholder="{{ t('messages.nexus.negotiation.dispute.note_placeholder') }}"></textarea>
+                        <button type="submit" class="rounded-md bg-nexus-cyan/20 px-4 py-1.5 text-sm font-semibold text-nexus-cyan hover:bg-nexus-cyan/30">
+                            {{ t('messages.nexus.negotiation.dispute.submit_evidence') }}
+                        </button>
+                    </form>
+                @endif
+            </x-nexus-panel>
+        @endif
+
         @if ($escrow && $escrow->status === 'released')
             <x-nexus-panel :title="t('messages.nexus.negotiation.review.title')">
                 @if ($myReview)

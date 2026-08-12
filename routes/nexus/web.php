@@ -76,6 +76,10 @@ Route::middleware('web')->group(function () {
         Route::post('/{negotiation}/escrow/release', [NegotiationViewerController::class, 'releaseEscrow'])->name('escrow.release');
         Route::post('/{negotiation}/escrow/dispute', [NegotiationViewerController::class, 'disputeEscrow'])->name('escrow.dispute');
 
+        // Dispute Resolution evidence (Phase 6, M3) — appends a text note
+        // to the auto-opened DisputeCase; a no-op if none exists yet.
+        Route::post('/{negotiation}/dispute/evidence', [NegotiationViewerController::class, 'submitDisputeEvidence'])->name('dispute.evidence');
+
         // Reviews & Ratings (Phase 6, M1) — only reachable once Escrow is
         // Released (a genuinely completed deal), enforced in SubmitReviewAction.
         Route::post('/{negotiation}/review', [NegotiationViewerController::class, 'submitReview'])->name('review.submit');

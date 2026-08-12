@@ -3,15 +3,18 @@
 namespace App\Domains\Nexus\Contract\Application\Actions;
 
 use App\Domains\Nexus\Contract\Application\DTOs\EscrowData;
+use App\Domains\Nexus\Contract\Domain\Events\EscrowWasDisputed;
 use App\Domains\Nexus\Contract\Domain\Repositories\EscrowRepositoryInterface;
+use Illuminate\Support\Facades\Event;
 use InvalidArgumentException;
 
 /**
- * Either party flags a Held Escrow as Disputed — Held -> Disputed. No
- * arbitration/evidence workflow exists yet (that's Phase 6 Trust &
- * Reputation's "Dispute Resolution" territory, docs/nexus-roadmap.md) —
- * a documented, deliberate gap, not an oversight. Resolution today is
- * RefundEscrowAction, an admin-only manual action.
+ * Either party flags a Held Escrow as Disputed — Held -> Disputed. Phase
+ * 6/M3's Dispute domain listens for the EscrowWasDisputed event this
+ * dispatches to auto-open the real evidence/mediation/arbitration
+ * workflow (OpenDisputeCaseOnEscrowDisputedListener) — this Action itself
+ * stays exactly the simple "either party can flag it" entry point it
+ * always was, per its own original docblock.
  */
 final class DisputeEscrowAction
 {
@@ -34,6 +37,8 @@ final class DisputeEscrowAction
 
         $escrow->dispute($reason);
         $escrow = $this->escrows->save($escrow);
+
+        Event::dispatch(new EscrowWasDisputed($escrow, $actingBusinessId));
 
         return EscrowData::fromEntity($escrow);
     }
