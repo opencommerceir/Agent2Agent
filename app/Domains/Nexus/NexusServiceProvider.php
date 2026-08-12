@@ -15,6 +15,9 @@ use App\Domains\Nexus\Catalog\Domain\Repositories\ProductRepositoryInterface;
 use App\Domains\Nexus\Catalog\Domain\Repositories\ServiceRepositoryInterface;
 use App\Domains\Nexus\Catalog\Infrastructure\Repositories\EloquentProductRepository;
 use App\Domains\Nexus\Catalog\Infrastructure\Repositories\EloquentServiceRepository;
+use App\Domains\Nexus\Contract\Application\Listeners\GenerateContractOnNegotiationAcceptedListener;
+use App\Domains\Nexus\Contract\Domain\Repositories\ContractRepositoryInterface;
+use App\Domains\Nexus\Contract\Infrastructure\Repositories\EloquentContractRepository;
 use App\Domains\Nexus\Marketplace\Application\Actions\SearchMarketplaceAction;
 use App\Domains\Nexus\Negotiation\Application\Actions\AcceptDealAction;
 use App\Domains\Nexus\Negotiation\Application\Actions\GetNegotiationAction;
@@ -26,6 +29,7 @@ use App\Domains\Nexus\Negotiation\Domain\Repositories\NegotiationRepositoryInter
 use App\Domains\Nexus\Negotiation\Domain\ValueObjects\CatalogItemType;
 use App\Domains\Nexus\Negotiation\Domain\ValueObjects\Money as NegotiationMoney;
 use App\Domains\Nexus\Negotiation\Domain\ValueObjects\NegotiationTerms;
+use App\Domains\Nexus\Negotiation\Domain\Events\NegotiationWasAccepted;
 use App\Domains\Nexus\Negotiation\Infrastructure\Repositories\EloquentNegotiationMessageRepository;
 use App\Domains\Nexus\Negotiation\Infrastructure\Repositories\EloquentNegotiationRepository;
 use Illuminate\Support\Facades\Event;
@@ -48,6 +52,7 @@ class NexusServiceProvider extends ServiceProvider
         $this->app->bind(ServiceRepositoryInterface::class, EloquentServiceRepository::class);
         $this->app->bind(NegotiationRepositoryInterface::class, EloquentNegotiationRepository::class);
         $this->app->bind(NegotiationMessageRepositoryInterface::class, EloquentNegotiationMessageRepository::class);
+        $this->app->bind(ContractRepositoryInterface::class, EloquentContractRepository::class);
     }
 
     public function boot(): void
@@ -60,6 +65,7 @@ class NexusServiceProvider extends ServiceProvider
         $this->loadMigrationsFrom(database_path('migrations/nexus'));
 
         Event::listen(BusinessWasVerified::class, CreateAgentOnBusinessVerifiedListener::class);
+        Event::listen(NegotiationWasAccepted::class, GenerateContractOnNegotiationAcceptedListener::class);
 
         $this->registerMcpCapabilityHandlers();
     }

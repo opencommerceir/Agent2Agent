@@ -235,3 +235,19 @@
 **کامیت:** `feat(nexus): add deterministic Negotiation reasoning (think/reflect-shaped traces)`.
 
 ---
+
+## Phase 2 / M6 — دامنه Contract (PDF + امضای هش)
+
+`GenerateContractOnNegotiationAcceptedListener` روی `NegotiationWasAccepted` گوش می‌دهد (نه فراخوانی مستقیم از Negotiation → Contract) و `GenerateContractAction` را صدا می‌زند: یک snapshot ساختاریافته و بدون‌زبان از معامله (نام‌های دوزبانه دو کسب‌وکار، قیمت، تعداد) می‌سازد، هش می‌کند (`hash('sha256', json_encode($terms))` — دقیقاً همان الگوی `AgentToken::hash()`، تنها precedent واقعی «امضای دیجیتال» در کدبیس)، و با `Pdf::loadView()` (اولین استفاده از این متد در کل پروژه — قبلاً فقط `Pdf::loadHTML()` روی رشتهٔ دستی استفاده شده بود) یک PDF واقعی می‌سازد.
+
+**تصمیم:** قرارداد یک PDF دوزبانه است (هر دو بخش فارسی و انگلیسی در یک فایل)، نه دو فایل جدا — همان شکل رایج قراردادهای تجارت بین‌المللی. چون این تولید داخل یک MCP request بدون middleware `web` اجرا می‌شود، از `t()`/`dashboard_language()` (که به session نیاز دارند) استفاده نشد — برچسب‌های دو زبان مستقیم در Blade نوشته شده‌اند.
+
+**تأیید واقعی، نه فرضی:** طبق پلن، ریسک اصلی این مرحله (آیا dompdf واقعاً فارسی/RTL را درست رندر می‌کند؟) با تولید دستی یک PDF واقعی و بازکردن آن بررسی شد — متن فارسی با شکل صحیح حروف (RTL, حروف چسبیده) درست نمایش داده شد، نه جعبه‌های خالی یا کاراکترهای درهم. حجم فایل (~۸۸۰KB) تأیید می‌کند فونت DejaVu Sans کامل (که گلیف‌های فارسی/عربی دارد) embed شده است.
+
+**فایل‌های اصلی:** `app/Domains/Nexus/Contract/{Domain,Application,Infrastructure}/**`، `database/migrations/nexus/..._create_contracts_table.php`، `resources/views/nexus/contracts/pdf.blade.php`.
+
+**تست:** ۲ تست Feature جدید — یکی مسیر کامل (Accept → event → Contract واقعی + PDF واقعی در Storage با بایت‌های `%PDF-` معتبر)، دیگری تأیید می‌کند Reject هیچ Contract ای نمی‌سازد.
+
+**کامیت:** `feat(nexus): add Contract domain (auto-generate bilingual PDF + hash signature on acceptance)`.
+
+---
