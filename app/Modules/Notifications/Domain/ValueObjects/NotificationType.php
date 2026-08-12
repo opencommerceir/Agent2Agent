@@ -29,4 +29,12 @@ enum NotificationType: string
     case TicketCreated = 'ticket_created';
     case SubscriptionPaymentFailed = 'subscription_payment_failed';
     case PromotionAnnouncement = 'promotion_announcement';
+
+    // Nexus Phase 5 (Growth) — SendAgentInviteAction's own outbound
+    // "join the platform" email, addressed to a raw lead email with no
+    // owning Customer/Agent id, same shape PromotionAnnouncement already
+    // established for a caller-supplied-recipient send. No Listener of
+    // its own (not event-driven — sent synchronously the moment the
+    // capability is invoked).
+    case AgentInvite = 'agent_invite';
 }

@@ -33,10 +33,13 @@ use App\Domains\Nexus\Credit\Infrastructure\Repositories\EloquentCreditBalanceRe
 use App\Domains\Nexus\Credit\Infrastructure\Repositories\EloquentCreditPurchaseSessionRepository;
 use App\Domains\Nexus\Credit\Infrastructure\Repositories\EloquentCreditTransactionRepository;
 use App\Domains\Nexus\Growth\Application\Actions\GetReferralStatusAction;
+use App\Domains\Nexus\Growth\Application\Actions\SendAgentInviteAction;
 use App\Domains\Nexus\Growth\Application\Listeners\GrantReferralRewardOnBusinessVerifiedListener;
 use App\Domains\Nexus\Growth\Application\Listeners\IssueReferralCodeOnBusinessVerifiedListener;
+use App\Domains\Nexus\Growth\Domain\Repositories\InviteRepositoryInterface;
 use App\Domains\Nexus\Growth\Domain\Repositories\ReferralCodeRepositoryInterface;
 use App\Domains\Nexus\Growth\Domain\Repositories\ReferralSignupRepositoryInterface;
+use App\Domains\Nexus\Growth\Infrastructure\Repositories\EloquentInviteRepository;
 use App\Domains\Nexus\Growth\Infrastructure\Repositories\EloquentReferralCodeRepository;
 use App\Domains\Nexus\Growth\Infrastructure\Repositories\EloquentReferralSignupRepository;
 use App\Domains\Nexus\Llm\Application\Services\LLMProviderRegistry;
@@ -96,6 +99,7 @@ class NexusServiceProvider extends ServiceProvider
         $this->app->bind(LLMUsageLogRepositoryInterface::class, EloquentLLMUsageLogRepository::class);
         $this->app->bind(ReferralCodeRepositoryInterface::class, EloquentReferralCodeRepository::class);
         $this->app->bind(ReferralSignupRepositoryInterface::class, EloquentReferralSignupRepository::class);
+        $this->app->bind(InviteRepositoryInterface::class, EloquentInviteRepository::class);
 
         // Nexus's own PaymentGatewayRegistry singleton — CommerceServiceProvider
         // (where these adapter classes originally live) is disabled since
@@ -214,6 +218,19 @@ class NexusServiceProvider extends ServiceProvider
             $callingBusinessId = $this->resolveActingBusiness($context);
 
             return $this->app->make(GetReferralStatusAction::class)->execute($callingBusinessId)->toArray();
+        });
+
+        $handlers->register('nexus.invite.send', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            $invite = $this->app->make(SendAgentInviteAction::class)->execute(
+                inviterBusinessId: $callingBusinessId,
+                inviteeName: $input['invitee_name'],
+                inviteeEmail: $input['invitee_email'],
+                messageVariant: $input['message_variant'] ?? 'a',
+            );
+
+            return $invite->toArray();
         });
 
         $this->registerNegotiationCapabilityHandlers($handlers);

@@ -6,6 +6,7 @@ use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessLogoutControl
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\RegisterBusinessController;
 use App\Domains\Nexus\Credit\Interfaces\Http\Controllers\CreditPurchaseCallbackController;
 use App\Domains\Nexus\Credit\Interfaces\Http\Controllers\CreditPurchaseController;
+use App\Domains\Nexus\Growth\Interfaces\Http\Controllers\InviteController;
 use App\Domains\Nexus\Growth\Interfaces\Http\Controllers\ReferralController;
 use App\Domains\Nexus\Negotiation\Interfaces\Http\Controllers\NegotiationViewerController;
 use Illuminate\Support\Facades\Route;
@@ -78,5 +79,7 @@ Route::middleware('web')->group(function () {
     // 'business.auth' guard as the rest of the business-facing portal.
     Route::middleware('business.auth:business')->prefix('nexus/growth')->name('nexus.growth.')->group(function () {
         Route::get('/referrals', [ReferralController::class, 'index'])->name('referrals.index');
+        Route::get('/invites', [InviteController::class, 'index'])->name('invites.index');
+        Route::post('/invites', [InviteController::class, 'store'])->name('invites.store');
     });
 });

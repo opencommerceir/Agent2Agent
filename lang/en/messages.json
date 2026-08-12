@@ -313,6 +313,21 @@
           "pending": "Pending verification",
           "rewarded": "Rewarded"
         }
+      },
+      "invites": {
+        "title": "Invite a business",
+        "name_placeholder": "Business or contact name",
+        "email_placeholder": "Email address",
+        "submit": "Send invite",
+        "sent": "Invite sent.",
+        "empty": "No invites sent yet.",
+        "table_name": "Name",
+        "table_email": "Email",
+        "table_status": "Status",
+        "status": {
+          "sent": "Sent",
+          "converted": "Converted"
+        }
       }
     },
     "negotiation": {

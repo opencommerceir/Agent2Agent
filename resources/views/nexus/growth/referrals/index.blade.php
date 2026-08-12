@@ -5,7 +5,12 @@
 @section('content')
     <div class="mx-auto max-w-3xl space-y-4">
         <x-nexus-panel :title="t('messages.nexus.growth.referrals.title')">
-            <p class="mb-4 text-sm text-nexus-text-muted">{{ t('messages.nexus.growth.referrals.how_it_works') }}</p>
+            <div class="mb-4 flex items-center justify-between">
+                <p class="text-sm text-nexus-text-muted">{{ t('messages.nexus.growth.referrals.how_it_works') }}</p>
+                <a href="{{ route('nexus.growth.invites.index') }}" class="shrink-0 rounded-md border border-nexus-cyan/40 px-3 py-1.5 text-sm text-nexus-cyan hover:bg-nexus-cyan/10">
+                    {{ t('messages.nexus.growth.invites.title') }}
+                </a>
+            </div>
 
             <div class="mb-6 flex flex-col gap-2 rounded-md border border-nexus-cyan/40 bg-nexus-cyan/10 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>

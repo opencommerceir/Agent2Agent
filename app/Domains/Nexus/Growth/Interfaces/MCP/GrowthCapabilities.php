@@ -41,6 +41,26 @@ final class GrowthCapabilities
                 ],
                 'requiredPermissions' => ['nexus.growth.read'],
             ],
+            [
+                'name' => 'nexus.invite.send',
+                'description' => 'Send a Nexus onboarding invite (pre-filled with the calling Business\'s own referral code) to a named lead by email',
+                // message_variant is optional (A/B testing, Phase 5/M5) —
+                // same "declared fields are always required, so leave
+                // optional ones out" rule NegotiationCapabilities' own
+                // manifest already follows.
+                'inputSchema' => [
+                    'invitee_name' => 'string',
+                    'invitee_email' => 'string',
+                ],
+                'outputSchema' => [
+                    'id' => 'integer',
+                    'inviteeName' => 'string',
+                    'inviteeEmail' => 'string',
+                    'status' => 'string',
+                    'createdAt' => 'string',
+                ],
+                'requiredPermissions' => ['nexus.growth.manage'],
+            ],
         ];
     }
 }

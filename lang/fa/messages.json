@@ -313,6 +313,21 @@
           "pending": "در انتظار تأیید",
           "rewarded": "پاداش گرفته"
         }
+      },
+      "invites": {
+        "title": "دعوت کسب‌وکار",
+        "name_placeholder": "نام کسب‌وکار یا فرد",
+        "email_placeholder": "آدرس ایمیل",
+        "submit": "ارسال دعوت",
+        "sent": "دعوت ارسال شد.",
+        "empty": "هنوز دعوتی ارسال نشده است.",
+        "table_name": "نام",
+        "table_email": "ایمیل",
+        "table_status": "وضعیت",
+        "status": {
+          "sent": "ارسال شده",
+          "converted": "تبدیل شده"
+        }
       }
     },
     "negotiation": {
