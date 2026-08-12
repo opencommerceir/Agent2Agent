@@ -3,32 +3,119 @@
 return [
     /*
     |--------------------------------------------------------------------------
-    | LLM Providers
+    | LLM Providers (Phase 4 — LLM Provider System)
     |--------------------------------------------------------------------------
     |
     | Nexus negotiates and reasons through the same class of LLM providers
     | the base Agent Orchestrator supports (config/agent-orchestrator.php),
     | but under its own NEXUS_* credentials so a Nexus deployment can point
-    | at different keys/models than the underlying platform.
+    | at different keys/models than the underlying platform, and through its
+    | own LLMProviderRegistry (app/Domains/Nexus/Llm) rather than
+    | AgentOrchestrator's single active LLMClientInterface binding — Nexus
+    | needs several simultaneously-available providers (admin picks one per
+    | feature, with a fallback chain), not one global choice.
+    |
+    | Nothing read `llm.*` before Phase 4 (it was a dead placeholder since
+    | Phase 0), so this block was free to grow beyond its original 3 keys
+    | without a breaking rename of any env var already in real use.
     |
     */
     'llm' => [
-        'default_provider' => env('NEXUS_LLM_PROVIDER', 'openai'),
-
+        // One entry per LLMProviderRegistry key (6 = the roadmap's full
+        // provider list: OpenAI, Anthropic, OpenRouter, Groq, self-hosted
+        // Qwen, local Llama). 'claude' stays the config/registry key for
+        // the Anthropic vendor (matches the NEXUS_CLAUDE_* env vars already
+        // in use since Phase 0) — the registry key and the adapter class
+        // name (AnthropicLLMProvider) are independent; nothing requires
+        // them to match.
         'providers' => [
             'openai' => [
                 'api_key' => env('NEXUS_OPENAI_API_KEY'),
-                'model' => env('NEXUS_OPENAI_MODEL', 'gpt-4'),
+                'model' => env('NEXUS_OPENAI_MODEL', 'gpt-4o'),
+                'base_url' => env('NEXUS_OPENAI_BASE_URL', 'https://api.openai.com'),
             ],
             'claude' => [
                 'api_key' => env('NEXUS_CLAUDE_API_KEY'),
                 'model' => env('NEXUS_CLAUDE_MODEL', 'claude-3-opus-20240229'),
+                'base_url' => env('NEXUS_CLAUDE_BASE_URL', 'https://api.anthropic.com'),
             ],
             'openrouter' => [
                 'api_key' => env('NEXUS_OPENROUTER_API_KEY'),
                 'model' => env('NEXUS_OPENROUTER_MODEL', 'meta-llama/llama-3.1-405b-instruct:free'),
                 'base_url' => env('NEXUS_OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1'),
             ],
+            'groq' => [
+                'api_key' => env('NEXUS_GROQ_API_KEY'),
+                'model' => env('NEXUS_GROQ_MODEL', 'llama-3.1-8b-instant'),
+                'base_url' => env('NEXUS_GROQ_BASE_URL', 'https://api.groq.com/openai/v1'),
+            ],
+            // Self-hosted/local — no real model server runs in this dev
+            // environment (same honest limitation every other external
+            // Connector in this codebase already documents); base_url
+            // defaults to an Ollama-style OpenAI-compatible endpoint, which
+            // vLLM/LM Studio/llama.cpp's server also all speak.
+            'qwen-14b-local' => [
+                'api_key' => env('NEXUS_QWEN_LOCAL_API_KEY', ''),
+                'model' => env('NEXUS_QWEN_LOCAL_MODEL', 'qwen2.5:14b'),
+                'base_url' => env('NEXUS_QWEN_LOCAL_BASE_URL', 'http://localhost:11434/v1'),
+            ],
+            'llama-3.2-3b-local' => [
+                'api_key' => env('NEXUS_LLAMA_LOCAL_API_KEY', ''),
+                'model' => env('NEXUS_LLAMA_LOCAL_MODEL', 'llama3.2:3b'),
+                'base_url' => env('NEXUS_LLAMA_LOCAL_BASE_URL', 'http://localhost:11434/v1'),
+            ],
+        ],
+
+        // Declarative price-tier metadata — not part of LLMProviderInterface
+        // itself (the roadmap specifies exactly chat()/estimateCost()/
+        // supports(), tier isn't one of them), just plain config LLMRouter
+        // and LLMBudgetGuard both read to decide fallback/budget behavior
+        // ("never fallback from local to paid unless explicitly allowed",
+        // "block paid providers, force local only").
+        'provider_tiers' => [
+            'openai' => 'paid',
+            'claude' => 'paid',
+            'openrouter' => 'free',
+            'groq' => 'free',
+            'qwen-14b-local' => 'free',
+            'llama-3.2-3b-local' => 'free',
+        ],
+
+        // Fresh-install fallback only — the real, admin-editable mapping is
+        // read through LLMSettingsService (hot-reload, same role
+        // MarginSettingsService already plays for margin.*), never
+        // config() directly once an admin override row exists.
+        'feature_providers' => [
+            'reasoning' => env('NEXUS_LLM_REASONING_PROVIDER', 'qwen-14b-local'),
+            'negotiation' => env('NEXUS_LLM_NEGOTIATION_PROVIDER', 'qwen-14b-local'),
+            'classification' => env('NEXUS_LLM_CLASSIFICATION_PROVIDER', 'llama-3.2-3b-local'),
+            'fallback' => env('NEXUS_LLM_FALLBACK_PROVIDER', 'openrouter'),
+        ],
+
+        // Ordered chain LLMRouter walks when the chosen provider's chat()
+        // throws — relabeled from llm-strategy.md §11's illustrative ids
+        // (openrouter-free/groq-free/local-qwen-14b) to this registry's
+        // actual keys; tier is already tracked above so no redundant
+        // "-free" suffix is baked into the identifier itself.
+        'fallback_chain' => explode(',', (string) env('NEXUS_LLM_FALLBACK_CHAIN', 'openrouter,groq,qwen-14b-local')),
+
+        'cost_control' => [
+            // Toman (matches credit.currency below) since these are
+            // business/agent-facing budget figures per
+            // docs/nexus-roadmap.md — LLMUsageLog itself stores cost in USD
+            // (what providers actually bill in); LLMBudgetGuard is the one
+            // explicit place these two currencies meet (see its own
+            // docblock), via usd_to_irt_rate below.
+            'daily_budget_per_agent_irt' => (int) env('NEXUS_LLM_DAILY_BUDGET_PER_AGENT', 50000),
+            'monthly_budget_per_business_irt' => (int) env('NEXUS_LLM_MONTHLY_BUDGET_PER_BUSINESS', 1000000),
+            // Seed rate only, same "seed defaults" language margin.* below
+            // already uses — not a real-time FX feed.
+            'usd_to_irt_rate' => (float) env('NEXUS_LLM_USD_TO_IRT_RATE', 600000),
+        ],
+
+        'behavior' => [
+            'enable_fallback' => (bool) env('NEXUS_LLM_ENABLE_FALLBACK', true),
+            'allow_local_to_paid_fallback' => (bool) env('NEXUS_LLM_ALLOW_LOCAL_TO_PAID_FALLBACK', false),
         ],
     ],
 
