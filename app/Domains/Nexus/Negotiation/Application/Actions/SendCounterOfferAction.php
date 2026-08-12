@@ -3,6 +3,7 @@
 namespace App\Domains\Nexus\Negotiation\Application\Actions;
 
 use App\Domains\Nexus\Negotiation\Application\DTOs\NegotiationData;
+use App\Domains\Nexus\Negotiation\Application\Services\NegotiationReasoningService;
 use App\Domains\Nexus\Negotiation\Domain\Entities\NegotiationMessage;
 use App\Domains\Nexus\Negotiation\Domain\Repositories\NegotiationMessageRepositoryInterface;
 use App\Domains\Nexus\Negotiation\Domain\Repositories\NegotiationRepositoryInterface;
@@ -21,6 +22,7 @@ final class SendCounterOfferAction
     public function __construct(
         private readonly NegotiationRepositoryInterface $negotiations,
         private readonly NegotiationMessageRepositoryInterface $messages,
+        private readonly NegotiationReasoningService $reasoning,
     ) {
     }
 
@@ -36,6 +38,9 @@ final class SendCounterOfferAction
             throw new InvalidArgumentException("Business [{$actingBusinessId}] is not a party to this Negotiation.");
         }
 
+        $previousTerms = $negotiation->currentTerms();
+        $roundCountBeforeCounter = $negotiation->roundCount();
+
         $negotiation->counter($terms);
         $negotiation = $this->negotiations->save($negotiation);
 
@@ -44,6 +49,7 @@ final class SendCounterOfferAction
             senderBusinessId: $actingBusinessId,
             type: NegotiationMessageType::Counter,
             terms: $terms,
+            reasoning: $this->reasoning->forCounter($previousTerms, $terms, $roundCountBeforeCounter, $negotiation->maxRounds()),
         ));
 
         return NegotiationData::fromEntity($negotiation);

@@ -4,6 +4,7 @@ namespace App\Domains\Nexus\Negotiation\Application\Actions;
 
 use App\Domains\Nexus\Agent\Domain\Repositories\AgentRepositoryInterface;
 use App\Domains\Nexus\Negotiation\Application\DTOs\NegotiationData;
+use App\Domains\Nexus\Negotiation\Application\Services\NegotiationReasoningService;
 use App\Domains\Nexus\Negotiation\Domain\Entities\NegotiationMessage;
 use App\Domains\Nexus\Negotiation\Domain\Events\NegotiationWasAccepted;
 use App\Domains\Nexus\Negotiation\Domain\Repositories\NegotiationMessageRepositoryInterface;
@@ -31,6 +32,7 @@ final class AcceptDealAction
         private readonly NegotiationRepositoryInterface $negotiations,
         private readonly NegotiationMessageRepositoryInterface $messages,
         private readonly AgentRepositoryInterface $agents,
+        private readonly NegotiationReasoningService $reasoning,
     ) {
     }
 
@@ -49,8 +51,9 @@ final class AcceptDealAction
         $agent = $this->agents->findByBusinessId($actingBusinessId);
         $maxDealValue = $agent?->authorityLimits()['max_deal_value'] ?? null;
         $totalAmount = $negotiation->currentTerms()->totalAmount();
+        $exceedsAuthorityLimit = $maxDealValue !== null && $totalAmount > $maxDealValue;
 
-        if ($maxDealValue !== null && $totalAmount > $maxDealValue) {
+        if ($exceedsAuthorityLimit) {
             $negotiation->requestApproval();
         } else {
             $negotiation->accept();
@@ -63,6 +66,7 @@ final class AcceptDealAction
             senderBusinessId: $actingBusinessId,
             type: NegotiationMessageType::Accept,
             terms: $negotiation->currentTerms(),
+            reasoning: $this->reasoning->forAccept($negotiation->currentTerms(), $exceedsAuthorityLimit),
         ));
 
         if ($negotiation->status() === NegotiationStatus::Accepted) {

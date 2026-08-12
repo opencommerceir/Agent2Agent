@@ -3,6 +3,7 @@
 namespace App\Domains\Nexus\Negotiation\Application\Actions;
 
 use App\Domains\Nexus\Negotiation\Application\DTOs\NegotiationData;
+use App\Domains\Nexus\Negotiation\Application\Services\NegotiationReasoningService;
 use App\Domains\Nexus\Negotiation\Domain\Entities\NegotiationMessage;
 use App\Domains\Nexus\Negotiation\Domain\Repositories\NegotiationMessageRepositoryInterface;
 use App\Domains\Nexus\Negotiation\Domain\Repositories\NegotiationRepositoryInterface;
@@ -14,6 +15,7 @@ final class RejectDealAction
     public function __construct(
         private readonly NegotiationRepositoryInterface $negotiations,
         private readonly NegotiationMessageRepositoryInterface $messages,
+        private readonly NegotiationReasoningService $reasoning,
     ) {
     }
 
@@ -37,6 +39,7 @@ final class RejectDealAction
             senderBusinessId: $actingBusinessId,
             type: NegotiationMessageType::Reject,
             terms: $negotiation->currentTerms(),
+            reasoning: $this->reasoning->forReject($negotiation->currentTerms(), $reason),
         ));
 
         return NegotiationData::fromEntity($negotiation);

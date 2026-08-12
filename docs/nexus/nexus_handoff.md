@@ -221,3 +221,17 @@
 **کامیت:** `feat(nexus): wire nexus.negotiation.* MCP capabilities + human approval actions`.
 
 ---
+
+## Phase 2 / M5 — سرویس Reasoning مذاکره
+
+`NegotiationReasoningService` — قطعی و rule-based، بدون هیچ فراخوانی LLM، مطابق پیش‌فرض «Rule Engine 80%، بدون هزینه» در `docs/claude/llm-strategy.md`. چهار متد به شکل هر `NegotiationMessageType` (`forProposal`/`forCounter`/`forAccept`/`forReject`) که هرکدام `array{thoughts, confidence, decision, explanation}` برمی‌گردانند — همان shape که `docs/nexus-roadmap.md` برای think()/reflect() خواسته بود، ولی interface موجود AgentOrchestrator (`ReasoningEngineInterface`) عمداً استفاده نشد چون به `Goal`/`ExecutionResult`/۴ نوع ثابت Agent گره خورده و قابل انتقال نبود (طبق تحقیق قبل از Phase 2).
+
+قوانین واقعی، نه placeholder: `forCounter` درصد تغییر قیمت نسبت به پیشنهاد قبلی را حساب می‌کند و confidence را بر اساس نزدیکی دو پیشنهاد تنظیم می‌کند؛ نزدیک به سقف دور مذاکره یک هشدار اضافه می‌کند؛ `forAccept` بین «قبول مستقیم» و «نیاز به تأیید انسان» بر اساس همان چک authority_limits که M3/M4 ساختند تمایز می‌گذارد.
+
+هر ۴ Action مذاکره (M3/M4) به‌روزرسانی شدند تا `reasoning` را قبل از ذخیره هر `NegotiationMessage` محاسبه کنند.
+
+**تست:** ۷ تست Unit جدید روی خودِ سرویس reasoning (framework-free). کل تست‌های Negotiation: ۳۹ پاس (۲۴ Unit + ۱۵ Feature).
+
+**کامیت:** `feat(nexus): add deterministic Negotiation reasoning (think/reflect-shaped traces)`.
+
+---

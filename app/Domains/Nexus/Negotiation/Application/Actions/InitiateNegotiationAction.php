@@ -4,6 +4,7 @@ namespace App\Domains\Nexus\Negotiation\Application\Actions;
 
 use App\Domains\Nexus\Business\Domain\Repositories\BusinessRepositoryInterface;
 use App\Domains\Nexus\Negotiation\Application\DTOs\NegotiationData;
+use App\Domains\Nexus\Negotiation\Application\Services\NegotiationReasoningService;
 use App\Domains\Nexus\Negotiation\Domain\Entities\Negotiation;
 use App\Domains\Nexus\Negotiation\Domain\Entities\NegotiationMessage;
 use App\Domains\Nexus\Negotiation\Domain\Repositories\NegotiationMessageRepositoryInterface;
@@ -27,6 +28,7 @@ final class InitiateNegotiationAction
         private readonly NegotiationRepositoryInterface $negotiations,
         private readonly NegotiationMessageRepositoryInterface $messages,
         private readonly BusinessRepositoryInterface $businesses,
+        private readonly NegotiationReasoningService $reasoning,
     ) {
     }
 
@@ -66,6 +68,7 @@ final class InitiateNegotiationAction
             senderBusinessId: $initiatorBusinessId,
             type: NegotiationMessageType::Proposal,
             terms: $terms,
+            reasoning: $this->reasoning->forProposal($terms),
         ));
 
         return NegotiationData::fromEntity($negotiation);
