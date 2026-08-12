@@ -386,6 +386,7 @@
         "with": "with",
         "round": "Round",
         "pending_approval_banner": "This deal exceeds the Agent's authority limit and needs your approval.",
+        "pending_approval_waiting": "This deal is awaiting the other party's approval.",
         "approve": "Approve",
         "reject": "Reject",
         "reasoning": "Reasoning",
@@ -412,6 +413,7 @@
         "fee": "Platform fee",
         "net": "Net",
         "confirm_delivery": "Confirm delivery",
+        "release_awaiting_buyer": "Only the buyer can confirm delivery.",
         "dispute": "Dispute",
         "status": {
           "held": "Held",
@@ -451,6 +453,7 @@
         "escrow_fees": "Escrow fees",
         "purchases": "purchases",
         "deals": "deals",
+        "llm_cost": "Real LLM cost (deducted from net revenue)",
         "pending": "Pending (held) escrow value",
         "credits_deducted": "Credits deducted platform-wide",
         "per_business": "Per business",

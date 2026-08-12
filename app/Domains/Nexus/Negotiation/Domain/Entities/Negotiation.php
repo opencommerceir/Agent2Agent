@@ -31,6 +31,14 @@ use DateTimeImmutable;
  * Agent's own authority_limits) via requestApproval() instead of calling
  * accept() directly — the entity itself has no opinion on authority
  * limits, that concept belongs to the Agent domain, not here.
+ *
+ * `pendingApprovalBusinessId` records exactly which Business's own
+ * accept() attempt exceeded its Agent's authority_limits and triggered
+ * requestApproval() — the caller of requestApproval() already knows this
+ * (AcceptDealAction has `$actingBusinessId` in hand), it just wasn't kept
+ * anywhere before. Application-layer Actions (ApprovePendingNegotiationAction/
+ * RejectPendingNegotiationAction) use it to restrict who may resolve the
+ * pause to that specific Business, not merely `isParty()`.
  */
 final class Negotiation
 {
@@ -61,6 +69,7 @@ final class Negotiation
         private ?string $rejectionReason,
         private readonly DateTimeImmutable $createdAt,
         private DateTimeImmutable $updatedAt,
+        private ?int $pendingApprovalBusinessId = null,
     ) {
     }
 
@@ -107,9 +116,10 @@ final class Negotiation
         $this->roundCount++;
     }
 
-    public function requestApproval(): void
+    public function requestApproval(int $businessId): void
     {
         $this->transitionTo(NegotiationStatus::PendingApproval);
+        $this->pendingApprovalBusinessId = $businessId;
     }
 
     public function accept(): void
@@ -205,6 +215,11 @@ final class Negotiation
     public function rejectionReason(): ?string
     {
         return $this->rejectionReason;
+    }
+
+    public function pendingApprovalBusinessId(): ?int
+    {
+        return $this->pendingApprovalBusinessId;
     }
 
     public function createdAt(): DateTimeImmutable

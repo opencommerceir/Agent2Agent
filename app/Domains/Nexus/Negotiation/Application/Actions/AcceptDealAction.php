@@ -56,7 +56,7 @@ final class AcceptDealAction
         $exceedsAuthorityLimit = $maxDealValue !== null && $totalAmount > $maxDealValue;
 
         if ($exceedsAuthorityLimit) {
-            $negotiation->requestApproval();
+            $negotiation->requestApproval($actingBusinessId);
         } else {
             $negotiation->accept();
         }

@@ -14,6 +14,8 @@ use App\Domains\Nexus\Credit\Application\Actions\GrantCreditsAction;
 use App\Domains\Nexus\Credit\Application\Actions\PurchaseCreditsAction;
 use App\Domains\Nexus\Credit\Domain\ValueObjects\CreditPackage;
 use App\Domains\Nexus\Credit\Domain\ValueObjects\CreditTransactionType;
+use App\Domains\Nexus\Llm\Domain\Entities\LLMUsageLog;
+use App\Domains\Nexus\Llm\Domain\Repositories\LLMUsageLogRepositoryInterface;
 use App\Domains\Nexus\Negotiation\Application\Actions\AcceptDealAction;
 use App\Domains\Nexus\Negotiation\Application\Actions\InitiateNegotiationAction;
 use App\Domains\Nexus\Negotiation\Domain\ValueObjects\CatalogItemType;
@@ -55,7 +57,43 @@ class GetRevenueDashboardActionTest extends TestCase
         $this->assertSame(500_000, $result['creditPackageRevenue']['amount']);
         $this->assertSame(1, $result['creditPackageRevenue']['count']);
         $this->assertSame(500_000, $result['grossRevenue']);
+        $this->assertSame(0.0, $result['llmCost']['amountUsd']);
         $this->assertSame(500_000, $result['netRevenue']);
+    }
+
+    public function test_execute_subtractsRealLlmCostFromNetRevenue_notChargedCost(): void
+    {
+        config(['nexus.platform.llm.cost_control.usd_to_irt_rate' => 600_000]);
+        $business = $this->verifiedBusiness('Buyer Co');
+        $purchase = app(PurchaseCreditsAction::class)->execute($business->id, CreditPackage::Starter);
+        app(ConfirmCreditPurchaseAction::class)->execute($purchase['tracking_reference']);
+
+        // realCostUsd is what the platform actually paid the provider;
+        // chargedCostUsd (with markup) is never billed to any Business
+        // anywhere in this codebase, so it must NOT be the figure
+        // subtracted from grossRevenue.
+        app(LLMUsageLogRepositoryInterface::class)->save(LLMUsageLog::record(
+            businessId: $business->id,
+            agentId: null,
+            feature: 'reasoning',
+            provider: 'openrouter',
+            model: 'test-model',
+            promptTokens: 100,
+            completionTokens: 50,
+            realCostUsd: 0.01,
+            chargedCostUsd: 0.013,
+            latencyMs: 200,
+            fromFallback: false,
+            success: true,
+        ));
+
+        $result = app(GetRevenueDashboardAction::class)->execute();
+
+        // 0.01 USD * 600,000 IRT/USD = 6,000 Toman.
+        $this->assertSame(0.01, $result['llmCost']['amountUsd']);
+        $this->assertSame(6_000, $result['llmCost']['amountIrt']);
+        $this->assertSame(500_000, $result['grossRevenue']);
+        $this->assertSame(494_000, $result['netRevenue']);
     }
 
     public function test_execute_countsReleasedEscrowFeeAsRevenue_normalizedToWholeToman(): void
@@ -68,7 +106,7 @@ class GetRevenueDashboardActionTest extends TestCase
             new NegotiationTerms(Money::fromAmount(1_000_000, 'IRT'), 1, null),
         );
         app(AcceptDealAction::class)->execute($negotiation->id, $buyer->id);
-        app(ReleaseEscrowAction::class)->execute($negotiation->id, $seller->id);
+        app(ReleaseEscrowAction::class)->execute($negotiation->id, $buyer->id);
 
         $result = app(GetRevenueDashboardAction::class)->execute();
 

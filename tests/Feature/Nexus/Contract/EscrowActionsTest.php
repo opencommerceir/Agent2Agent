@@ -51,13 +51,22 @@ class EscrowActionsTest extends TestCase
         return [$buyer, $seller, $negotiation->id];
     }
 
-    public function test_release_byEitherParty_transitionsToReleased(): void
+    public function test_release_byBuyer_transitionsToReleased(): void
+    {
+        [$buyer, , $negotiationId] = $this->heldEscrow();
+
+        $result = app(ReleaseEscrowAction::class)->execute($negotiationId, $buyer->id);
+
+        $this->assertSame('released', $result->status);
+    }
+
+    public function test_release_bySeller_throws(): void
     {
         [, $seller, $negotiationId] = $this->heldEscrow();
 
-        $result = app(ReleaseEscrowAction::class)->execute($negotiationId, $seller->id);
+        $this->expectException(InvalidArgumentException::class);
 
-        $this->assertSame('released', $result->status);
+        app(ReleaseEscrowAction::class)->execute($negotiationId, $seller->id);
     }
 
     public function test_release_byNonParty_throws(): void

@@ -740,3 +740,23 @@
 **آماده برای Phase 6 (Trust & Reputation)** طبق `docs/nexus-roadmap.md`.
 
 ---
+
+## بین Phase 5 و Phase 6 — رفع دغدغه‌های مستند تا Phase 5
+
+**دستور:** «هر چی لازم داره که دغدغه است به نظرت تا فاز 5 حلش کن» — بدون کدنویسی تازه برای Phase 6، سه مورد که خود این لاگ به‌صراحت به‌عنوان «محدودیت شناخته‌شده، کاندید فاز بعد» چندبار تکرار کرده بود، انتخاب و حل شدند.
+
+**۱) تنگ‌کردن Pending Approval negotiation (تکرارشده در Phase 2/M4، Phase 3 §7، Phase 5 §5):** `Negotiation` تا این لحظه هیچ رکوردی از اینکه کدام طرف باعث توقف در `pending_approval` شده نداشت — `isParty()` به هر دو طرف اجازه Approve/Reject می‌داد. ستون جدید nullable `pending_approval_business_id` روی `negotiations` اضافه شد؛ `AcceptDealAction` همان لحظه‌ای که `requestApproval()` را صدا می‌زند (جایی که `$actingBusinessId` را از قبل در دست دارد) این مقدار را ست می‌کند. `ApprovePendingNegotiationAction`/`RejectPendingNegotiationAction` حالا به‌جای `isParty()` دقیقاً همین فیلد را چک می‌کنند. Viewer (کنترلر/DTO/Blade/ترجمه‌ها) هم به‌روزرسانی شد: طرفی که آستانه‌اش رد نشده، دیگر دکمه‌های تأیید/رد را نمی‌بیند — پیام «در انتظار تأیید طرف مقابل» می‌بیند.
+
+**۲) تنگ‌کردن Escrow Release (تکرارشده در Phase 3/M4، Phase 3 §7، Phase 5 §5):** بررسی نشان داد در تمام کدبیس (هر تست، هر جریان واقعی) قرارداد `initiator = خریدار`/`counterparty = فروشنده` است، هرچند `InitiateNegotiationAction` صراحتاً این را enforce نمی‌کند. `ReleaseEscrowAction` («تأیید تحویل») حالا `NegotiationRepositoryInterface` را تزریق می‌کند و فقط `initiatorBusinessId()` (خریدار) را می‌پذیرد — چون فقط خریدار می‌تواند صادقانه تأیید کند که چیزی دریافت کرده؛ ریسک واقعی این بود که فروشنده بتواند escrow را یک‌طرفه به نفع خودش آزاد کند. `DisputeEscrowAction` عمداً دست‌نخورده ماند (هر دو طرف)، چون اعتراض برخلاف Release یک ادعا است، نه یک انتقال دارایی — منطقاً هر دو طرف باید بتوانند مطرحش کنند. دکمهٔ «تأیید تحویل» در Viewer هم فقط برای initiator نمایش داده می‌شود.
+
+**۳) وصل‌کردن هزینهٔ واقعی LLM به Net Revenue (Phase 3/M6's docblock صراحتاً این را «قلمرو Phase 4» خوانده بود، ولی Phase 4 که تمام شد هیچ‌کس این را وصل نکرده بود):** متد جدید `LLMUsageQuery::sumRealCostUsdForRange()` (هم‌شکل `RevenueQuery::applyRange`) اضافه شد — عمداً `real_cost_usd` را جمع می‌زند، نه `charged_cost_usd`: بررسی کدبیس نشان داد `charged_cost_usd` (شامل markup) هیچ‌جا واقعاً به هیچ Businessی شارژ نمی‌شود (هیچ CostGate/`SpendCreditsForActionAction`ای به آن ارجاع نمی‌دهد)، پس تنها هزینهٔ واقعی پلتفرم همان `real_cost_usd` (چیزی که واقعاً به provider پرداخت شده) است. `GetRevenueDashboardAction` این را با همان الگوی تبدیل ارز `LLMBudgetGuard` (`× usd_to_irt_rate`) به تومان تبدیل می‌کند و از `grossRevenue` کم می‌کند؛ کلید جدید `llmCost` (`amountUsd`/`amountIrt`) به خروجی اضافه شد. داشبورد ادمین (`resources/views/dashboard/nexus/revenue/index.blade.php`) این رقم را نمایش می‌دهد.
+
+**فایل‌های اصلی:** migration جدید `..._add_pending_approval_business_id_to_negotiations_table.php`، `Negotiation` entity/Model/Repository، `AcceptDealAction`/`ApprovePendingNegotiationAction`/`RejectPendingNegotiationAction`، `NegotiationData` DTO، `ReleaseEscrowAction`، `resources/views/nexus/negotiations/show.blade.php`، `LLMUsageQuery`، `GetRevenueDashboardAction`، `resources/views/dashboard/nexus/revenue/index.blade.php`، کلیدهای ترجمهٔ جدید در `lang/{fa,en}/messages.json`.
+
+**تست:** ۴ تست جدید (۲ روی محدودیت Pending Approval، ۱ روی محدودیت Escrow Release، ۱ روی صحت Net Revenue با هزینهٔ واقعی LLM — شامل اثبات صریح که `charged_cost_usd` عمداً استفاده نمی‌شود)، به‌علاوه به‌روزرسانی چند تست موجود که قبلاً روی رفتار سهل‌گیرانهٔ قدیم تکیه کرده بودند (`NegotiationTest` روی امضای جدید `requestApproval()`، `EscrowActionsTest`/`GetRevenueDashboardActionTest` روی release توسط seller). سوییت کامل: **۱۲۲۹ pass / ۲۸۳ fail** — بدون رگرشن (baseline Phase 5: ۱۲۲۵ pass؛ خالص +۴).
+
+**کامیت:** (هنوز کامیت نشده — منتظر تأیید کاربر.)
+
+**محدودیت شناخته‌شدهٔ باقی‌مانده که عمداً دست‌نخورده ماند:** حل واقعی Dispute (evidence/mediation/arbitration) هنوز فقط `RefundEscrowAction` دستی ادمین است — این صراحتاً قلمرو Phase 6 (Trust & Reputation) است، نه یک دغدغهٔ جامانده از فازهای قبل.
+
+---

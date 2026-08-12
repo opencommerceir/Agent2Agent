@@ -386,6 +386,7 @@
         "with": "با",
         "round": "دور",
         "pending_approval_banner": "این معامله از سقف اختیار Agent فراتر رفته و نیاز به تأیید شما دارد.",
+        "pending_approval_waiting": "این معامله در انتظار تأیید طرف مقابل است.",
         "approve": "تأیید",
         "reject": "رد",
         "reasoning": "استدلال",
@@ -412,6 +413,7 @@
         "fee": "کارمزد پلتفرم",
         "net": "خالص",
         "confirm_delivery": "تأیید تحویل",
+        "release_awaiting_buyer": "فقط خریدار می‌تواند تحویل را تأیید کند.",
         "dispute": "اعتراض",
         "status": {
           "held": "نگهداری‌شده",
@@ -451,6 +453,7 @@
         "escrow_fees": "کارمزد امانی",
         "purchases": "خرید",
         "deals": "معامله",
+        "llm_cost": "هزینه واقعی LLM (کسرشده از درآمد خالص)",
         "pending": "ارزش امانی‌های در انتظار (Held)",
         "credits_deducted": "کردیت مصرف‌شده در کل پلتفرم",
         "per_business": "به‌تفکیک کسب‌وکار",

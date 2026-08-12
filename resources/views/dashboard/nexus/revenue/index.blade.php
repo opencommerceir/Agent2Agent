@@ -39,6 +39,8 @@
     </div>
 
     <div class="mb-6 rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-600">
+        {{ t('messages.nexus.admin.revenue.llm_cost') }}: {{ number_format($revenue['llmCost']['amountIrt']) }}
+        (${{ number_format($revenue['llmCost']['amountUsd'], 4) }}) —
         {{ t('messages.nexus.admin.revenue.pending') }}: {{ number_format($revenue['escrowPending']['grossAmount']) }}
         ({{ $revenue['escrowPending']['count'] }}) —
         {{ t('messages.nexus.admin.revenue.credits_deducted') }}: {{ number_format($revenue['creditsDeducted']) }}

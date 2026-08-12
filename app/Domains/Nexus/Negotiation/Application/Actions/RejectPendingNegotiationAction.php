@@ -12,6 +12,10 @@ use InvalidArgumentException;
  * (legal from PendingApproval per the entity's own ALLOWED_TRANSITIONS),
  * kept as its own Action so the web viewer's "reject a pending approval"
  * button doesn't need to pretend it's an Agent acting via RejectDealAction.
+ *
+ * Restricted to Negotiation::pendingApprovalBusinessId() for the same
+ * reason ApprovePendingNegotiationAction is — only the Business whose own
+ * authority_limits triggered the pause has a decision to make here.
  */
 final class RejectPendingNegotiationAction
 {
@@ -28,8 +32,8 @@ final class RejectPendingNegotiationAction
             throw new InvalidArgumentException("Negotiation [{$negotiationId}] does not exist.");
         }
 
-        if (! $negotiation->isParty($rejectingBusinessId)) {
-            throw new InvalidArgumentException("Business [{$rejectingBusinessId}] is not a party to this Negotiation.");
+        if ($negotiation->pendingApprovalBusinessId() !== $rejectingBusinessId) {
+            throw new InvalidArgumentException("Business [{$rejectingBusinessId}] is not the party awaiting approval on this Negotiation.");
         }
 
         $negotiation->reject($reason);

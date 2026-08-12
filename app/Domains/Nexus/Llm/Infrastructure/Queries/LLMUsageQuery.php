@@ -3,6 +3,7 @@
 namespace App\Domains\Nexus\Llm\Infrastructure\Queries;
 
 use App\Domains\Nexus\Llm\Infrastructure\Models\LLMUsageLog;
+use DateTimeInterface;
 use Illuminate\Support\Carbon;
 
 /**
@@ -75,5 +76,31 @@ final class LLMUsageQuery
             ->max('total');
 
         return $maxSpentUsd !== null && ($maxSpentUsd * $usdToIrtRate) > $monthlyBudgetIrt;
+    }
+
+    /**
+     * Backs the Revenue Dashboard's real "net revenue" (Phase 3/M6's own
+     * docblock named exactly this as Phase 4's territory to fill in).
+     * Deliberately sums `real_cost_usd`, not `charged_cost_usd` — the
+     * markup is never actually billed to any Business anywhere in this
+     * codebase (no CostGate/SpendCreditsForActionAction call references
+     * charged_cost_usd), so it isn't a real expense to net against
+     * revenue; `real_cost_usd` is what the platform actually pays each
+     * LLM provider, the genuine cost side of gross-minus-cost. Mirrors
+     * RevenueQuery::applyRange's own from/to filtering on `created_at`.
+     */
+    public function sumRealCostUsdForRange(?DateTimeInterface $from, ?DateTimeInterface $to): float
+    {
+        $query = LLMUsageLog::query();
+
+        if ($from) {
+            $query->where('created_at', '>=', $from);
+        }
+
+        if ($to) {
+            $query->where('created_at', '<=', $to);
+        }
+
+        return (float) $query->sum('real_cost_usd');
     }
 }

@@ -47,6 +47,7 @@ class EloquentNegotiationRepository implements NegotiationRepositoryInterface
         $model->round_count = $negotiation->roundCount();
         $model->max_rounds = $negotiation->maxRounds();
         $model->rejection_reason = $negotiation->rejectionReason();
+        $model->pending_approval_business_id = $negotiation->pendingApprovalBusinessId();
         $model->save();
 
         return $this->toEntity($model);
@@ -69,6 +70,7 @@ class EloquentNegotiationRepository implements NegotiationRepositoryInterface
             rejectionReason: $model->rejection_reason,
             createdAt: DateTimeImmutable::createFromInterface($model->created_at),
             updatedAt: DateTimeImmutable::createFromInterface($model->updated_at),
+            pendingApprovalBusinessId: $model->pending_approval_business_id,
         );
     }
 }

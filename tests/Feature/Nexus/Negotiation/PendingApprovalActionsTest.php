@@ -87,4 +87,25 @@ class PendingApprovalActionsTest extends TestCase
 
         app(ApprovePendingNegotiationAction::class)->execute($negotiation->id, $outsider->id);
     }
+
+    public function test_approvePendingNegotiation_byCounterpartyThatDidNotTriggerIt_throws(): void
+    {
+        // The buyer's own accept() exceeded ITS authority limit — the
+        // seller is a party to the Negotiation but never had a threshold
+        // checked, so it has nothing to approve here.
+        [, $seller, $negotiation] = $this->pendingNegotiation();
+
+        $this->expectException(\InvalidArgumentException::class);
+
+        app(ApprovePendingNegotiationAction::class)->execute($negotiation->id, $seller->id);
+    }
+
+    public function test_rejectPendingNegotiation_byCounterpartyThatDidNotTriggerIt_throws(): void
+    {
+        [, $seller, $negotiation] = $this->pendingNegotiation();
+
+        $this->expectException(\InvalidArgumentException::class);
+
+        app(RejectPendingNegotiationAction::class)->execute($negotiation->id, $seller->id);
+    }
 }

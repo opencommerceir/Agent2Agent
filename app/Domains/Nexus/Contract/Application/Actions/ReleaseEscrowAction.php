@@ -4,19 +4,26 @@ namespace App\Domains\Nexus\Contract\Application\Actions;
 
 use App\Domains\Nexus\Contract\Application\DTOs\EscrowData;
 use App\Domains\Nexus\Contract\Domain\Repositories\EscrowRepositoryInterface;
+use App\Domains\Nexus\Negotiation\Domain\Repositories\NegotiationRepositoryInterface;
 use InvalidArgumentException;
 
 /**
  * "Confirm Delivery" on the Live Negotiation Viewer — Held -> Released.
- * Either party may release in this phase (Escrow doesn't track which side
- * is the deliverer vs. the receiver yet) — the same documented,
- * deliberate-not-oversight gap Phase 2/M4 already established for
- * Pending Approval.
+ * Restricted to the Negotiation's initiator: every InitiateNegotiationAction
+ * caller across this codebase (Marketplace-discovered proposals, Coalition's
+ * CloseCoalitionAction) uses initiator-as-buyer/counterparty-as-seller, so
+ * the initiator is the party who actually received the goods/services and
+ * can honestly confirm delivery — the seller confirming its own delivery
+ * to itself was the real risk in the old either-party check, the same
+ * "known limitation" Phase 2/M4 and Phase 3/M4 both flagged for
+ * tightening. DisputeEscrowAction stays either-party: raising a concern is
+ * legitimately something either side can do.
  */
 final class ReleaseEscrowAction
 {
     public function __construct(
         private readonly EscrowRepositoryInterface $escrows,
+        private readonly NegotiationRepositoryInterface $negotiations,
     ) {
     }
 
@@ -28,8 +35,10 @@ final class ReleaseEscrowAction
             throw new InvalidArgumentException("No Escrow exists for Negotiation [{$negotiationId}].");
         }
 
-        if (! $escrow->isParty($actingBusinessId)) {
-            throw new InvalidArgumentException("Business [{$actingBusinessId}] is not a party to this Escrow.");
+        $negotiation = $this->negotiations->findById($negotiationId);
+
+        if (! $negotiation || $negotiation->initiatorBusinessId() !== $actingBusinessId) {
+            throw new InvalidArgumentException("Business [{$actingBusinessId}] is not the buyer on this Escrow's Negotiation.");
         }
 
         $escrow->release();

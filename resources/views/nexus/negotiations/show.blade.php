@@ -52,12 +52,16 @@
 
                 @if ($escrow->status === 'held')
                     <div class="flex gap-2">
-                        <form method="POST" action="{{ route('nexus.negotiations.escrow.release', $negotiation->id) }}">
-                            @csrf
-                            <button type="submit" class="rounded-md bg-nexus-success/20 px-4 py-1.5 text-sm font-semibold text-nexus-success hover:bg-nexus-success/30">
-                                {{ t('messages.nexus.negotiation.escrow.confirm_delivery') }}
-                            </button>
-                        </form>
+                        @if ($actingBusinessId === $negotiation->initiatorBusinessId)
+                            <form method="POST" action="{{ route('nexus.negotiations.escrow.release', $negotiation->id) }}">
+                                @csrf
+                                <button type="submit" class="rounded-md bg-nexus-success/20 px-4 py-1.5 text-sm font-semibold text-nexus-success hover:bg-nexus-success/30">
+                                    {{ t('messages.nexus.negotiation.escrow.confirm_delivery') }}
+                                </button>
+                            </form>
+                        @else
+                            <p class="text-xs text-nexus-text-muted">{{ t('messages.nexus.negotiation.escrow.release_awaiting_buyer') }}</p>
+                        @endif
                         <form method="POST" action="{{ route('nexus.negotiations.escrow.dispute', $negotiation->id) }}">
                             @csrf
                             <button type="submit" class="rounded-md bg-nexus-error/20 px-4 py-1.5 text-sm font-semibold text-nexus-error hover:bg-nexus-error/30">
@@ -71,21 +75,25 @@
 
         @if ($negotiation->status === 'pending_approval')
             <x-nexus-panel style="border-color: var(--color-nexus-warning)">
-                <p class="mb-3 text-sm text-nexus-text">{{ t('messages.nexus.negotiation.show.pending_approval_banner') }}</p>
-                <div class="flex gap-2">
-                    <form method="POST" action="{{ route('nexus.negotiations.approve', $negotiation->id) }}">
-                        @csrf
-                        <button type="submit" class="rounded-md bg-nexus-success/20 px-4 py-1.5 text-sm font-semibold text-nexus-success hover:bg-nexus-success/30">
-                            {{ t('messages.nexus.negotiation.show.approve') }}
-                        </button>
-                    </form>
-                    <form method="POST" action="{{ route('nexus.negotiations.reject', $negotiation->id) }}">
-                        @csrf
-                        <button type="submit" class="rounded-md bg-nexus-error/20 px-4 py-1.5 text-sm font-semibold text-nexus-error hover:bg-nexus-error/30">
-                            {{ t('messages.nexus.negotiation.show.reject') }}
-                        </button>
-                    </form>
-                </div>
+                @if ($negotiation->pendingApprovalBusinessId === $actingBusinessId)
+                    <p class="mb-3 text-sm text-nexus-text">{{ t('messages.nexus.negotiation.show.pending_approval_banner') }}</p>
+                    <div class="flex gap-2">
+                        <form method="POST" action="{{ route('nexus.negotiations.approve', $negotiation->id) }}">
+                            @csrf
+                            <button type="submit" class="rounded-md bg-nexus-success/20 px-4 py-1.5 text-sm font-semibold text-nexus-success hover:bg-nexus-success/30">
+                                {{ t('messages.nexus.negotiation.show.approve') }}
+                            </button>
+                        </form>
+                        <form method="POST" action="{{ route('nexus.negotiations.reject', $negotiation->id) }}">
+                            @csrf
+                            <button type="submit" class="rounded-md bg-nexus-error/20 px-4 py-1.5 text-sm font-semibold text-nexus-error hover:bg-nexus-error/30">
+                                {{ t('messages.nexus.negotiation.show.reject') }}
+                            </button>
+                        </form>
+                    </div>
+                @else
+                    <p class="text-sm text-nexus-text">{{ t('messages.nexus.negotiation.show.pending_approval_waiting') }}</p>
+                @endif
             </x-nexus-panel>
         @endif
 

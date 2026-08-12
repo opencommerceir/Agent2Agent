@@ -90,8 +90,9 @@ class NegotiationTest extends TestCase
     {
         $negotiation = $this->propose();
 
-        $negotiation->requestApproval();
+        $negotiation->requestApproval(1);
         $this->assertSame(NegotiationStatus::PendingApproval, $negotiation->status());
+        $this->assertSame(1, $negotiation->pendingApprovalBusinessId());
 
         $negotiation->accept();
         $this->assertSame(NegotiationStatus::Accepted, $negotiation->status());
@@ -101,7 +102,7 @@ class NegotiationTest extends TestCase
     {
         $negotiation = $this->propose();
 
-        $negotiation->requestApproval();
+        $negotiation->requestApproval(1);
         $negotiation->reject('over authority limit');
 
         $this->assertSame(NegotiationStatus::Rejected, $negotiation->status());
@@ -110,7 +111,7 @@ class NegotiationTest extends TestCase
     public function test_pendingApproval_cannotBeCountered(): void
     {
         $negotiation = $this->propose();
-        $negotiation->requestApproval();
+        $negotiation->requestApproval(1);
 
         $this->expectException(InvalidNegotiationStateException::class);
 

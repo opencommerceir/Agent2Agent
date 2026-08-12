@@ -21,6 +21,7 @@ final class NegotiationData
         public readonly int $roundCount,
         public readonly int $maxRounds,
         public readonly ?string $rejectionReason,
+        public readonly ?int $pendingApprovalBusinessId,
     ) {
     }
 
@@ -37,11 +38,12 @@ final class NegotiationData
             roundCount: $negotiation->roundCount(),
             maxRounds: $negotiation->maxRounds(),
             rejectionReason: $negotiation->rejectionReason(),
+            pendingApprovalBusinessId: $negotiation->pendingApprovalBusinessId(),
         );
     }
 
     /**
-     * @return array{id: ?int, initiatorBusinessId: int, counterpartyBusinessId: int, catalogItemType: string, catalogItemId: int, status: string, currentTerms: array, roundCount: int, maxRounds: int, rejectionReason: ?string}
+     * @return array{id: ?int, initiatorBusinessId: int, counterpartyBusinessId: int, catalogItemType: string, catalogItemId: int, status: string, currentTerms: array, roundCount: int, maxRounds: int, rejectionReason: ?string, pendingApprovalBusinessId: ?int}
      */
     public function toArray(): array
     {
@@ -56,6 +58,7 @@ final class NegotiationData
             'roundCount' => $this->roundCount,
             'maxRounds' => $this->maxRounds,
             'rejectionReason' => $this->rejectionReason,
+            'pendingApprovalBusinessId' => $this->pendingApprovalBusinessId,
         ];
     }
 }

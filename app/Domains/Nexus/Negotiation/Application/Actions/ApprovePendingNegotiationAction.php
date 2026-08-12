@@ -18,10 +18,12 @@ use InvalidArgumentException;
  * transition) — a human's approval must bypass the gate entirely, not
  * re-evaluate it.
  *
- * Either party may resolve a pending approval in this phase — Negotiation
- * doesn't track which specific side's authority_limits triggered the
- * pause, so this doesn't restrict to "only the side that would have
- * accepted." Narrowing that is a natural follow-up, not requested yet.
+ * Only the Business whose own accept() attempt exceeded its Agent's
+ * authority_limits (Negotiation::pendingApprovalBusinessId(), set by
+ * AcceptDealAction at requestApproval() time) may resolve the pause — not
+ * merely any party. The counterparty proposed/accepted the deal on the
+ * terms it already wanted; it isn't the one whose authority was found
+ * insufficient, so it has nothing to approve here.
  */
 final class ApprovePendingNegotiationAction
 {
@@ -38,8 +40,8 @@ final class ApprovePendingNegotiationAction
             throw new InvalidArgumentException("Negotiation [{$negotiationId}] does not exist.");
         }
 
-        if (! $negotiation->isParty($approvingBusinessId)) {
-            throw new InvalidArgumentException("Business [{$approvingBusinessId}] is not a party to this Negotiation.");
+        if ($negotiation->pendingApprovalBusinessId() !== $approvingBusinessId) {
+            throw new InvalidArgumentException("Business [{$approvingBusinessId}] is not the party awaiting approval on this Negotiation.");
         }
 
         $negotiation->accept();

@@ -3,6 +3,7 @@
 namespace App\Domains\Nexus\Analytics\Application\Actions;
 
 use App\Domains\Nexus\Analytics\Infrastructure\Queries\RevenueQuery;
+use App\Domains\Nexus\Llm\Infrastructure\Queries\LLMUsageQuery;
 use DateTimeInterface;
 
 /**
@@ -15,17 +16,20 @@ use DateTimeInterface;
  * counterpart" reasoning GetBusinessDashboardAction's own docblock
  * already established.
  *
- * "Net revenue" = creditPackageRevenue + escrowFeeRevenue (the two real
- * income streams docs/claude/monetization.md names) — there is no
- * separate "cost" to subtract yet (LLM cost tracking is Phase 4's own
- * territory), so gross and net are the same figure today; kept as two
- * separate keys so a future Phase 4 cost figure has somewhere to slot in
- * without reshaping this Action's return type.
+ * "Gross revenue" = creditPackageRevenue + escrowFeeRevenue (the two real
+ * income streams docs/claude/monetization.md names). "Net revenue" now
+ * actually subtracts a real cost — LLMUsageQuery::sumRealCostUsdForRange(),
+ * the platform's genuine LLM provider spend (Phase 4) — closing the gap
+ * this Action's own docblock originally left open for exactly this. Same
+ * USD->IRT conversion point convention LLMBudgetGuard established
+ * (`config('nexus.platform.llm.cost_control.usd_to_irt_rate')`), since
+ * Credit/Revenue amounts are Toman and LLMUsageLog cost is USD.
  */
 final class GetRevenueDashboardAction
 {
     public function __construct(
         private readonly RevenueQuery $revenue,
+        private readonly LLMUsageQuery $llmUsage,
     ) {
     }
 
@@ -35,6 +39,7 @@ final class GetRevenueDashboardAction
      *     escrowFeeRevenue: array{amount: int, count: int},
      *     escrowPending: array{grossAmount: int, count: int},
      *     grossRevenue: int,
+     *     llmCost: array{amountUsd: float, amountIrt: int},
      *     netRevenue: int,
      *     creditsDeducted: int,
      *     perBusiness: list<array>,
@@ -46,14 +51,19 @@ final class GetRevenueDashboardAction
     {
         $creditPackageRevenue = $this->revenue->creditPackageRevenue($from, $to);
         $escrowFeeRevenue = $this->revenue->escrowFeeRevenue($from, $to);
-        $total = $creditPackageRevenue['amount'] + $escrowFeeRevenue['amount'];
+        $gross = $creditPackageRevenue['amount'] + $escrowFeeRevenue['amount'];
+
+        $usdToIrtRate = (float) config('nexus.platform.llm.cost_control.usd_to_irt_rate', 0);
+        $llmCostUsd = $this->llmUsage->sumRealCostUsdForRange($from, $to);
+        $llmCostIrt = (int) round($llmCostUsd * $usdToIrtRate);
 
         return [
             'creditPackageRevenue' => $creditPackageRevenue,
             'escrowFeeRevenue' => $escrowFeeRevenue,
             'escrowPending' => $this->revenue->escrowPending($from, $to),
-            'grossRevenue' => $total,
-            'netRevenue' => $total,
+            'grossRevenue' => $gross,
+            'llmCost' => ['amountUsd' => $llmCostUsd, 'amountIrt' => $llmCostIrt],
+            'netRevenue' => $gross - $llmCostIrt,
             'creditsDeducted' => $this->revenue->creditsDeducted($from, $to),
             'perBusiness' => $this->revenue->perBusiness($from, $to),
             'perIndustry' => $this->revenue->perIndustry($from, $to),

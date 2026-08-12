@@ -20,6 +20,7 @@ class Negotiation extends Model
         'round_count',
         'max_rounds',
         'rejection_reason',
+        'pending_approval_business_id',
     ];
 
     protected $casts = [
