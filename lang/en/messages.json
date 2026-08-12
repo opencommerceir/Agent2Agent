@@ -328,6 +328,37 @@
           "sent": "Sent",
           "converted": "Converted"
         }
+      },
+      "coalitions": {
+        "title": "Group Buying",
+        "how_it_works": "Pool orders with other businesses to unlock a bulk discount from a supplier.",
+        "create_new": "Start a coalition",
+        "empty": "No open coalitions right now.",
+        "catalog_item": "Item",
+        "discount": "Discount",
+        "members": "Members",
+        "total_quantity": "Total quantity",
+        "join": "Join",
+        "leave": "Leave",
+        "close": "Close & propose deal",
+        "cancel": "Cancel",
+        "status": {
+          "forming": "Forming",
+          "negotiating": "Negotiating",
+          "completed": "Completed",
+          "cancelled": "Cancelled"
+        },
+        "form": {
+          "target_business_id": "Target supplier (Business ID)",
+          "catalog_item_type": "Item type",
+          "catalog_item_id": "Item ID",
+          "unit_price_amount": "Unit price (smallest unit)",
+          "unit_price_currency": "Currency",
+          "min_participants": "Minimum participants",
+          "discount_percent": "Requested discount (%)",
+          "quantity": "Your quantity",
+          "submit": "Create coalition"
+        }
       }
     },
     "negotiation": {

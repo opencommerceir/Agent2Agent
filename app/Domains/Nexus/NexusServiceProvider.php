@@ -32,13 +32,24 @@ use App\Domains\Nexus\Credit\Domain\Repositories\CreditTransactionRepositoryInte
 use App\Domains\Nexus\Credit\Infrastructure\Repositories\EloquentCreditBalanceRepository;
 use App\Domains\Nexus\Credit\Infrastructure\Repositories\EloquentCreditPurchaseSessionRepository;
 use App\Domains\Nexus\Credit\Infrastructure\Repositories\EloquentCreditTransactionRepository;
+use App\Domains\Nexus\Growth\Application\Actions\CancelCoalitionAction;
+use App\Domains\Nexus\Growth\Application\Actions\CloseCoalitionAction;
+use App\Domains\Nexus\Growth\Application\Actions\CreateCoalitionAction;
 use App\Domains\Nexus\Growth\Application\Actions\GetReferralStatusAction;
+use App\Domains\Nexus\Growth\Application\Actions\JoinCoalitionAction;
+use App\Domains\Nexus\Growth\Application\Actions\LeaveCoalitionAction;
+use App\Domains\Nexus\Growth\Application\Actions\ListOpenCoalitionsAction;
 use App\Domains\Nexus\Growth\Application\Actions\SendAgentInviteAction;
+use App\Domains\Nexus\Growth\Application\Listeners\CompleteCoalitionOnNegotiationAcceptedListener;
 use App\Domains\Nexus\Growth\Application\Listeners\GrantReferralRewardOnBusinessVerifiedListener;
 use App\Domains\Nexus\Growth\Application\Listeners\IssueReferralCodeOnBusinessVerifiedListener;
+use App\Domains\Nexus\Growth\Domain\Repositories\CoalitionMemberRepositoryInterface;
+use App\Domains\Nexus\Growth\Domain\Repositories\CoalitionRepositoryInterface;
 use App\Domains\Nexus\Growth\Domain\Repositories\InviteRepositoryInterface;
 use App\Domains\Nexus\Growth\Domain\Repositories\ReferralCodeRepositoryInterface;
 use App\Domains\Nexus\Growth\Domain\Repositories\ReferralSignupRepositoryInterface;
+use App\Domains\Nexus\Growth\Infrastructure\Repositories\EloquentCoalitionMemberRepository;
+use App\Domains\Nexus\Growth\Infrastructure\Repositories\EloquentCoalitionRepository;
 use App\Domains\Nexus\Growth\Infrastructure\Repositories\EloquentInviteRepository;
 use App\Domains\Nexus\Growth\Infrastructure\Repositories\EloquentReferralCodeRepository;
 use App\Domains\Nexus\Growth\Infrastructure\Repositories\EloquentReferralSignupRepository;
@@ -100,6 +111,8 @@ class NexusServiceProvider extends ServiceProvider
         $this->app->bind(ReferralCodeRepositoryInterface::class, EloquentReferralCodeRepository::class);
         $this->app->bind(ReferralSignupRepositoryInterface::class, EloquentReferralSignupRepository::class);
         $this->app->bind(InviteRepositoryInterface::class, EloquentInviteRepository::class);
+        $this->app->bind(CoalitionRepositoryInterface::class, EloquentCoalitionRepository::class);
+        $this->app->bind(CoalitionMemberRepositoryInterface::class, EloquentCoalitionMemberRepository::class);
 
         // Nexus's own PaymentGatewayRegistry singleton — CommerceServiceProvider
         // (where these adapter classes originally live) is disabled since
@@ -127,6 +140,7 @@ class NexusServiceProvider extends ServiceProvider
         Event::listen(BusinessWasVerified::class, IssueReferralCodeOnBusinessVerifiedListener::class);
         Event::listen(BusinessWasVerified::class, GrantReferralRewardOnBusinessVerifiedListener::class);
         Event::listen(NegotiationWasAccepted::class, GenerateContractOnNegotiationAcceptedListener::class);
+        Event::listen(NegotiationWasAccepted::class, CompleteCoalitionOnNegotiationAcceptedListener::class);
         Event::listen(ContractWasGenerated::class, HoldEscrowOnContractGeneratedListener::class);
 
         // Real Payment Gateways (Phase 3/M3) — same Connector Pattern
@@ -233,7 +247,73 @@ class NexusServiceProvider extends ServiceProvider
             return $invite->toArray();
         });
 
+        $this->registerCoalitionCapabilityHandlers($handlers);
         $this->registerNegotiationCapabilityHandlers($handlers);
+    }
+
+    private function registerCoalitionCapabilityHandlers(CapabilityHandlerRegistry $handlers): void
+    {
+        $handlers->register('nexus.coalition.create', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            $coalition = $this->app->make(CreateCoalitionAction::class)->execute(
+                organizerBusinessId: $callingBusinessId,
+                targetBusinessId: (int) $input['target_business_id'],
+                catalogItemType: CatalogItemType::from($input['catalog_item_type']),
+                catalogItemId: (int) $input['catalog_item_id'],
+                unitPriceAmount: (int) $input['unit_price_amount'],
+                unitPriceCurrency: $input['unit_price_currency'],
+                minParticipants: (int) $input['min_participants'],
+                discountPercent: (float) $input['discount_percent'],
+                organizerQuantity: (int) $input['quantity'],
+            );
+
+            return ['coalition' => $coalition->toArray()];
+        });
+
+        $handlers->register('nexus.coalition.join', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            $coalition = $this->app->make(JoinCoalitionAction::class)->execute(
+                (int) $input['coalition_id'],
+                $callingBusinessId,
+                (int) $input['quantity'],
+            );
+
+            return ['coalition' => $coalition->toArray()];
+        });
+
+        $handlers->register('nexus.coalition.list', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            $coalitions = $this->app->make(ListOpenCoalitionsAction::class)->execute($callingBusinessId);
+
+            return ['coalitions' => array_map(fn ($c) => $c->toArray(), $coalitions)];
+        });
+
+        $handlers->register('nexus.coalition.close', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            $coalition = $this->app->make(CloseCoalitionAction::class)->execute((int) $input['coalition_id'], $callingBusinessId);
+
+            return ['coalition' => $coalition->toArray()];
+        });
+
+        $handlers->register('nexus.coalition.leave', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            $this->app->make(LeaveCoalitionAction::class)->execute((int) $input['coalition_id'], $callingBusinessId);
+
+            return [];
+        });
+
+        $handlers->register('nexus.coalition.cancel', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            $coalition = $this->app->make(CancelCoalitionAction::class)->execute((int) $input['coalition_id'], $callingBusinessId);
+
+            return ['coalition' => $coalition->toArray()];
+        });
     }
 
     private function registerNegotiationCapabilityHandlers(CapabilityHandlerRegistry $handlers): void

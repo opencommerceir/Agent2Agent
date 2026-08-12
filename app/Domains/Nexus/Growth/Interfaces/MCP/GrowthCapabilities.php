@@ -61,6 +61,57 @@ final class GrowthCapabilities
                 ],
                 'requiredPermissions' => ['nexus.growth.manage'],
             ],
+            [
+                'name' => 'nexus.coalition.create',
+                'description' => 'Organize a Group Buying coalition against a target supplier for one catalog item, requesting a bulk discount',
+                'inputSchema' => [
+                    'target_business_id' => 'integer',
+                    'catalog_item_type' => 'string',
+                    'catalog_item_id' => 'integer',
+                    'unit_price_amount' => 'integer',
+                    'unit_price_currency' => 'string',
+                    'min_participants' => 'integer',
+                    'discount_percent' => 'number',
+                    'quantity' => 'integer',
+                ],
+                'outputSchema' => ['coalition' => 'array'],
+                'requiredPermissions' => ['nexus.growth.manage'],
+            ],
+            [
+                'name' => 'nexus.coalition.join',
+                'description' => 'Join an open (Forming) coalition with a committed quantity',
+                'inputSchema' => ['coalition_id' => 'integer', 'quantity' => 'integer'],
+                'outputSchema' => ['coalition' => 'array'],
+                'requiredPermissions' => ['nexus.growth.manage'],
+            ],
+            [
+                'name' => 'nexus.coalition.list',
+                'description' => 'List open (Forming) coalitions the calling Business can still join',
+                'inputSchema' => [],
+                'outputSchema' => ['coalitions' => 'array'],
+                'requiredPermissions' => ['nexus.growth.read'],
+            ],
+            [
+                'name' => 'nexus.coalition.close',
+                'description' => 'Organizer-only: once minParticipants is reached, aggregate every member\'s quantity and open the bulk Negotiation with the target supplier',
+                'inputSchema' => ['coalition_id' => 'integer'],
+                'outputSchema' => ['coalition' => 'array'],
+                'requiredPermissions' => ['nexus.growth.manage'],
+            ],
+            [
+                'name' => 'nexus.coalition.leave',
+                'description' => 'Leave a coalition the calling Business previously joined, while it is still Forming',
+                'inputSchema' => ['coalition_id' => 'integer'],
+                'outputSchema' => [],
+                'requiredPermissions' => ['nexus.growth.manage'],
+            ],
+            [
+                'name' => 'nexus.coalition.cancel',
+                'description' => 'Organizer-only: cancel a coalition (Forming or Negotiating)',
+                'inputSchema' => ['coalition_id' => 'integer'],
+                'outputSchema' => ['coalition' => 'array'],
+                'requiredPermissions' => ['nexus.growth.manage'],
+            ],
         ];
     }
 }

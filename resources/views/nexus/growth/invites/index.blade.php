@@ -5,6 +5,12 @@
 @section('content')
     <div class="mx-auto max-w-3xl space-y-4">
         <x-nexus-panel :title="t('messages.nexus.growth.invites.title')">
+            <div class="mb-4 flex justify-end">
+                <a href="{{ route('nexus.growth.coalitions.index') }}" class="shrink-0 rounded-md border border-nexus-cyan/40 px-3 py-1.5 text-sm text-nexus-cyan hover:bg-nexus-cyan/10">
+                    {{ t('messages.nexus.growth.coalitions.title') }}
+                </a>
+            </div>
+
             @if (session('status'))
                 <div class="mb-4 rounded-md border border-nexus-success/40 bg-nexus-success/10 px-4 py-3 text-sm text-nexus-success">
                     {{ session('status') }}

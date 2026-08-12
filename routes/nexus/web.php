@@ -6,6 +6,7 @@ use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessLogoutControl
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\RegisterBusinessController;
 use App\Domains\Nexus\Credit\Interfaces\Http\Controllers\CreditPurchaseCallbackController;
 use App\Domains\Nexus\Credit\Interfaces\Http\Controllers\CreditPurchaseController;
+use App\Domains\Nexus\Growth\Interfaces\Http\Controllers\CoalitionController;
 use App\Domains\Nexus\Growth\Interfaces\Http\Controllers\InviteController;
 use App\Domains\Nexus\Growth\Interfaces\Http\Controllers\ReferralController;
 use App\Domains\Nexus\Negotiation\Interfaces\Http\Controllers\NegotiationViewerController;
@@ -81,5 +82,16 @@ Route::middleware('web')->group(function () {
         Route::get('/referrals', [ReferralController::class, 'index'])->name('referrals.index');
         Route::get('/invites', [InviteController::class, 'index'])->name('invites.index');
         Route::post('/invites', [InviteController::class, 'store'])->name('invites.store');
+
+        Route::prefix('coalitions')->name('coalitions.')->group(function () {
+            Route::get('/', [CoalitionController::class, 'index'])->name('index');
+            Route::get('/create', [CoalitionController::class, 'create'])->name('create');
+            Route::post('/', [CoalitionController::class, 'store'])->name('store');
+            Route::get('/{coalition}', [CoalitionController::class, 'show'])->name('show');
+            Route::post('/{coalition}/join', [CoalitionController::class, 'join'])->name('join');
+            Route::post('/{coalition}/leave', [CoalitionController::class, 'leave'])->name('leave');
+            Route::post('/{coalition}/close', [CoalitionController::class, 'close'])->name('close');
+            Route::post('/{coalition}/cancel', [CoalitionController::class, 'cancel'])->name('cancel');
+        });
     });
 });

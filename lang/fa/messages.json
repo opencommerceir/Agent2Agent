@@ -328,6 +328,37 @@
           "sent": "ارسال شده",
           "converted": "تبدیل شده"
         }
+      },
+      "coalitions": {
+        "title": "خرید گروهی",
+        "how_it_works": "سفارش خود را با کسب‌وکارهای دیگر ترکیب کنید تا تخفیف عمده از تأمین‌کننده بگیرید.",
+        "create_new": "ایجاد ائتلاف",
+        "empty": "در حال حاضر ائتلاف بازی وجود ندارد.",
+        "catalog_item": "کالا",
+        "discount": "تخفیف",
+        "members": "اعضا",
+        "total_quantity": "مجموع تعداد",
+        "join": "پیوستن",
+        "leave": "خروج",
+        "close": "بستن و پیشنهاد معامله",
+        "cancel": "لغو",
+        "status": {
+          "forming": "در حال شکل‌گیری",
+          "negotiating": "در حال مذاکره",
+          "completed": "تکمیل شده",
+          "cancelled": "لغو شده"
+        },
+        "form": {
+          "target_business_id": "تأمین‌کننده هدف (شناسه کسب‌وکار)",
+          "catalog_item_type": "نوع کالا",
+          "catalog_item_id": "شناسه کالا",
+          "unit_price_amount": "قیمت واحد (کوچک‌ترین واحد)",
+          "unit_price_currency": "واحد پول",
+          "min_participants": "حداقل تعداد شرکت‌کننده",
+          "discount_percent": "تخفیف درخواستی (٪)",
+          "quantity": "تعداد شما",
+          "submit": "ایجاد ائتلاف"
+        }
       }
     },
     "negotiation": {
