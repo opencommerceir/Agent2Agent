@@ -62,6 +62,7 @@ use App\Domains\Nexus\Llm\Infrastructure\Providers\OpenAILLMProvider;
 use App\Domains\Nexus\Llm\Infrastructure\Providers\OpenRouterLLMProvider;
 use App\Domains\Nexus\Llm\Infrastructure\Providers\SelfHostedQwenLLMProvider;
 use App\Domains\Nexus\Llm\Infrastructure\Repositories\EloquentLLMUsageLogRepository;
+use App\Domains\Nexus\Marketplace\Application\Actions\GetBusinessNetworkAction;
 use App\Domains\Nexus\Marketplace\Application\Actions\SearchMarketplaceAction;
 use App\Domains\Nexus\Negotiation\Application\Actions\AcceptDealAction;
 use App\Domains\Nexus\Negotiation\Application\Actions\GetNegotiationAction;
@@ -218,6 +219,12 @@ class NexusServiceProvider extends ServiceProvider
                 query: $input['query'] ?? null,
                 industry: $input['industry'] ?? null,
             );
+        });
+
+        $handlers->register('nexus.marketplace.network', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            return $this->app->make(GetBusinessNetworkAction::class)->execute($callingBusinessId)->toArray();
         });
 
         $handlers->register('nexus.credit.balance', function (array $input, AuthContext $context) {

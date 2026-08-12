@@ -36,6 +36,16 @@ final class MarketplaceCapabilities
                 'outputSchema' => ['listings' => 'array'],
                 'requiredPermissions' => ['nexus.marketplace.read'],
             ],
+            [
+                'name' => 'nexus.marketplace.network',
+                'description' => "Get the calling Business's real relationship graph — direct Negotiation/Coalition partners, plus businesses those partners work with (Phase 5, Network Visualization)",
+                // Free, like nexus.credit.balance/nexus.referral.status —
+                // viewing your own relationship graph must never itself be
+                // gated by the CostGate (Phase 3/M2).
+                'inputSchema' => [],
+                'outputSchema' => ['nodes' => 'array', 'edges' => 'array'],
+                'requiredPermissions' => ['nexus.marketplace.read'],
+            ],
         ];
     }
 }

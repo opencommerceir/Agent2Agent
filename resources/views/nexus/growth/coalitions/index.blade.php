@@ -7,9 +7,14 @@
         <x-nexus-panel :title="t('messages.nexus.growth.coalitions.title')">
             <div class="mb-4 flex items-center justify-between">
                 <p class="text-sm text-nexus-text-muted">{{ t('messages.nexus.growth.coalitions.how_it_works') }}</p>
-                <a href="{{ route('nexus.growth.coalitions.create') }}" class="shrink-0 rounded-md bg-nexus-cyan/20 px-3 py-1.5 text-sm font-semibold text-nexus-cyan hover:bg-nexus-cyan/30">
-                    {{ t('messages.nexus.growth.coalitions.create_new') }}
-                </a>
+                <div class="flex shrink-0 gap-2">
+                    <a href="{{ route('nexus.network.index') }}" class="rounded-md border border-nexus-cyan/40 px-3 py-1.5 text-sm text-nexus-cyan hover:bg-nexus-cyan/10">
+                        {{ t('messages.nexus.network.title') }}
+                    </a>
+                    <a href="{{ route('nexus.growth.coalitions.create') }}" class="rounded-md bg-nexus-cyan/20 px-3 py-1.5 text-sm font-semibold text-nexus-cyan hover:bg-nexus-cyan/30">
+                        {{ t('messages.nexus.growth.coalitions.create_new') }}
+                    </a>
+                </div>
             </div>
 
             @if (count($coalitions) === 0)

@@ -361,6 +361,17 @@
         }
       }
     },
+    "network": {
+      "title": "Your Network",
+      "how_it_works": "Businesses you've actually negotiated deals or formed coalitions with, plus businesses those partners work with.",
+      "empty": "No connections yet — accept a Negotiation or join a Coalition to start building your network.",
+      "legend": {
+        "self": "You",
+        "direct": "Direct partner",
+        "coalition": "Coalition partner",
+        "recommended": "Recommended (2 hops away)"
+      }
+    },
     "negotiation": {
       "index": {
         "title": "Negotiations",

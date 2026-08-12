@@ -9,6 +9,7 @@ use App\Domains\Nexus\Credit\Interfaces\Http\Controllers\CreditPurchaseControlle
 use App\Domains\Nexus\Growth\Interfaces\Http\Controllers\CoalitionController;
 use App\Domains\Nexus\Growth\Interfaces\Http\Controllers\InviteController;
 use App\Domains\Nexus\Growth\Interfaces\Http\Controllers\ReferralController;
+use App\Domains\Nexus\Marketplace\Interfaces\Http\Controllers\NetworkController;
 use App\Domains\Nexus\Negotiation\Interfaces\Http\Controllers\NegotiationViewerController;
 use Illuminate\Support\Facades\Route;
 
@@ -94,4 +95,8 @@ Route::middleware('web')->group(function () {
             Route::post('/{coalition}/cancel', [CoalitionController::class, 'cancel'])->name('cancel');
         });
     });
+
+    // Network Visualization (Phase 5, M4) — Marketplace domain, same
+    // 'business.auth' guard as the rest of the business-facing portal.
+    Route::middleware('business.auth:business')->get('/nexus/network', [NetworkController::class, 'index'])->name('nexus.network.index');
 });
