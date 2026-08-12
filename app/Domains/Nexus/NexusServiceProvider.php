@@ -16,8 +16,16 @@ use App\Domains\Nexus\Catalog\Domain\Repositories\ServiceRepositoryInterface;
 use App\Domains\Nexus\Catalog\Infrastructure\Repositories\EloquentProductRepository;
 use App\Domains\Nexus\Catalog\Infrastructure\Repositories\EloquentServiceRepository;
 use App\Domains\Nexus\Marketplace\Application\Actions\SearchMarketplaceAction;
+use App\Domains\Nexus\Negotiation\Application\Actions\AcceptDealAction;
+use App\Domains\Nexus\Negotiation\Application\Actions\GetNegotiationAction;
+use App\Domains\Nexus\Negotiation\Application\Actions\InitiateNegotiationAction;
+use App\Domains\Nexus\Negotiation\Application\Actions\RejectDealAction;
+use App\Domains\Nexus\Negotiation\Application\Actions\SendCounterOfferAction;
 use App\Domains\Nexus\Negotiation\Domain\Repositories\NegotiationMessageRepositoryInterface;
 use App\Domains\Nexus\Negotiation\Domain\Repositories\NegotiationRepositoryInterface;
+use App\Domains\Nexus\Negotiation\Domain\ValueObjects\CatalogItemType;
+use App\Domains\Nexus\Negotiation\Domain\ValueObjects\Money as NegotiationMoney;
+use App\Domains\Nexus\Negotiation\Domain\ValueObjects\NegotiationTerms;
 use App\Domains\Nexus\Negotiation\Infrastructure\Repositories\EloquentNegotiationMessageRepository;
 use App\Domains\Nexus\Negotiation\Infrastructure\Repositories\EloquentNegotiationRepository;
 use Illuminate\Support\Facades\Event;
@@ -68,7 +76,7 @@ class NexusServiceProvider extends ServiceProvider
         $handlers = $this->app->make(CapabilityHandlerRegistry::class);
 
         $handlers->register('nexus.marketplace.search', function (array $input, AuthContext $context) {
-            $callingBusinessId = $this->app->make(ResolveActingBusinessAction::class)->execute($context->agentId);
+            $callingBusinessId = $this->resolveActingBusiness($context);
 
             return $this->app->make(SearchMarketplaceAction::class)->execute(
                 callingBusinessId: $callingBusinessId,
@@ -76,5 +84,77 @@ class NexusServiceProvider extends ServiceProvider
                 industry: $input['industry'] ?? null,
             );
         });
+
+        $this->registerNegotiationCapabilityHandlers($handlers);
+    }
+
+    private function registerNegotiationCapabilityHandlers(CapabilityHandlerRegistry $handlers): void
+    {
+        $handlers->register('nexus.negotiation.propose', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            $negotiation = $this->app->make(InitiateNegotiationAction::class)->execute(
+                initiatorBusinessId: $callingBusinessId,
+                counterpartyBusinessId: (int) $input['counterparty_business_id'],
+                catalogItemType: CatalogItemType::from($input['catalog_item_type']),
+                catalogItemId: (int) $input['catalog_item_id'],
+                terms: new NegotiationTerms(
+                    NegotiationMoney::fromAmount((int) $input['price_amount'], $input['price_currency']),
+                    (int) ($input['quantity'] ?? 1),
+                    $input['notes'] ?? null,
+                ),
+            );
+
+            return ['negotiation' => $negotiation->toArray()];
+        });
+
+        $handlers->register('nexus.negotiation.counter', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            $negotiation = $this->app->make(SendCounterOfferAction::class)->execute(
+                negotiationId: (int) $input['negotiation_id'],
+                actingBusinessId: $callingBusinessId,
+                terms: new NegotiationTerms(
+                    NegotiationMoney::fromAmount((int) $input['price_amount'], $input['price_currency']),
+                    (int) ($input['quantity'] ?? 1),
+                    $input['notes'] ?? null,
+                ),
+            );
+
+            return ['negotiation' => $negotiation->toArray()];
+        });
+
+        $handlers->register('nexus.negotiation.accept', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            $negotiation = $this->app->make(AcceptDealAction::class)->execute((int) $input['negotiation_id'], $callingBusinessId);
+
+            return ['negotiation' => $negotiation->toArray()];
+        });
+
+        $handlers->register('nexus.negotiation.reject', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            $negotiation = $this->app->make(RejectDealAction::class)->execute(
+                (int) $input['negotiation_id'],
+                $callingBusinessId,
+                $input['reason'] ?? null,
+            );
+
+            return ['negotiation' => $negotiation->toArray()];
+        });
+
+        $handlers->register('nexus.negotiation.status', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            $negotiation = $this->app->make(GetNegotiationAction::class)->execute((int) $input['negotiation_id'], $callingBusinessId);
+
+            return ['negotiation' => $negotiation->toArray()];
+        });
+    }
+
+    private function resolveActingBusiness(AuthContext $context): int
+    {
+        return $this->app->make(ResolveActingBusinessAction::class)->execute($context->agentId);
     }
 }

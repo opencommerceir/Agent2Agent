@@ -207,3 +207,17 @@
 **کامیت:** `feat(nexus): add Negotiation domain core (state machine, terms, propose/counter/accept/reject)`.
 
 ---
+
+## Phase 2 / M4 — MCP Capabilities مذاکره + تأیید انسانی
+
+پنج capability جدید (`nexus.negotiation.{propose,counter,accept,reject,status}`) با همان الگوی manifest→Seeder→handler M2. هر پنج هندلر از `ResolveActingBusinessAction` (ساخته‌شده در M2) برای فهمیدن «کدام Business Nexus در حال تماس است» استفاده می‌کنند — دقیقاً همان سرمایه‌گذاری مشترک که برایش ساخته شد.
+
+**باگ واقعی پیدا و رفع شد در حین طراحی:** ابتدا خواستم `AcceptDealAction` را برای «تأیید انسانی یک مذاکرهٔ Pending» دوباره استفاده کنم، ولی چون آن Action دوباره authority_limits را چک می‌کند، در حالت Pending دوباره سعی می‌کرد `requestApproval()` بزند — که طبق جدول `ALLOWED_TRANSITIONS` از حالت `pending_approval` به خودش مجاز نیست و Exception می‌داد. راه‌حل: دو Action مجزا و ساده — `ApprovePendingNegotiationAction`/`RejectPendingNegotiationAction` — که مستقیم `accept()`/`reject()` را صدا می‌زنند، بدون چک مجدد آستانه (چون انسان از قبل تصمیم گرفته).
+
+**محدودیت شناخته‌شده (مستند):** در حال حاضر هر یک از دو طرف مذاکره می‌تواند یک Pending Approval را تأیید/رد کند، نه فقط طرفی که آستانه‌اش رد شده — چون Negotiation entity هنوز رکورد نمی‌کند کدام طرف باعث Pending شدن شده. تنگ‌کردن این محدوده، کار فاز بعدی است، نه سهل‌انگاری این فاز.
+
+**تست:** ۶ تست Feature جدید — یک سناریوی کامل propose→counter→accept→status با دو توکن Bearer واقعی روی `/mcp/v1/execute`، سناریوی reject، سناریوی عبور از آستانه اختیار (→ pending_approval)، و ۳ تست روی Approve/Reject انسانی. یک باگ تست پیدا شد (پیشنهاد به خودِ همان کسب‌وکار به‌جای طرف مقابل) و رفع شد. کل تست‌های Negotiation: ۳۲ پاس (۱۷ Unit + ۱۵ Feature).
+
+**کامیت:** `feat(nexus): wire nexus.negotiation.* MCP capabilities + human approval actions`.
+
+---
