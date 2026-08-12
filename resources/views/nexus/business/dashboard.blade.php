@@ -56,6 +56,22 @@
             <x-nexus-panel :title="t('messages.nexus.business.dashboard.negotiations')">
                 <x-metric-card :label="t('messages.nexus.business.dashboard.active_negotiations')" :value="$activeNegotiations ?? '—'" />
             </x-nexus-panel>
+
+            <x-nexus-panel :title="t('messages.nexus.business.dashboard.reputation')">
+                <div class="flex items-center gap-3">
+                    <x-metric-card :label="t('messages.nexus.business.dashboard.reputation_score')" :value="$reputationScore->score" />
+                    @if ($reputationScore->reviewCount > 0)
+                        <span class="text-xs text-nexus-text-muted">{{ $reputationScore->averageRating }}/5 ({{ $reputationScore->reviewCount }})</span>
+                    @endif
+                </div>
+                @if ($reputationScore->badges !== [])
+                    <div class="mt-2 flex flex-wrap gap-1.5">
+                        @foreach ($reputationScore->badges as $badge)
+                            <x-status-badge status="success" :label="t('messages.nexus.reputation.badges.'.$badge)" />
+                        @endforeach
+                    </div>
+                @endif
+            </x-nexus-panel>
         </div>
     </div>
 @endsection

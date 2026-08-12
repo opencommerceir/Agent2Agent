@@ -77,6 +77,7 @@ use App\Domains\Nexus\Negotiation\Domain\ValueObjects\NegotiationTerms;
 use App\Domains\Nexus\Negotiation\Domain\Events\NegotiationWasAccepted;
 use App\Domains\Nexus\Negotiation\Infrastructure\Repositories\EloquentNegotiationMessageRepository;
 use App\Domains\Nexus\Negotiation\Infrastructure\Repositories\EloquentNegotiationRepository;
+use App\Domains\Nexus\Reputation\Application\Actions\CalculateReputationScoreAction;
 use App\Domains\Nexus\Reputation\Application\Actions\ListReviewsForBusinessAction;
 use App\Domains\Nexus\Reputation\Application\Actions\SubmitReviewAction;
 use App\Domains\Nexus\Reputation\Domain\Repositories\ReviewRepositoryInterface;
@@ -285,6 +286,14 @@ class NexusServiceProvider extends ServiceProvider
             $reviews = $this->app->make(ListReviewsForBusinessAction::class)->execute((int) $input['business_id']);
 
             return ['reviews' => array_map(fn ($r) => $r->toArray(), $reviews)];
+        });
+
+        $handlers->register('nexus.reputation.score', function (array $input, AuthContext $context) {
+            $this->resolveActingBusiness($context);
+
+            $score = $this->app->make(CalculateReputationScoreAction::class)->execute((int) $input['business_id']);
+
+            return ['score' => $score->toArray()];
         });
     }
 

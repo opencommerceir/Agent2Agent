@@ -270,7 +270,9 @@
         "credit": "کردیت",
         "credit_balance": "موجودی",
         "negotiations": "مذاکرات",
-        "active_negotiations": "فعال"
+        "active_negotiations": "فعال",
+        "reputation": "اعتبار",
+        "reputation_score": "امتیاز"
       },
       "industry": {
         "retail": "خرده‌فروشی",
@@ -428,6 +430,13 @@
         "rating": "امتیاز",
         "comment_placeholder": "نظر شما (اختیاری)",
         "submit": "ثبت نظر"
+      }
+    },
+    "reputation": {
+      "badges": {
+        "verified": "تأیید شده",
+        "top_rated": "برترین امتیاز",
+        "gold_partner": "همکار طلایی"
       }
     },
     "credit": {

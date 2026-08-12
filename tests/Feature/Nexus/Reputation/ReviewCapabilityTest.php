@@ -98,6 +98,22 @@ class ReviewCapabilityTest extends TestCase
         $submit->assertStatus(403);
     }
 
+    public function test_reputationScore_viaMcp_returnsComputedScore(): void
+    {
+        $buyer = $this->verifiedBusiness('Buyer Co');
+        $seller = $this->verifiedBusiness('Seller Co');
+        $buyerToken = $this->tokenFor($buyer->id, ['nexus.reputation.read']);
+
+        $response = $this->postJson('/mcp/v1/execute', [
+            'capability' => 'nexus.reputation.score',
+            'input' => ['business_id' => $seller->id],
+        ], ['Authorization' => "Bearer {$buyerToken}"]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.score.businessId', $seller->id);
+        $response->assertJsonPath('data.score.badges', ['verified']);
+    }
+
     private function verifiedBusiness(string $nameEn): BusinessData
     {
         $business = app(RegisterBusinessAction::class)->execute("نام {$nameEn}", $nameEn, BusinessType::Company, Industry::Technology);

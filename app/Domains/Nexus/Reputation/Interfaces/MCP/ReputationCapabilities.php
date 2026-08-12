@@ -35,6 +35,16 @@ final class ReputationCapabilities
                 'outputSchema' => ['reviews' => 'array'],
                 'requiredPermissions' => ['nexus.reputation.read'],
             ],
+            [
+                'name' => 'nexus.reputation.score',
+                'description' => "Get a Business's computed reputation score (0-1000), badges, and component breakdown — check this before negotiating with an unfamiliar counterparty",
+                'inputSchema' => ['business_id' => 'integer'],
+                'outputSchema' => ['score' => 'array'],
+                // Free, like nexus.credit.balance/nexus.marketplace.network —
+                // checking trust signals before deciding whether to deal
+                // with someone must never itself be gated by the CostGate.
+                'requiredPermissions' => ['nexus.reputation.read'],
+            ],
         ];
     }
 }

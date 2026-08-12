@@ -270,7 +270,9 @@
         "credit": "Credit",
         "credit_balance": "Balance",
         "negotiations": "Negotiations",
-        "active_negotiations": "Active"
+        "active_negotiations": "Active",
+        "reputation": "Reputation",
+        "reputation_score": "Score"
       },
       "industry": {
         "retail": "Retail",
@@ -428,6 +430,13 @@
         "rating": "Rating",
         "comment_placeholder": "Your comment (optional)",
         "submit": "Submit review"
+      }
+    },
+    "reputation": {
+      "badges": {
+        "verified": "Verified",
+        "top_rated": "Top-Rated",
+        "gold_partner": "Gold Partner"
       }
     },
     "credit": {

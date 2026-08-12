@@ -223,6 +223,36 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Reputation (Phase 6 — Trust & Reputation)
+    |--------------------------------------------------------------------------
+    |
+    | CalculateReputationScoreAction's weights (must sum to 1000, the
+    | roadmap's own "امتیاز ۰ تا ۱۰۰۰" scale) and the threshold badges are
+    | derived at, not stored. Read once per call (not hot-reloadable like
+    | margin.* or llm.* — no dedicated admin settings page exists for these,
+    | unlike MarginSettingsService/LLMSettingsService, since nothing in
+    | Phase 6's scope asked for one).
+    |
+    */
+    'reputation' => [
+        'weights' => [
+            'success_rate' => (int) env('NEXUS_REPUTATION_WEIGHT_SUCCESS_RATE', 500),
+            'rating' => (int) env('NEXUS_REPUTATION_WEIGHT_RATING', 400),
+            'longevity' => (int) env('NEXUS_REPUTATION_WEIGHT_LONGEVITY', 100),
+        ],
+        // Months of Business tenure before the longevity component maxes out.
+        'longevity_full_months' => (int) env('NEXUS_REPUTATION_LONGEVITY_FULL_MONTHS', 12),
+
+        'badges' => [
+            'top_rated_min_reviews' => (int) env('NEXUS_REPUTATION_TOP_RATED_MIN_REVIEWS', 5),
+            'top_rated_min_average' => (float) env('NEXUS_REPUTATION_TOP_RATED_MIN_AVERAGE', 4.5),
+            'gold_partner_min_score' => (int) env('NEXUS_REPUTATION_GOLD_PARTNER_MIN_SCORE', 800),
+            'gold_partner_min_deals' => (int) env('NEXUS_REPUTATION_GOLD_PARTNER_MIN_DEALS', 10),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Theme (Jarvis)
     |--------------------------------------------------------------------------
     |

@@ -9,6 +9,7 @@ use App\Domains\Nexus\Catalog\Domain\Repositories\ServiceRepositoryInterface;
 use App\Domains\Nexus\Credit\Domain\Repositories\CreditBalanceRepositoryInterface;
 use App\Domains\Nexus\Negotiation\Domain\Repositories\NegotiationRepositoryInterface;
 use App\Domains\Nexus\Negotiation\Domain\ValueObjects\NegotiationStatus;
+use App\Domains\Nexus\Reputation\Application\Actions\CalculateReputationScoreAction;
 use InvalidArgumentException;
 
 /**
@@ -41,6 +42,7 @@ final class GetBusinessDashboardAction
         private readonly ServiceRepositoryInterface $services,
         private readonly CreditBalanceRepositoryInterface $creditBalances,
         private readonly NegotiationRepositoryInterface $negotiations,
+        private readonly CalculateReputationScoreAction $reputationScore,
     ) {
     }
 
@@ -52,6 +54,7 @@ final class GetBusinessDashboardAction
      *     serviceCount: int,
      *     creditBalance: ?int,
      *     activeNegotiations: int,
+     *     reputationScore: \App\Domains\Nexus\Reputation\Application\DTOs\ReputationScoreData,
      * }
      */
     public function execute(int $businessId): array
@@ -74,6 +77,7 @@ final class GetBusinessDashboardAction
             'serviceCount' => count($this->services->findByBusinessId($businessId)),
             'creditBalance' => $this->creditBalances->findByBusinessId($businessId)?->balance(),
             'activeNegotiations' => count($activeNegotiations),
+            'reputationScore' => $this->reputationScore->execute($businessId),
         ];
     }
 }

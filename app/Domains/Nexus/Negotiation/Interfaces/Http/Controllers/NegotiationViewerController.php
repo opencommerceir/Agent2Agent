@@ -14,6 +14,7 @@ use App\Domains\Nexus\Negotiation\Application\Actions\ListMyNegotiationsAction;
 use App\Domains\Nexus\Negotiation\Application\Actions\ListNegotiationMessagesAction;
 use App\Domains\Nexus\Negotiation\Application\Actions\PollNegotiationMessagesAction;
 use App\Domains\Nexus\Negotiation\Application\Actions\RejectPendingNegotiationAction;
+use App\Domains\Nexus\Reputation\Application\Actions\CalculateReputationScoreAction;
 use App\Domains\Nexus\Reputation\Application\Actions\SubmitReviewAction;
 use App\Domains\Nexus\Reputation\Domain\Repositories\ReviewRepositoryInterface;
 use App\Http\Controllers\Controller;
@@ -46,6 +47,7 @@ class NegotiationViewerController extends Controller
         private readonly DisputeEscrowAction $disputeEscrow,
         private readonly ReviewRepositoryInterface $reviews,
         private readonly SubmitReviewAction $submitReview,
+        private readonly CalculateReputationScoreAction $reputationScore,
     ) {
     }
 
@@ -75,6 +77,7 @@ class NegotiationViewerController extends Controller
             'actingBusinessId' => $businessId,
             'otherPartyNameFa' => $otherParty?->nameFa() ?? '—',
             'otherPartyNameEn' => $otherParty?->nameEn() ?? '—',
+            'otherPartyReputation' => $otherParty ? $this->reputationScore->execute($otherPartyId) : null,
             'escrow' => $escrow ? EscrowData::fromEntity($escrow) : null,
             'myReview' => $myReview,
         ]);

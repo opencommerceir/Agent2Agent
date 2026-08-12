@@ -32,7 +32,12 @@
         <x-nexus-panel>
             <div class="flex items-center justify-between">
                 <div>
-                    <p class="text-sm text-nexus-text">{{ t('messages.nexus.negotiation.show.title') }} #{{ $negotiation->id }} — {{ t('messages.nexus.negotiation.show.with') }} {{ $otherPartyName }}</p>
+                    <p class="text-sm text-nexus-text">
+                        {{ t('messages.nexus.negotiation.show.title') }} #{{ $negotiation->id }} — {{ t('messages.nexus.negotiation.show.with') }} {{ $otherPartyName }}
+                        @if ($otherPartyReputation)
+                            <span class="text-xs text-nexus-cyan">({{ $otherPartyReputation->score }}/1000@if ($otherPartyReputation->reviewCount > 0), {{ $otherPartyReputation->averageRating }}/5@endif)</span>
+                        @endif
+                    </p>
                     <p class="text-xs text-nexus-text-muted">{{ t('messages.nexus.negotiation.show.round') }} {{ $negotiation->roundCount }}/{{ $negotiation->maxRounds }}</p>
                 </div>
                 <x-status-badge :status="$negotiation->status === 'accepted' ? 'success' : ($negotiation->status === 'rejected' ? 'error' : ($negotiation->status === 'pending_approval' ? 'warning' : 'idle'))" :label="t('messages.nexus.negotiation.status.'.$negotiation->status)" />
