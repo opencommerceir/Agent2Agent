@@ -471,3 +471,150 @@
 **آماده برای Phase 4 (LLM Provider System)** طبق `docs/nexus-roadmap.md`.
 
 ---
+
+# Phase 4 — LLM Provider System
+
+**دستور:** «برو سراغ فاز 4 کامل کن» (بعد از تأیید Phase 3). قبل از کدنویسی، سه Explore agent موازی روی زیرساخت موجود (LLM موجود در AgentOrchestrator، الگوی hot-reload/CostGate Phase 3، الگوی Connector Registry/wiring در NexusServiceProvider) اجرا شد و پلن کامل ۸ مرحله‌ای (M1–M8) تأیید شد — با یک تصمیم صریح پیش از هر خط کد: **بازنویسی reasoning مذاکره به LLM واقعی عمداً خارج از اسکوپ این فاز است** (پایین‌تر توضیح داده شده).
+
+**یافتهٔ کلیدی پیش از کدنویسی:** یک انتزاع LLM دیگر، ساده‌تر و کاملاً جدا، از قبل در ماژول *فعال* `AgentOrchestrator` وجود داشت (`LLMClientInterface::complete()/completeStructured()`، پیاده‌سازی‌های واقعی OpenAI/Claude/OpenRouter، یک بایندینگ سراسری واحد، بدون متادیتای cost/token). این انتزاع فاقد شکل موردنیاز Phase 4 بود (بدون cost/token/latency، بدون رجیستری چندگانه) و طبق قانون ۱ («Extend, Don't Rebuild») بررسی شد ولی **عمداً reuse نشد** — یک طراحی موازی مستقل، نه نقض آن قانون، چون شکل واقعاً متفاوت بود (برخلاف Zibal/Stripe در Phase 3/M3 که شکل دقیقاً یکی بود). در عوض، الگوهای اثبات‌شدهٔ HTTP آن (Guzzle، `?ClientInterface $http = null` تزریق‌پذیر، نرمال‌سازی خطا به یک Exception) کپی شد. همچنین `config/nexus/platform.php` از قبل یک بخش `llm` داشت که هیچ‌کدام کدهای فعلی آن را نمی‌خواندند — کاملاً آزاد برای بازطراحی بدون شکستن چیزی.
+
+---
+
+## Phase 4 / M1 — هستهٔ دامنهٔ LLM Provider
+
+**تصمیم کلیدی:** `LLMProviderInterface` (`chat()`/`estimateCost()`/`supports()`، دقیقاً طبق `docs/nexus-roadmap.md`) در `Domain/Services` قرار گرفت (نه `Domain/Repositories`) چون یک پورت خروجی به سیستم خارجی است، نه پورت پایداری — دقیقاً همان جایگاه `LLMClientInterface` در AgentOrchestrator. `LLMResponse` یک Value Object دامنه (immutable، فکتوری استاتیک `success()`) است چون خروجی یک اینترفیس دامنه است. فیلد `error` طبق شکل مستندشدهٔ `docs/claude/llm-strategy.md` نگه داشته شد ولی همیشه `null` است — هر خطای واقعی در این کدبیس با یک Exception تایپ‌شده اعلام می‌شود، نه یک پاسخ soft-error.
+
+**فایل‌های اصلی:** `app/Domains/Nexus/Llm/Domain/{Services/LLMProviderInterface, ValueObjects/{LLMResponse,LLMFeature}, Exceptions/*}.php`، بازنویسی کامل بخش `llm` در `config/nexus/platform.php` (شمای جدید: `providers` با ۶ کلید، `provider_tiers`، `feature_providers`، `fallback_chain`، `cost_control`، `behavior`).
+
+**تست:** ۵ تست جدید (Unit روی `LLMResponse`/`LLMFeature`) — همه پاس.
+
+**کامیت:** `feat(nexus): add LLM Provider domain core (interface, response VO, exceptions)`.
+
+---
+
+## Phase 4 / M2 — پیاده‌سازی‌های واقعی Provider + رجیستری
+
+**تصمیم کلیدی:** پنج از شش provider (OpenAI, OpenRouter, Groq, self-hosted Qwen, local Llama) دقیقاً همان فرمت سیمی OpenAI Chat Completions را صحبت می‌کنند — پس یک `AbstractOpenAiCompatibleProvider` مشترک منطق HTTP را یک‌بار پیاده می‌کند؛ فقط `AnthropicLLMProvider` جدا ماند (Messages API واقعاً متفاوت است — دقیقاً همان دلیلی که `ClaudeClient` را از `OpenAIClient` جدا نگه داشته بود). `LLMProviderRegistry` پنجمین کاربرد الگوی Connector همین کدبیس است (`ConnectorRegistry`/`ShippingProviderRegistry`/`ChannelSenderRegistry`/`PaymentGatewayRegistry`) — عیناً از `PaymentGatewayRegistry` کپی شد (`register`/`get`/`registered` + یک `NotFoundException`).
+
+**باگ واقعی که از قبل مستند بود، این‌بار پیشگیرانه رعایت شد:** همان مشکل RFC 3986 که در `OpenRouterClient` (AgentOrchestrator) واقعاً رخ داده بود (وقتی `base_uri` خودش یک path segment دارد، مسیر درخواست باید بدون `/` ابتدایی باشد وگرنه Guzzle آن segment را بی‌صدا حذف می‌کند) — این‌بار در `AbstractOpenAiCompatibleProvider` از روز اول با `rtrim($baseUrl,'/').'/'` + مسیر نسبی رعایت شد و برای هر Provider با تست جداگانه (`UriResolver::resolve` روی کلاینت واقعی پشت Reflection) تأیید شد.
+
+**Provider های local/self-hosted:** چون هیچ سرور مدل محلی واقعی در این محیط توسعه اجرا نمی‌شود (همان صداقت مستندشدهٔ هر Connector خارجی دیگر این کدبیس)، به یک endpoint قابل‌تنظیم و سازگار با OpenAI (پیش‌فرض سبک Ollama، `http://localhost:11434/v1`) اشاره می‌کنند؛ `estimateCost()` برایشان همیشه `0.0` است، بدون قید‌وشرط.
+
+**فایل‌های اصلی:** ۷ کلاس Provider زیر `Infrastructure/Providers/**`، `Application/Services/LLMProviderRegistry.php`، بروزرسانی `NexusServiceProvider` (singleton جدید + ثبت هر ۶ provider در `boot()` از روی `config('nexus.platform.llm.providers.*')`).
+
+**تست:** ۳۸ تست جدید (۴ Unit روی رجیستری، ۳۴ Feature روی ۶ Provider — هرکدام با Guzzle `MockHandler`، هیچ HTTP واقعی) — همه پاس. کل تست‌های Nexus: ۲۳۳ پاس.
+
+**کامیت:** `feat(nexus): add LLM provider adapters + registry (OpenAI/Anthropic/OpenRouter/Groq/local Qwen/local Llama)`.
+
+---
+
+## Phase 4 / M3 — دفتر کل هزینه (`LLMUsageLog`)
+
+**تصمیم کلیدی:** `LLMUsageLog` عیناً همان شکل `CreditTransaction` را کپی می‌کند (ردیف immutable، بدون `updated_at`، فکتوری استاتیک `record()`) — همان فلسفهٔ audit-trail، این‌بار برای هر تلاش فراخوانی LLM (موفق یا ناموفق، اصلی یا fallback). `businessId`/`agentId` هر دو nullable هستند تا پینگ‌های «تست اتصال» ادمین (بدون هیچ Business/Agent) هم بتوانند ثبت شوند — یک پینگ روی provider پولی واقعاً هزینهٔ واقعی دارد و نباید بی‌صدا از audit trail غایب باشد.
+
+**`chargedCostUsd`** برای اولین‌بار به‌ `MarginSettingsService::llmCostMarkupPercent()` (که از Phase 3/M5 وجود داشت ولی هیچ‌وقت صدا زده نشده بود) یک caller واقعی می‌دهد: `chargedCostUsd = realCostUsd × (۱ + markup/۱۰۰)`. تجمیع (برای چک بودجهٔ M6) عمداً از repository جدا نگه داشته شد و در یک `LLMUsageQuery` (شِل خالی در این مرحله) قرار گرفت — دقیقاً همان جداسازی که `RevenueQuery` قبلاً برای Analytics تثبیت کرده بود.
+
+**فایل‌های اصلی:** `app/Domains/Nexus/Llm/{Domain/Entities/LLMUsageLog, Domain/Repositories/LLMUsageLogRepositoryInterface, Infrastructure/{Models,Repositories,Queries}/*}.php`، `database/migrations/nexus/..._create_nexus_llm_usage_logs_table.php`.
+
+**تست:** ۷ تست جدید (۴ Unit روی Entity، ۳ Feature روی رفت‌وبرگشت واقعی دیتابیس) — همه پاس. کل تست‌های Nexus: ۲۴۰ پاس.
+
+**کامیت:** `feat(nexus): add LLM cost ledger (LLMUsageLog)`.
+
+---
+
+## Phase 4 / M4 — `LLMSettingsService` (hot-reload)
+
+**تصمیم کلیدی:** کپی ساختاری دقیق `MarginSettingsService` (همان `Cache::rememberForever`/`Cache::forget`، همان fallback به `config()`) با یک `CACHE_PREFIX` مستقل (`nexus.llm_setting.`) — و همان جدول عمومی `nexus_platform_settings` را دوباره استفاده می‌کند، **بدون migration جدید**، فقط با کلیدهای تازه (`llm.feature_provider.*`, `llm.fallback_chain`, `llm.cost_control.*`). `set*()` پیش از ذخیره، شناسهٔ provider را با `LLMProviderRegistry::registered()` اعتبارسنجی می‌کند — دقیقاً همان «validate provider IDs on save» که `docs/claude/llm-strategy.md` می‌خواست؛ یک تایپوی ادمین هرگز بی‌صدا routing را خراب نمی‌کند.
+
+**فایل‌های اصلی:** `app/Domains/Nexus/Llm/Application/Services/LLMSettingsService.php`.
+
+**تست:** ۹ تست جدید (fallback به config روی نصب تازه، اثر فوری `set()` بدون پاک‌کردن کش، دیدپذیری از یک instance تازه، رد شدن provider نامعتبر بدون persist) — همه پاس. کل تست‌های Nexus: ۲۴۹ پاس.
+
+**کامیت:** `feat(nexus): add LLMSettingsService (hot-reload feature routing/budget)`.
+
+---
+
+## Phase 4 / M5 — `LLMRouter`
+
+**تصمیم کلیدی:** نقطهٔ اتصال مرکزی — provider اصلی را از `LLMSettingsService` می‌خواند، صدا می‌زند، و در صورت شکست (و فقط اگر `behavior.enable_fallback` روشن باشد) زنجیرهٔ fallback را طی می‌کند؛ یک candidate پولی وقتی provider اصلی خودش رایگان/محلی بوده، پرش داده می‌شود مگر `allow_local_to_paid_fallback` صریحاً روشن باشد («هرگز از local به paid فال‌بک نکن مگر صریحاً مجاز شود»، `docs/claude/llm-strategy.md` §۱۱). هر تلاش — موفق یا ناموفق، اصلی یا fallback — یک ردیف `LLMUsageLog` می‌سازد.
+
+**اگر کل زنجیره شکست بخورد:** `AllLLMProvidersFailedException` پرتاب می‌شود، نه یک `LLMResponse` جعلی. «استفاده از Rule Engine در صورت fail شدن همه LLMها» (roadmap) با این طراحی برآورده می‌شود که هر دامنه‌ای که این Router را صدا می‌زند، خودش این Exception را بگیرد و به منطق قطعی موجودش (مثل `NegotiationReasoningService`) برگردد — نه اینکه خودِ Router یک Rule Engine عمومی دومی اختراع کند که در این کدبیس وجود ندارد. **در این فاز هیچ caller واقعی این Exception را نمی‌گیرد** (تصمیم مستند زیر) — درستیِ این قرارداد را تست‌های همین کلاس و E2E دستی M8 اثبات می‌کنند.
+
+**فایل‌های اصلی:** `app/Domains/Nexus/Llm/Application/Services/LLMRouter.php`.
+
+**تست:** ۶ تست جدید (موفقیت اصلی، شکست اصلی→موفقیت fallback با `fromFallback=true`، شکست کل زنجیره، عدم فال‌بک خودکار local→paid، فعال‌سازی صریح آن، غیرفعال‌بودن fallback) — همه پاس. کل تست‌های Nexus: ۲۵۵ پاس.
+
+**کامیت:** `feat(nexus): add LLMRouter (provider selection, fallback chain, usage logging)`.
+
+---
+
+## Phase 4 / M6 — کنترل بودجه (`LLMBudgetGuard`)
+
+**تصمیم کلیدی (مرز عبور واحد پول):** بودجه‌ها به تومان (IRT) پیکربندی/نمایش می‌شوند (هم‌راستا با `credit.currency`)، ولی `LLMUsageLog` هزینه را به دلار (USD — واحدی که هر provider واقعی صورتحساب می‌دهد) ذخیره می‌کند. `LLMBudgetGuard` تنها نقطهٔ صریح تبدیل این دو ارز است (`× usd_to_irt_rate`) — دقیقاً همان درسی که `RevenueQuery` قبلاً دربارهٔ ناهم‌خوانی واحد فرعی Credit/Escrow مستند کرده بود.
+
+**«مسدود کردن provider های پولی، اجبار به local» بدون هیچ حالت خاص:** Guard برای provider های رایگان/local همیشه no-op است، و برای زمینهٔ خالی (هر دو `agentId`/`businessId` تهی — یعنی پینگ تست اتصال ادمین) هم چک نمی‌کند. یک candidate پولی که از بودجه رد شود، دقیقاً مثل یک provider خراب توسط حلقهٔ موجود `LLMRouter` گرفته و به candidate بعدی (که طبق فیلتر tier قبلاً حتماً رایگان/local است) می‌رود — بدون هیچ شاخهٔ کد اضافه.
+
+**فایل‌های اصلی:** `app/Domains/Nexus/Llm/Application/Services/LLMBudgetGuard.php`، تکمیل متدهای تجمیعی `LLMUsageQuery` (شِل خالی از M3)، بروزرسانی `LLMRouter` برای صدا زدن Guard پیش از هر candidate پولی.
+
+**تست:** ۹ تست جدید (۶ روی خودِ Guard — no-op برای رایگان/بدون زمینه، پرتاب واقعی روی رد شدن از بودجهٔ روزانه/ماهانه با ردیف‌های واقعی دیتابیس؛ ۳ integration روی `LLMRouter` که نشان می‌دهد عبور از بودجه شفاف به provider رایگان سقوط می‌کند) — همه پاس. کل تست‌های Nexus: ۲۶۴ پاس.
+
+**کامیت:** `feat(nexus): add LLM budget control (LLMBudgetGuard)`.
+
+---
+
+## Phase 4 / M7 — Admin LLM Switcher
+
+**تحویلیِ واقعی roadmap:** «ادمین می‌تواند LLM را بدون تغییر کد و با یک کلیک عوض کند.» `NexusLlmSettingsController` (گارد `auth`+`admin` هستهٔ پلتفرم، `layouts.dashboard` — **نه** تم Jarvis، دقیقاً همان مرز معماری‌ای که Phase 1/M1 برای `User`/`UserRole` هسته تعیین کرد و `NexusMarginSettingsController` قبلاً دنبال کرده بود) مستقیماً به `LLMSettingsService`/`LLMProviderRegistry`/`LLMUsageQuery` وابسته است، بدون Action واسط — همان توجیهی که `NexusMarginSettingsController` قبلاً داده بود.
+
+**«تست اتصال» عمداً از `LLMRouter`/`LLMBudgetGuard` عبور نمی‌کند:** یک ادمین باید بتواند حتی وسط قطعی یا عبور از بودجه، سلامت یک provider را بررسی کند — دقیقاً همان مشکلی که این دکمه قرار است تشخیص دهد. با این‌حال هر پینگ (موفق یا ناموفق) در `LLMUsageLog` ثبت می‌شود (`feature = 'admin_test_connection'`, `business_id`/`agent_id` هر دو null) چون یک پینگ روی provider پولی واقعاً هزینهٔ واقعی دارد.
+
+**بنر «عبور از بودجه»:** یک نسخهٔ کوچک‌شدهٔ Monitoring Dashboard کامل §۱۲ (که به‌طور مستند به یک «Phase 4.5» بعدی موکول شد) — فقط «آیا الان کسی از بودجه رد شده؟»، با دو متد جدید `LLMUsageQuery::any{Agent,Business}Over*Budget()` که بیشترین هزینهٔ گروه‌بندی‌شده را در PHP مقایسه می‌کنند (نه `groupBy()->having()->exists()`، برای اجتناب از تفاوت رفتار درایورهای مختلف دیتابیس).
+
+**فایل‌های اصلی:** `app/Http/Controllers/Dashboard/NexusLlmSettingsController.php`، `resources/views/dashboard/nexus/llm-settings/index.blade.php` (فرم Tailwind ساده هم‌شکل با `margin-settings`، به‌علاوه یک دکمهٔ «تست» به‌ازای هر ویژگی با Alpine.js `x-data`/`fetch()` — همان الگوی pollingِ `negotiations/show.blade.php`)، مسیرهای جدید زیر گروه موجود `nexus.` در `routes/web.php`، کلیدهای ترجمهٔ جدید `nexus.admin.llm_settings.*` در `lang/{fa,en}/messages.json`.
+
+**تست:** ۸ تست جدید (۴ روی کنترلر — نمایش، ذخیره با hot-reload فوری، رد provider نامعتبر؛ ۴ روی endpoint تست اتصال — موفق، ناموفق، provider ثبت‌نشده، هرگز چک نشدن بودجه) — همه پاس. کل تست‌های Nexus: ۲۷۲ پاس.
+
+**کامیت:** `feat(nexus): add Admin LLM Switcher (feature routing, fallback chain, budget, test connection)`.
+
+---
+
+## Phase 4 / M8 — تأیید نهایی
+
+- `php artisan migrate --force` روی دیتابیس dev: تنها migration جدید (`nexus_llm_usage_logs`) تمیز اجرا شد.
+- `php artisan test` کامل: **۱۱۴۵ pass / ۲۸۳ fail** — بدون رگرشن (baseline قبل از Phase 4: ۱۰۶۳ pass؛ خالص +۸۲ تست پاس اضافه‌شده، دقیقاً برابر ۸۲ تست نوشته‌شدهٔ M1 تا M7 — این‌بار، برخلاف فازهای قبل، هیچ تست موجودی نیاز به بروزرسانی نداشت چون Phase 4 هیچ رفتار موجودی را عوض نکرد، فقط زیرساخت مستقل جدید اضافه کرد).
+- تست End-to-End دستی واقعی (نه فقط PHPUnit، از طریق `php artisan tinker` روی سرور/دیتابیس واقعی — همان جایگزین مستندشدهٔ کلیک مرورگری از Phase 2/3 به‌خاطر مشکل شناخته‌شدهٔ رزرو پورت ویندوز):
+  1. هر ۶ provider واقعاً در `LLMProviderRegistry` ثبت‌شده بودند.
+  2. نگاشت پیش‌فرض feature→provider نصب تازه دقیقاً با `config/nexus/platform.php` مطابقت داشت (`reasoning`→`qwen-14b-local`, `negotiation`→`qwen-14b-local`, `classification`→`llama-3.2-3b-local`, `fallback`→`openrouter`).
+  3. **اثبات واقعی (بدون mock) مسیر شکست→fallback:** `reasoning` را به `qwen-14b-local` اشاره دادیم (که در این محیط توسعه به `localhost:11434` نرسیدنی است) و زنجیرهٔ fallback را به `openrouter` (بدون کلید API واقعی) — فراخوانی واقعی `LLMRouter::route()` دقیقاً دو خطای شبکه‌ای واقعی گرفت (`cURL error 7: Failed to connect` برای local، یک خطای HTTP واقعی از OpenRouter برای fallback)، هر دو تلاش را در `LLMUsageLog` ثبت کرد، و در نهایت `AllLLMProvidersFailedException` پرتاب کرد — دقیقاً رفتار طراحی‌شده، این‌بار روی شبکهٔ واقعی نه `MockHandler`.
+  4. **اثبات hot-reload:** `LLMSettingsService::setFeatureProvider()` وسط همان session تغییر داده شد؛ یک instance کاملاً تازهٔ سرویس (شبیه‌سازی یک request جدید) بلافاصله مقدار جدید را دید — بدون هیچ ری‌استارت.
+  5. `MarginSettingsService::llmCostMarkupPercent()` مقدار پیش‌فرض `30` را برگرداند — تأیید این‌که M3 واقعاً به آن وصل است.
+  6. `php artisan route:list --path=llm-settings`: هر ۳ مسیر جدید (`GET/PUT /dashboard/nexus/llm-settings`, `POST .../test-connection`) درست ثبت شده‌اند؛ صحت گارد (`302` بدون session) و بدون هیچ `500` قبلاً توسط تست‌های Feature کنترلر (M7) روی همین مسیرها تأیید شده بود.
+- `git log --oneline`: هر ۷ مرحلهٔ Phase 4 (M1 تا M7) کامیت شده‌اند.
+
+**کامیت:** `docs(nexus): Phase 4 complete — final handoff summary`.
+
+---
+
+## 🎯 خلاصه Phase 4 (LLM Provider System) — تکمیل شد
+
+| دامنه | Entity/Service اصلی | Provider ها | Admin سطح | تست |
+|---|---|---|---|---|
+| Llm (Core) | `LLMResponse`, `LLMFeature` | — | — | ۵ |
+| Llm (Providers) | ۷ پیاده‌سازی `LLMProviderInterface` | OpenAI, Anthropic, OpenRouter, Groq, Qwen-14B-local, Llama-3.2-local | — | ۳۸ |
+| Llm (Ledger) | `LLMUsageLog` | — | — | ۷ |
+| Llm (Settings) | `PlatformSetting` (reused) | `LLMSettingsService` | — | ۹ |
+| Llm (Router) | — | `LLMRouter` | — | ۶ |
+| Llm (Budget) | — | `LLMBudgetGuard`, `LLMUsageQuery` | بنر عبور از بودجه | ۹ |
+| Llm (Admin UI) | — | — | `/dashboard/nexus/llm-settings` + تست اتصال | ۸ |
+| **مجموع** | | | | **۸۲ (پاس)** |
+
+تصمیمات معماری ماندگار برای فازهای بعدی:
+1. **بازنویسی reasoning مذاکره به LLM واقعی عمداً خارج از اسکوپ این فاز ماند** — `NegotiationReasoningService` (Phase 2/M5) قطعی و بدون شکست باقی می‌ماند؛ زیرساخت LLM کامل و آزمایش‌شده است (`LLMRouter::route(LLMFeature::Negotiation, ...)` دقیقاً همان فراخوانی‌ای است که یک بازطراحی آینده نیاز دارد)، ولی اتصال واقعی آن یک تغییر جدا و مستند برای فاز/بعدفاز دیگری است، نه چیزی که این‌جا قاچاقی اضافه شود.
+2. **دو انتزاع LLM مجزا در این کدبیس عمداً همزیستی می‌کنند** — `LLMClientInterface` (AgentOrchestrator، بدون cost/token، یک بایندینگ سراسری) برای Agent های Core، و `LLMProviderInterface` (Nexus، رجیستری چندگانه با متادیتای کامل) برای مصرف‌کنندگان آیندهٔ Nexus — یکی‌سازی آن‌ها یک تصمیم بزرگ‌تر است که این فاز عمداً نگرفت.
+3. **Monitoring Dashboard کامل (نمودارهای per-provider/per-feature) ساخته نشد** — فقط یک بنر سادهٔ «کسی الان از بودجه رد شده؟». یک `GetLLMUsageDashboardAction`/گسترش `LLMUsageQuery` مشابه `RevenueQuery`/`GetRevenueDashboardAction` Phase 3، کاندید طبیعی یک فاز بعدی است.
+4. **کلیدهای provider هرگز نباید خودشان نقطه داشته باشند** — همان درسِ Phase 3/M2 دربارهٔ `action_costs`، این‌بار در طراحی `provider_tiers`/`feature_providers` از ابتدا رعایت شد (شناسه‌ها با `-` جدا می‌شوند، نه `.`).
+5. **واحد پول بین Credit (تومان) و Llm (دلار) نیز، مثل Escrow/Negotiation در Phase 3، باید صریح و در یک نقطهٔ مشخص تبدیل شود** — `LLMBudgetGuard` این نقطه است برای دامنهٔ LLM؛ هر مصرف‌کنندهٔ آیندهٔ دیگر باید همین‌جا تبدیل کند، نه جای دیگر.
+
+**آماده برای Phase 5 (Viral Growth Engine)** طبق `docs/nexus-roadmap.md`.
+
+---
