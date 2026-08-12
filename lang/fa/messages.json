@@ -363,6 +363,27 @@
       }
     },
     "admin": {
+      "revenue": {
+        "title": "داشبورد درآمد",
+        "from": "از",
+        "to": "تا",
+        "filter": "فیلتر",
+        "gross": "درآمد ناخالص",
+        "net": "درآمد خالص",
+        "credit_sales": "فروش کردیت",
+        "escrow_fees": "کارمزد امانی",
+        "purchases": "خرید",
+        "deals": "معامله",
+        "pending": "ارزش امانی‌های در انتظار (Held)",
+        "credits_deducted": "کردیت مصرف‌شده در کل پلتفرم",
+        "per_business": "به‌تفکیک کسب‌وکار",
+        "per_industry": "به‌تفکیک صنعت",
+        "per_day": "به‌تفکیک روز",
+        "business": "کسب‌وکار",
+        "industry": "صنعت",
+        "date": "تاریخ",
+        "empty": "داده‌ای برای این بازه وجود ندارد."
+      },
       "margin_settings": {
         "title": "تنظیمات حاشیه سود",
         "llm_cost_markup_percent": "حاشیهٔ هزینهٔ LLM (٪)",

@@ -410,3 +410,21 @@
 **کامیت:** `feat(nexus): add hot-reloadable Admin Margin Settings`.
 
 ---
+
+## Phase 3 / M6 — Revenue Dashboard
+
+**باگ واقعی پیدا و رفع شد پیش از commit (مقیاس واحد پول ناسازگار بین دو دامنه):** `nexus_credit_purchase_sessions.total_amount` تومان خام است (۵۰۰۰۰۰ یعنی ۵۰۰٬۰۰۰ تومان — همان قرارداد M3، بدون واحد فرعی)، ولی `nexus_escrows.*_amount` قرارداد Money خودِ Negotiation را به ارث می‌برد که واحد فرعی ۲رقمی دارد (`negotiations/show.blade.php` از قبل روی همین مقادیر `/100` می‌زند) — یک ناسازگاری از پیش موجود بین دو دامنهٔ Nexus، نه چیزی که این مرحله ایجاد کرده. جمع مستقیم این دو عدد در پیش‌نویس اول `GetRevenueDashboardAction` (قبل از commit) کاملاً نادرست بود (کارمزد ۰.۵٪ روی ۱۰٬۰۰۰ تومان واقعی، ۱۰۰ برابر بزرگ‌تر از واقعیت نمایش داده می‌شد). راه‌حل: `RevenueQuery` هر مقدار برگرفته از Escrow را قبل از هر جمعی بر ۱۰۰ تقسیم می‌کند (نرمال‌سازی به تومان واقعی)، مستند شده در docblock خودِ کلاس تا این ناسازگاری هرگز دوباره کشف نشود.
+
+**دو جریان درآمد واقعی و مجزا** (طبق `docs/claude/monetization.md`): فروش پکیج کردیت (`nexus_credit_purchase_sessions.status = completed`، پول واقعی) و کارمزد Escrow (۰.۵٪ فقط وقتی Escrow به `released` برسد — `Held` هنوز شناسایی‌نشده، `Disputed`/`Refunded` برگشت‌خورده، مطابق منطق واقعی revenue recognition، نه «همان لحظهٔ وعده»). کردیت‌های مصرف‌شده (deduction) به‌عنوان یک سیگنال حجم مصرف گزارش می‌شود، نه درآمد دوباره — کسب‌وکار از قبل بابت آن کردیت‌ها پول واقعی پرداخته.
+
+**«Net revenue» فعلاً برابر «Gross revenue» است** — چون هنوز هیچ هزینهٔ واقعی (مثل هزینهٔ LLM، قلمرو Phase 4) ردیابی نمی‌شود؛ دو کلید جدا نگه داشته شدند تا وقتی Phase 4 رسید، بدون تغییر shape این Action، جای محاسبهٔ هزینه باز باشد.
+
+**`GetBusinessDashboardAction`** (آخرین جای‌نگه‌دار صادقانهٔ باقی‌مانده از Phase 1/M6): `activeNegotiations` حالا واقعاً از `NegotiationRepositoryInterface::findVisibleTo()` شمارش می‌شود (وضعیت‌های Proposed/Countered/PendingApproval) — دیگر `null` نیست.
+
+**فایل‌های اصلی:** `app/Domains/Nexus/Analytics/Infrastructure/Queries/RevenueQuery.php`، `app/Domains/Nexus/Analytics/Application/Actions/GetRevenueDashboardAction.php`، `app/Http/Controllers/Dashboard/NexusRevenueController.php`، `resources/views/dashboard/nexus/revenue/index.blade.php`.
+
+**تست:** ۱۲ تست جدید (۵ روی `GetRevenueDashboardAction` — شامل تست مستقیم صحت نرمال‌سازی واحد پول، ۲ روی کنترلر ادمین، به‌علاوه به‌روزرسانی `GetBusinessDashboardActionTest` برای `activeNegotiations` واقعی) — همه پاس. کل تست‌های Nexus: ۱۹۰ پاس. سوییت کامل: ۱۰۶۳ pass / ۲۸۳ fail (بدون رگرشن).
+
+**کامیت:** `feat(nexus): add Revenue Dashboard`.
+
+---

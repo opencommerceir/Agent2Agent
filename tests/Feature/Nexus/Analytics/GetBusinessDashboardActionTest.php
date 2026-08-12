@@ -27,7 +27,7 @@ class GetBusinessDashboardActionTest extends TestCase
         $this->assertSame(0, $result['productCount']);
         $this->assertSame(0, $result['serviceCount']);
         $this->assertNull($result['creditBalance']);
-        $this->assertNull($result['activeNegotiations']);
+        $this->assertSame(0, $result['activeNegotiations']);
     }
 
     public function test_execute_forVerifiedBusinessWithProducts_returnsAgentAndCounts(): void

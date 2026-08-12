@@ -363,6 +363,27 @@
       }
     },
     "admin": {
+      "revenue": {
+        "title": "Revenue Dashboard",
+        "from": "From",
+        "to": "To",
+        "filter": "Filter",
+        "gross": "Gross revenue",
+        "net": "Net revenue",
+        "credit_sales": "Credit sales",
+        "escrow_fees": "Escrow fees",
+        "purchases": "purchases",
+        "deals": "deals",
+        "pending": "Pending (held) escrow value",
+        "credits_deducted": "Credits deducted platform-wide",
+        "per_business": "Per business",
+        "per_industry": "Per industry",
+        "per_day": "Per day",
+        "business": "Business",
+        "industry": "Industry",
+        "date": "Date",
+        "empty": "No data for this range."
+      },
       "margin_settings": {
         "title": "Margin Settings",
         "llm_cost_markup_percent": "LLM cost markup (%)",
