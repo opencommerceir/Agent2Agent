@@ -6,6 +6,7 @@ use App\Http\Controllers\Dashboard\AgentController;
 use App\Http\Controllers\Dashboard\AnalyticsController;
 use App\Http\Controllers\Dashboard\DashboardController;
 use App\Http\Controllers\Dashboard\NexusEscrowController;
+use App\Http\Controllers\Dashboard\NexusGrowthController;
 use App\Http\Controllers\Dashboard\NexusLlmSettingsController;
 use App\Http\Controllers\Dashboard\NexusMarginSettingsController;
 use App\Http\Controllers\Dashboard\NexusRevenueController;
@@ -116,6 +117,8 @@ Route::middleware('auth')->group(function () {
             Route::get('/llm-settings', [NexusLlmSettingsController::class, 'index'])->name('llm-settings.index');
             Route::put('/llm-settings', [NexusLlmSettingsController::class, 'update'])->name('llm-settings.update');
             Route::post('/llm-settings/test-connection', [NexusLlmSettingsController::class, 'testConnection'])->name('llm-settings.test-connection');
+
+            Route::get('/growth', [NexusGrowthController::class, 'index'])->name('growth.index');
         });
     });
 });
