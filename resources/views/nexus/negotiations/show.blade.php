@@ -73,6 +73,32 @@
             </x-nexus-panel>
         @endif
 
+        @if ($escrow && $escrow->status === 'released')
+            <x-nexus-panel :title="t('messages.nexus.negotiation.review.title')">
+                @if ($myReview)
+                    <p class="text-sm text-nexus-text-muted">{{ t('messages.nexus.negotiation.review.already_submitted') }} ({{ $myReview->rating() }}/5)</p>
+                @else
+                    <form method="POST" action="{{ route('nexus.negotiations.review.submit', $negotiation->id) }}" class="space-y-2">
+                        @csrf
+                        <label class="block text-sm text-nexus-text-muted">
+                            {{ t('messages.nexus.negotiation.review.rating') }}
+                            <select name="rating" class="mt-1 block rounded-md border border-nexus-border bg-nexus-surface-1 px-3 py-1.5 text-sm text-nexus-text">
+                                <option value="5">5</option>
+                                <option value="4">4</option>
+                                <option value="3">3</option>
+                                <option value="2">2</option>
+                                <option value="1">1</option>
+                            </select>
+                        </label>
+                        <textarea name="comment" rows="2" class="block w-full rounded-md border border-nexus-border bg-nexus-surface-1 px-3 py-1.5 text-sm text-nexus-text" placeholder="{{ t('messages.nexus.negotiation.review.comment_placeholder') }}"></textarea>
+                        <button type="submit" class="rounded-md bg-nexus-cyan/20 px-4 py-1.5 text-sm font-semibold text-nexus-cyan hover:bg-nexus-cyan/30">
+                            {{ t('messages.nexus.negotiation.review.submit') }}
+                        </button>
+                    </form>
+                @endif
+            </x-nexus-panel>
+        @endif
+
         @if ($negotiation->status === 'pending_approval')
             <x-nexus-panel style="border-color: var(--color-nexus-warning)">
                 @if ($negotiation->pendingApprovalBusinessId === $actingBusinessId)

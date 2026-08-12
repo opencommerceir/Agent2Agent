@@ -77,6 +77,10 @@ use App\Domains\Nexus\Negotiation\Domain\ValueObjects\NegotiationTerms;
 use App\Domains\Nexus\Negotiation\Domain\Events\NegotiationWasAccepted;
 use App\Domains\Nexus\Negotiation\Infrastructure\Repositories\EloquentNegotiationMessageRepository;
 use App\Domains\Nexus\Negotiation\Infrastructure\Repositories\EloquentNegotiationRepository;
+use App\Domains\Nexus\Reputation\Application\Actions\ListReviewsForBusinessAction;
+use App\Domains\Nexus\Reputation\Application\Actions\SubmitReviewAction;
+use App\Domains\Nexus\Reputation\Domain\Repositories\ReviewRepositoryInterface;
+use App\Domains\Nexus\Reputation\Infrastructure\Repositories\EloquentReviewRepository;
 use App\Modules\Commerce\Application\Services\PaymentGatewayRegistry;
 use App\Modules\Commerce\Application\Services\StripeConfig;
 use App\Modules\Commerce\Application\Services\StripePaymentGateway;
@@ -114,6 +118,7 @@ class NexusServiceProvider extends ServiceProvider
         $this->app->bind(InviteRepositoryInterface::class, EloquentInviteRepository::class);
         $this->app->bind(CoalitionRepositoryInterface::class, EloquentCoalitionRepository::class);
         $this->app->bind(CoalitionMemberRepositoryInterface::class, EloquentCoalitionMemberRepository::class);
+        $this->app->bind(ReviewRepositoryInterface::class, EloquentReviewRepository::class);
 
         // Nexus's own PaymentGatewayRegistry singleton — CommerceServiceProvider
         // (where these adapter classes originally live) is disabled since
@@ -256,6 +261,31 @@ class NexusServiceProvider extends ServiceProvider
 
         $this->registerCoalitionCapabilityHandlers($handlers);
         $this->registerNegotiationCapabilityHandlers($handlers);
+        $this->registerReputationCapabilityHandlers($handlers);
+    }
+
+    private function registerReputationCapabilityHandlers(CapabilityHandlerRegistry $handlers): void
+    {
+        $handlers->register('nexus.review.submit', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            $review = $this->app->make(SubmitReviewAction::class)->execute(
+                negotiationId: (int) $input['negotiation_id'],
+                reviewerBusinessId: $callingBusinessId,
+                rating: (int) $input['rating'],
+                comment: $input['comment'] ?? null,
+            );
+
+            return ['review' => $review->toArray()];
+        });
+
+        $handlers->register('nexus.review.list', function (array $input, AuthContext $context) {
+            $this->resolveActingBusiness($context);
+
+            $reviews = $this->app->make(ListReviewsForBusinessAction::class)->execute((int) $input['business_id']);
+
+            return ['reviews' => array_map(fn ($r) => $r->toArray(), $reviews)];
+        });
     }
 
     private function registerCoalitionCapabilityHandlers(CapabilityHandlerRegistry $handlers): void

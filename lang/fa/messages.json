@@ -421,6 +421,13 @@
           "disputed": "معترض",
           "refunded": "بازگردانده‌شده"
         }
+      },
+      "review": {
+        "title": "ثبت نظر",
+        "already_submitted": "شما قبلاً نظر خود را ثبت کرده‌اید",
+        "rating": "امتیاز",
+        "comment_placeholder": "نظر شما (اختیاری)",
+        "submit": "ثبت نظر"
       }
     },
     "credit": {

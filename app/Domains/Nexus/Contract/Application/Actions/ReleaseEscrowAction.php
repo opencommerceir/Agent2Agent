@@ -3,8 +3,10 @@
 namespace App\Domains\Nexus\Contract\Application\Actions;
 
 use App\Domains\Nexus\Contract\Application\DTOs\EscrowData;
+use App\Domains\Nexus\Contract\Domain\Events\EscrowWasReleased;
 use App\Domains\Nexus\Contract\Domain\Repositories\EscrowRepositoryInterface;
 use App\Domains\Nexus\Negotiation\Domain\Repositories\NegotiationRepositoryInterface;
+use Illuminate\Support\Facades\Event;
 use InvalidArgumentException;
 
 /**
@@ -43,6 +45,8 @@ final class ReleaseEscrowAction
 
         $escrow->release();
         $escrow = $this->escrows->save($escrow);
+
+        Event::dispatch(new EscrowWasReleased($escrow));
 
         return EscrowData::fromEntity($escrow);
     }

@@ -421,6 +421,13 @@
           "disputed": "Disputed",
           "refunded": "Refunded"
         }
+      },
+      "review": {
+        "title": "Leave a review",
+        "already_submitted": "You already submitted your review",
+        "rating": "Rating",
+        "comment_placeholder": "Your comment (optional)",
+        "submit": "Submit review"
       }
     },
     "credit": {

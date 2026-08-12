@@ -75,6 +75,10 @@ Route::middleware('web')->group(function () {
         // held against the auto-generated Contract.
         Route::post('/{negotiation}/escrow/release', [NegotiationViewerController::class, 'releaseEscrow'])->name('escrow.release');
         Route::post('/{negotiation}/escrow/dispute', [NegotiationViewerController::class, 'disputeEscrow'])->name('escrow.dispute');
+
+        // Reviews & Ratings (Phase 6, M1) — only reachable once Escrow is
+        // Released (a genuinely completed deal), enforced in SubmitReviewAction.
+        Route::post('/{negotiation}/review', [NegotiationViewerController::class, 'submitReview'])->name('review.submit');
     });
 
     // Viral Growth Engine (Phase 5) — its own prefix/name, same

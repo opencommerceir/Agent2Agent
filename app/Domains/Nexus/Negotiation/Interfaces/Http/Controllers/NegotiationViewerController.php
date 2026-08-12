@@ -14,6 +14,8 @@ use App\Domains\Nexus\Negotiation\Application\Actions\ListMyNegotiationsAction;
 use App\Domains\Nexus\Negotiation\Application\Actions\ListNegotiationMessagesAction;
 use App\Domains\Nexus\Negotiation\Application\Actions\PollNegotiationMessagesAction;
 use App\Domains\Nexus\Negotiation\Application\Actions\RejectPendingNegotiationAction;
+use App\Domains\Nexus\Reputation\Application\Actions\SubmitReviewAction;
+use App\Domains\Nexus\Reputation\Domain\Repositories\ReviewRepositoryInterface;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -42,6 +44,8 @@ class NegotiationViewerController extends Controller
         private readonly EscrowRepositoryInterface $escrows,
         private readonly ReleaseEscrowAction $releaseEscrow,
         private readonly DisputeEscrowAction $disputeEscrow,
+        private readonly ReviewRepositoryInterface $reviews,
+        private readonly SubmitReviewAction $submitReview,
     ) {
     }
 
@@ -63,6 +67,7 @@ class NegotiationViewerController extends Controller
             : $negotiationData->initiatorBusinessId;
         $otherParty = $this->businesses->findById($otherPartyId);
         $escrow = $this->escrows->findByNegotiationId($negotiation);
+        $myReview = $this->reviews->findByNegotiationAndReviewer($negotiation, $businessId);
 
         return view('nexus::negotiations.show', [
             'negotiation' => $negotiationData,
@@ -71,6 +76,7 @@ class NegotiationViewerController extends Controller
             'otherPartyNameFa' => $otherParty?->nameFa() ?? '—',
             'otherPartyNameEn' => $otherParty?->nameEn() ?? '—',
             'escrow' => $escrow ? EscrowData::fromEntity($escrow) : null,
+            'myReview' => $myReview,
         ]);
     }
 
@@ -107,6 +113,18 @@ class NegotiationViewerController extends Controller
     public function disputeEscrow(int $negotiation, Request $request): RedirectResponse
     {
         $this->disputeEscrow->execute($negotiation, $this->actingBusinessId(), $request->string('reason')->toString() ?: null);
+
+        return redirect()->route('nexus.negotiations.show', $negotiation);
+    }
+
+    public function submitReview(int $negotiation, Request $request): RedirectResponse
+    {
+        $this->submitReview->execute(
+            $negotiation,
+            $this->actingBusinessId(),
+            $request->integer('rating'),
+            $request->string('comment')->toString() ?: null,
+        );
 
         return redirect()->route('nexus.negotiations.show', $negotiation);
     }
