@@ -4,6 +4,10 @@ namespace App\Domains\Nexus\Negotiation\Interfaces\Http\Controllers;
 
 use App\Domains\Nexus\Business\Domain\Repositories\BusinessRepositoryInterface;
 use App\Domains\Nexus\Business\Infrastructure\Models\BusinessOwner;
+use App\Domains\Nexus\Contract\Application\Actions\DisputeEscrowAction;
+use App\Domains\Nexus\Contract\Application\Actions\ReleaseEscrowAction;
+use App\Domains\Nexus\Contract\Application\DTOs\EscrowData;
+use App\Domains\Nexus\Contract\Domain\Repositories\EscrowRepositoryInterface;
 use App\Domains\Nexus\Negotiation\Application\Actions\ApprovePendingNegotiationAction;
 use App\Domains\Nexus\Negotiation\Application\Actions\GetNegotiationAction;
 use App\Domains\Nexus\Negotiation\Application\Actions\ListMyNegotiationsAction;
@@ -35,6 +39,9 @@ class NegotiationViewerController extends Controller
         private readonly ApprovePendingNegotiationAction $approvePending,
         private readonly RejectPendingNegotiationAction $rejectPending,
         private readonly BusinessRepositoryInterface $businesses,
+        private readonly EscrowRepositoryInterface $escrows,
+        private readonly ReleaseEscrowAction $releaseEscrow,
+        private readonly DisputeEscrowAction $disputeEscrow,
     ) {
     }
 
@@ -55,6 +62,7 @@ class NegotiationViewerController extends Controller
             ? $negotiationData->counterpartyBusinessId
             : $negotiationData->initiatorBusinessId;
         $otherParty = $this->businesses->findById($otherPartyId);
+        $escrow = $this->escrows->findByNegotiationId($negotiation);
 
         return view('nexus::negotiations.show', [
             'negotiation' => $negotiationData,
@@ -62,6 +70,7 @@ class NegotiationViewerController extends Controller
             'actingBusinessId' => $businessId,
             'otherPartyNameFa' => $otherParty?->nameFa() ?? '—',
             'otherPartyNameEn' => $otherParty?->nameEn() ?? '—',
+            'escrow' => $escrow ? EscrowData::fromEntity($escrow) : null,
         ]);
     }
 
@@ -84,6 +93,20 @@ class NegotiationViewerController extends Controller
     public function reject(int $negotiation, Request $request): RedirectResponse
     {
         $this->rejectPending->execute($negotiation, $this->actingBusinessId(), $request->string('reason')->toString() ?: null);
+
+        return redirect()->route('nexus.negotiations.show', $negotiation);
+    }
+
+    public function releaseEscrow(int $negotiation): RedirectResponse
+    {
+        $this->releaseEscrow->execute($negotiation, $this->actingBusinessId());
+
+        return redirect()->route('nexus.negotiations.show', $negotiation);
+    }
+
+    public function disputeEscrow(int $negotiation, Request $request): RedirectResponse
+    {
+        $this->disputeEscrow->execute($negotiation, $this->actingBusinessId(), $request->string('reason')->toString() ?: null);
 
         return redirect()->route('nexus.negotiations.show', $negotiation);
     }

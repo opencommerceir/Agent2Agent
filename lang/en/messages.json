@@ -328,6 +328,20 @@
         "counter": "Counter-offer",
         "accept": "Accepted",
         "reject": "Rejected"
+      },
+      "escrow": {
+        "title": "Escrow",
+        "gross": "Deal value",
+        "fee": "Platform fee",
+        "net": "Net",
+        "confirm_delivery": "Confirm delivery",
+        "dispute": "Dispute",
+        "status": {
+          "held": "Held",
+          "released": "Released",
+          "disputed": "Disputed",
+          "refunded": "Refunded"
+        }
       }
     },
     "credit": {
@@ -346,6 +360,19 @@
         "confirmed_body": "credits were added to your balance.",
         "failed_title": "Payment failed",
         "failed_body": "Your credit balance was not changed."
+      }
+    },
+    "admin": {
+      "escrows": {
+        "title": "Disputed Escrows",
+        "empty": "No disputed escrows.",
+        "contract": "Contract",
+        "gross": "Gross",
+        "fee": "Fee",
+        "net": "Net",
+        "reason": "Reason",
+        "refund": "Mark refunded",
+        "refunded": "Escrow marked as refunded."
       }
     }
   }

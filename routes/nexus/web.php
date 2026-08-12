@@ -66,5 +66,10 @@ Route::middleware('web')->group(function () {
         Route::get('/{negotiation}/messages', [NegotiationViewerController::class, 'messages'])->name('messages');
         Route::post('/{negotiation}/approve', [NegotiationViewerController::class, 'approve'])->name('approve');
         Route::post('/{negotiation}/reject', [NegotiationViewerController::class, 'reject'])->name('reject');
+
+        // Escrow (Phase 3, M4) — "Confirm Delivery"/"Dispute" on the deal
+        // held against the auto-generated Contract.
+        Route::post('/{negotiation}/escrow/release', [NegotiationViewerController::class, 'releaseEscrow'])->name('escrow.release');
+        Route::post('/{negotiation}/escrow/dispute', [NegotiationViewerController::class, 'disputeEscrow'])->name('escrow.dispute');
     });
 });

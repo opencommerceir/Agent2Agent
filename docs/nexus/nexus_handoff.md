@@ -366,3 +366,27 @@
 **کامیت:** `feat(nexus): add credit purchase payment integration (Zibal)`.
 
 ---
+
+## Phase 3 / M4 — Escrow
+
+**تصمیم صداقت اسکوپ (مثل «امضای دیجیتال = هش ساده» Phase 2/M6):** Nexus هیچ زیرساخت واقعی پرداخت/تسویه بانکی بین دو کسب‌وکار ندارد (آن Enterprise/Phase 7 است). پس `Escrow` اینجا یک **لایهٔ ردیابی وضعیت** روی ارزش معاملهٔ Contract است، نه نگهداری واقعی پول بین دو حساب بانکی — دقیقاً همین در docblock خودِ Entity مستند شده تا هیچ توسعه‌دهندهٔ بعدی آن را با یک درگاه تسویهٔ واقعی اشتباه نگیرد.
+
+**زنجیرهٔ رویداد کامل (بدون هیچ تماس مستقیم بین دامنه‌ها):** `AcceptDealAction`/`ApprovePendingNegotiationAction` → `NegotiationWasAccepted` → `GenerateContractOnNegotiationAcceptedListener` → `GenerateContractAction` (که حالا رویداد جدید `ContractWasGenerated` را هم dispatch می‌کند) → `HoldEscrowOnContractGeneratedListener` → `HoldEscrowAction`. هر پنج قطعه با تست‌های M4 روی زنجیرهٔ واقعی (بدون `Event::fake()`) پوشش داده شدند.
+
+**«Payment processing: 100cr + 0.5%» از `monetization.md` به دو چیز جدا تفسیر شد:**
+1. ۱۰۰ کردیت flat → از طریق CostGate موجود (`SpendCreditsForActionAction`، کلید `contract.escrow.hold`) از Business آغازگر (همان ساده‌سازی مستند `contract.generate`) کسر می‌شود.
+2. ۰.۵٪ → یک کارمزد **پول واقعی** است، نه کردیت — روی خودِ `Escrow` به‌عنوان `platformFeePercent`/`platformFeeAmount`/`netAmount` snapshot می‌شود (از `config('nexus.platform.margin.transaction_fee_percent')` در همین مرحله؛ M5 این را به `MarginSettingsService` retrofit می‌کند تا hot-reload واقعی شود).
+
+**`businessAId`/`businessBId` مستقیماً از Contract روی خودِ Escrow دنورمالایز شدند** (نه lookup در لحظهٔ authorization از طریق `ContractRepositoryInterface`) تا `ReleaseEscrowAction`/`DisputeEscrowAction` دقیقاً همان قاعدهٔ «هر Action عضویت caller را خودش، مستقل، چک می‌کند» را حفظ کنند.
+
+**State machine:** `Held → {Released, Disputed}`, `Disputed → Refunded` (`ALLOWED_TRANSITIONS` + `transitionTo()`، همان الگوی `Subscription`/`Negotiation`/`PaymentSession`/`CreditPurchaseSession`). «تأیید تحویل» (release) و «اعتراض» (dispute) توسط **هر دو طرف** قابل انجام است — همان محدودیت شناخته‌شده و مستند «هر دو طرف می‌توانند Pending Approval را resolve کنند» از Phase 2/M4، اینجا هم عمداً تکرار شد نه فراموش. حل واقعی اختلاف (evidence/mediation/arbitration) صراحتاً به Phase 6 (Trust & Reputation) موکول شد — `RefundEscrowAction` فقط ادمین (گارد `auth`/`admin` هستهٔ پلتفرم، هرگز `business.auth`) می‌تواند صدا بزند و فقط وضعیت را ثبت می‌کند، هیچ انتقال پول واقعی رخ نمی‌دهد (چون از اول هم پولی واقعاً جابه‌جا نشده بود).
+
+**UI:** پنل Escrow جدید در `resources/views/nexus/negotiations/show.blade.php` (دکمه‌های تأیید تحویل/اعتراض وقتی `Held`) + یک صفحهٔ ادمین کوچک `dashboard.nexus.escrows.index` (فهرست Escrowهای Disputed + دکمهٔ Refund) زیر پیشوند `/dashboard` موجود پلتفرم پایه (گارد `auth`/`admin`، نه Jarvis-themed — تم پیش‌فرض Dashboard).
+
+**فایل‌های اصلی:** `app/Domains/Nexus/Contract/{Domain,Application,Infrastructure}/**` (Escrow entity/repo/actions/listener)، `database/migrations/nexus/..._create_nexus_escrows_table.php`، `app/Http/Controllers/Dashboard/NexusEscrowController.php`، به‌روزرسانی `NegotiationViewerController`/`GenerateContractAction`/`NexusServiceProvider`.
+
+**تست:** ۲۰ تست جدید (۷ Unit روی `Escrow`، ۱۳ Feature روی زنجیرهٔ رویداد واقعی + Release/Dispute/Refund + کنترلر ادمین + پنل Viewer) — همه پاس. یک تست موجود از M2 (`CostGateIntegrationTest`) برای انتظار شارژ جدید `contract.escrow.hold` به‌روزرسانی شد. کل تست‌های Nexus: ۱۷۵ پاس. سوییت کامل: ۱۰۴۸ pass / ۲۸۳ fail (بدون رگرشن).
+
+**کامیت:** `feat(nexus): add Escrow (state-tracking layer over Contract deal value)`.
+
+---

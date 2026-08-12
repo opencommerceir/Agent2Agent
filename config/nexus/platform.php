@@ -57,6 +57,7 @@ return [
             'nexus.negotiation.accept' => (int) env('NEXUS_COST_NEGOTIATION_ACCEPT', 2),
             'nexus.negotiation.reject' => (int) env('NEXUS_COST_NEGOTIATION_REJECT', 2),
             'contract.generate' => (int) env('NEXUS_COST_CONTRACT_GENERATE', 50),
+            'contract.escrow.hold' => (int) env('NEXUS_COST_ESCROW_HOLD', 100),
         ],
     ],
 
@@ -64,9 +65,20 @@ return [
     |--------------------------------------------------------------------------
     | Platform Margin
     |--------------------------------------------------------------------------
+    |
+    | Seed defaults only, from docs/claude/monetization.md — once Phase
+    | 3/M5's Admin Margin Settings lands, the real, hot-reloadable values
+    | are read through MarginSettingsService, never config() directly;
+    | these stay here purely as the fallback for a fresh install with no
+    | admin-set overrides yet.
+    |
     */
     'margin' => [
         'platform_fee_percent' => (float) env('NEXUS_PLATFORM_FEE_PERCENT', 5.0),
+        'llm_cost_markup_percent' => (float) env('NEXUS_MARGIN_LLM_COST_MARKUP', 30.0),
+        'transaction_fee_percent' => (float) env('NEXUS_MARGIN_TRANSACTION_FEE', 0.5),
+        'subscription_markup_percent' => (float) env('NEXUS_MARGIN_SUBSCRIPTION_MARKUP', 20.0),
+        'negotiation_fee_percent' => (float) env('NEXUS_MARGIN_NEGOTIATION_FEE', 1.0),
     ],
 
     /*

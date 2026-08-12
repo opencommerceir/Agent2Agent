@@ -39,6 +39,36 @@
             </div>
         </x-nexus-panel>
 
+        @if ($escrow)
+            <x-nexus-panel :title="t('messages.nexus.negotiation.escrow.title')">
+                <div class="mb-3 flex items-center justify-between">
+                    <div class="text-sm text-nexus-text-muted">
+                        <p>{{ t('messages.nexus.negotiation.escrow.gross') }}: {{ number_format($escrow->grossAmount / 100) }} {{ $escrow->currency }}</p>
+                        <p>{{ t('messages.nexus.negotiation.escrow.fee') }} ({{ $escrow->platformFeePercent }}%): {{ number_format($escrow->platformFeeAmount / 100) }} {{ $escrow->currency }}</p>
+                        <p>{{ t('messages.nexus.negotiation.escrow.net') }}: {{ number_format($escrow->netAmount / 100) }} {{ $escrow->currency }}</p>
+                    </div>
+                    <x-status-badge :status="$escrow->status === 'held' ? 'warning' : ($escrow->status === 'released' ? 'success' : ($escrow->status === 'disputed' ? 'error' : 'idle'))" :label="t('messages.nexus.negotiation.escrow.status.'.$escrow->status)" />
+                </div>
+
+                @if ($escrow->status === 'held')
+                    <div class="flex gap-2">
+                        <form method="POST" action="{{ route('nexus.negotiations.escrow.release', $negotiation->id) }}">
+                            @csrf
+                            <button type="submit" class="rounded-md bg-nexus-success/20 px-4 py-1.5 text-sm font-semibold text-nexus-success hover:bg-nexus-success/30">
+                                {{ t('messages.nexus.negotiation.escrow.confirm_delivery') }}
+                            </button>
+                        </form>
+                        <form method="POST" action="{{ route('nexus.negotiations.escrow.dispute', $negotiation->id) }}">
+                            @csrf
+                            <button type="submit" class="rounded-md bg-nexus-error/20 px-4 py-1.5 text-sm font-semibold text-nexus-error hover:bg-nexus-error/30">
+                                {{ t('messages.nexus.negotiation.escrow.dispute') }}
+                            </button>
+                        </form>
+                    </div>
+                @endif
+            </x-nexus-panel>
+        @endif
+
         @if ($negotiation->status === 'pending_approval')
             <x-nexus-panel style="border-color: var(--color-nexus-warning)">
                 <p class="mb-3 text-sm text-nexus-text">{{ t('messages.nexus.negotiation.show.pending_approval_banner') }}</p>

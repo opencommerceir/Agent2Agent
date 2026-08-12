@@ -5,9 +5,11 @@ namespace App\Domains\Nexus\Contract\Application\Actions;
 use App\Domains\Nexus\Business\Domain\Repositories\BusinessRepositoryInterface;
 use App\Domains\Nexus\Contract\Application\DTOs\ContractData;
 use App\Domains\Nexus\Contract\Domain\Entities\Contract;
+use App\Domains\Nexus\Contract\Domain\Events\ContractWasGenerated;
 use App\Domains\Nexus\Contract\Domain\Repositories\ContractRepositoryInterface;
 use App\Domains\Nexus\Negotiation\Domain\Entities\Negotiation;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
@@ -69,6 +71,8 @@ final class GenerateContractAction
 
         $contract->attachPdf($path);
         $contract = $this->contracts->save($contract);
+
+        Event::dispatch(new ContractWasGenerated($contract));
 
         return ContractData::fromEntity($contract);
     }

@@ -16,8 +16,12 @@ use App\Domains\Nexus\Catalog\Domain\Repositories\ServiceRepositoryInterface;
 use App\Domains\Nexus\Catalog\Infrastructure\Repositories\EloquentProductRepository;
 use App\Domains\Nexus\Catalog\Infrastructure\Repositories\EloquentServiceRepository;
 use App\Domains\Nexus\Contract\Application\Listeners\GenerateContractOnNegotiationAcceptedListener;
+use App\Domains\Nexus\Contract\Application\Listeners\HoldEscrowOnContractGeneratedListener;
+use App\Domains\Nexus\Contract\Domain\Events\ContractWasGenerated;
 use App\Domains\Nexus\Contract\Domain\Repositories\ContractRepositoryInterface;
+use App\Domains\Nexus\Contract\Domain\Repositories\EscrowRepositoryInterface;
 use App\Domains\Nexus\Contract\Infrastructure\Repositories\EloquentContractRepository;
+use App\Domains\Nexus\Contract\Infrastructure\Repositories\EloquentEscrowRepository;
 use App\Domains\Nexus\Credit\Application\Actions\GetCreditBalanceAction;
 use App\Domains\Nexus\Credit\Application\Listeners\GrantStartingCreditsOnBusinessVerifiedListener;
 use App\Domains\Nexus\Credit\Domain\Repositories\CreditBalanceRepositoryInterface;
@@ -66,6 +70,7 @@ class NexusServiceProvider extends ServiceProvider
         $this->app->bind(NegotiationRepositoryInterface::class, EloquentNegotiationRepository::class);
         $this->app->bind(NegotiationMessageRepositoryInterface::class, EloquentNegotiationMessageRepository::class);
         $this->app->bind(ContractRepositoryInterface::class, EloquentContractRepository::class);
+        $this->app->bind(EscrowRepositoryInterface::class, EloquentEscrowRepository::class);
         $this->app->bind(CreditBalanceRepositoryInterface::class, EloquentCreditBalanceRepository::class);
         $this->app->bind(CreditTransactionRepositoryInterface::class, EloquentCreditTransactionRepository::class);
         $this->app->bind(CreditPurchaseSessionRepositoryInterface::class, EloquentCreditPurchaseSessionRepository::class);
@@ -90,6 +95,7 @@ class NexusServiceProvider extends ServiceProvider
         Event::listen(BusinessWasVerified::class, CreateAgentOnBusinessVerifiedListener::class);
         Event::listen(BusinessWasVerified::class, GrantStartingCreditsOnBusinessVerifiedListener::class);
         Event::listen(NegotiationWasAccepted::class, GenerateContractOnNegotiationAcceptedListener::class);
+        Event::listen(ContractWasGenerated::class, HoldEscrowOnContractGeneratedListener::class);
 
         // Real Payment Gateways (Phase 3/M3) — same Connector Pattern
         // CommerceServiceProvider's own (dead, since Commerce is disabled)

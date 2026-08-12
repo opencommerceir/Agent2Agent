@@ -5,6 +5,7 @@ use App\Core\Interfaces\HTTP\Controllers\Auth\LogoutController;
 use App\Http\Controllers\Dashboard\AgentController;
 use App\Http\Controllers\Dashboard\AnalyticsController;
 use App\Http\Controllers\Dashboard\DashboardController;
+use App\Http\Controllers\Dashboard\NexusEscrowController;
 use App\Http\Controllers\Dashboard\NotificationController;
 use App\Http\Controllers\Dashboard\OrderController;
 use App\Http\Controllers\Dashboard\PerformanceController;
@@ -98,5 +99,11 @@ Route::middleware('auth')->group(function () {
         Route::put('/settings', [SettingsController::class, 'update'])->name('settings.update');
 
         Route::get('/performance', [PerformanceController::class, 'index'])->name('performance.index');
+
+        // Nexus (Phase 3) — admin-only Escrow dispute resolution.
+        Route::prefix('nexus')->name('nexus.')->group(function () {
+            Route::get('/escrows', [NexusEscrowController::class, 'index'])->name('escrows.index');
+            Route::post('/escrows/{escrow}/refund', [NexusEscrowController::class, 'refund'])->name('escrows.refund');
+        });
     });
 });

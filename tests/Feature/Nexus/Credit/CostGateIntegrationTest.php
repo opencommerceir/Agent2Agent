@@ -144,14 +144,15 @@ class CostGateIntegrationTest extends TestCase
 
     public function test_acceptDeal_withSufficientCredit_deductsAndLedgersIndependentlyOfContractCharge(): void
     {
-        $buyer = $this->verifiedBusiness('Buyer Co', credits: 200);
+        $buyer = $this->verifiedBusiness('Buyer Co', credits: 300);
         $seller = $this->verifiedBusiness('Seller Co', credits: 100);
         $negotiation = app(InitiateNegotiationAction::class)->execute($buyer->id, $seller->id, CatalogItemType::Product, 1, $this->terms());
-        // buyer: 200 - 20 (propose) = 180
+        // buyer: 300 - 20 (propose) = 280
 
         app(AcceptDealAction::class)->execute($negotiation->id, $buyer->id);
-        // buyer: 180 - 2 (accept) - 50 (contract.generate, charged to the
-        // initiator by GenerateContractOnNegotiationAcceptedListener) = 128
+        // buyer: 280 - 2 (accept) - 50 (contract.generate) - 100
+        // (contract.escrow.hold, Phase 3/M4 — both charged to the
+        // initiator by the Contract domain's own event listeners) = 128
 
         $balance = app(CreditBalanceRepositoryInterface::class)->findByBusinessId($buyer->id);
         $this->assertSame(128, $balance->balance());
@@ -164,6 +165,11 @@ class CostGateIntegrationTest extends TestCase
             'business_id' => $buyer->id,
             'reason' => 'contract.generate',
             'amount' => 50,
+        ]);
+        $this->assertDatabaseHas('nexus_credit_transactions', [
+            'business_id' => $buyer->id,
+            'reason' => 'contract.escrow.hold',
+            'amount' => 100,
         ]);
     }
 
