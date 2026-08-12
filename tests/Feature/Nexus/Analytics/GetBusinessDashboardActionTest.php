@@ -40,6 +40,10 @@ class GetBusinessDashboardActionTest extends TestCase
 
         $this->assertNotNull($result['agent']);
         $this->assertSame(1, $result['productCount']);
+        // Verification also opens a CreditBalance row (0 by default in
+        // this env — GrantStartingCreditsOnBusinessVerifiedListener) —
+        // no longer the honest-null placeholder for a verified Business.
+        $this->assertSame(0, $result['creditBalance']);
     }
 
     public function test_execute_withNonExistentBusiness_throwsInvalidArgumentException(): void

@@ -18,6 +18,11 @@ use App\Domains\Nexus\Catalog\Infrastructure\Repositories\EloquentServiceReposit
 use App\Domains\Nexus\Contract\Application\Listeners\GenerateContractOnNegotiationAcceptedListener;
 use App\Domains\Nexus\Contract\Domain\Repositories\ContractRepositoryInterface;
 use App\Domains\Nexus\Contract\Infrastructure\Repositories\EloquentContractRepository;
+use App\Domains\Nexus\Credit\Application\Listeners\GrantStartingCreditsOnBusinessVerifiedListener;
+use App\Domains\Nexus\Credit\Domain\Repositories\CreditBalanceRepositoryInterface;
+use App\Domains\Nexus\Credit\Domain\Repositories\CreditTransactionRepositoryInterface;
+use App\Domains\Nexus\Credit\Infrastructure\Repositories\EloquentCreditBalanceRepository;
+use App\Domains\Nexus\Credit\Infrastructure\Repositories\EloquentCreditTransactionRepository;
 use App\Domains\Nexus\Marketplace\Application\Actions\SearchMarketplaceAction;
 use App\Domains\Nexus\Negotiation\Application\Actions\AcceptDealAction;
 use App\Domains\Nexus\Negotiation\Application\Actions\GetNegotiationAction;
@@ -53,6 +58,8 @@ class NexusServiceProvider extends ServiceProvider
         $this->app->bind(NegotiationRepositoryInterface::class, EloquentNegotiationRepository::class);
         $this->app->bind(NegotiationMessageRepositoryInterface::class, EloquentNegotiationMessageRepository::class);
         $this->app->bind(ContractRepositoryInterface::class, EloquentContractRepository::class);
+        $this->app->bind(CreditBalanceRepositoryInterface::class, EloquentCreditBalanceRepository::class);
+        $this->app->bind(CreditTransactionRepositoryInterface::class, EloquentCreditTransactionRepository::class);
     }
 
     public function boot(): void
@@ -65,6 +72,7 @@ class NexusServiceProvider extends ServiceProvider
         $this->loadMigrationsFrom(database_path('migrations/nexus'));
 
         Event::listen(BusinessWasVerified::class, CreateAgentOnBusinessVerifiedListener::class);
+        Event::listen(BusinessWasVerified::class, GrantStartingCreditsOnBusinessVerifiedListener::class);
         Event::listen(NegotiationWasAccepted::class, GenerateContractOnNegotiationAcceptedListener::class);
 
         $this->registerMcpCapabilityHandlers();

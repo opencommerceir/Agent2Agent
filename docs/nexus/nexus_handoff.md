@@ -303,3 +303,26 @@
 **آماده برای Phase 3 (Credit & Payment Economy)** طبق `docs/nexus-roadmap.md`.
 
 ---
+
+# Phase 3 — Credit & Payment Economy
+
+**دستور:** «برو برای فاز 3 و پیاده‌سازیش» (بعد از تأیید Phase 2). قبل از کدنویسی، سه Explore agent موازی روی الگوهای موجود (درگاه پرداخت Zibal/Stripe، پنل ادمین/hot-reload/audit، پایپ‌لاین MCP + اسکلت فعلی Credit) اجرا شد و پلن کامل ۷ مرحله‌ای (M1–M7) تأیید شد.
+
+## Phase 3 / M1 — هستهٔ دامنهٔ Credit (Ledger)
+
+**یافتهٔ کلیدی پیش از کدنویسی:** هیچ الگوی ledger/wallet/balance در کل کدبیس وجود نداشت (حتی در ماژول‌های غیرفعال‌شدهٔ Finance/Commerce) — `app/Domains/Nexus/Credit/` هنوز دقیقاً همان اسکلت خالی Phase 0 بود. همچنین `CommerceServiceProvider` (و Finance/CRM/...) در `bootstrap/providers.php` کاملاً غیرفعال‌اند؛ کلاس‌هایشان (از جمله `ZibalPaymentGateway`/`StripePaymentGateway`) هنوز autoload می‌شوند ولی هیچ‌کدام bind/boot نمی‌شوند — نکته‌ای که M3 (خرید کردیت) باید صریح رعایت کند.
+
+**تصمیم‌های کلیدی:**
+- `CreditBalance` (یک رکورد به‌ازای هر Business، دقیقاً همان الگوی ۱:۱ که `Agent` دارد — بدون ستون `tenant_id`، چون `business_id` خودش کفایت می‌کند، عیناً مثل `nexus_agents`) موجودی را به‌صورت عدد صحیح خام «کردیت» نگه می‌دارد، نه `Money` — کردیت واحد پول واقعی نیست («۱٬۰۰۰ کردیت»، `docs/claude/monetization.md`)؛ سمت پول واقعی فقط در M3 (خرید) با یک `Money` VO مستقل Credit ظاهر می‌شود.
+- `CreditTransaction` یک ردیف ledger **غیرقابل‌تغییر** است (بدون `updated_at`، `created_at->useCurrent()`، دقیقاً همان الگوی مستندشدهٔ `workflow_logs`) — نه یک state machine مثل `Negotiation`/`PaymentSession`، چون یک واقعیت ثبت‌شده است نه یک workflow. همین ledger خودش audit trail الزام‌شدهٔ CLAUDE.md برای اقدامات Agent را برآورده می‌کند؛ ساخت یک `AuditLog` عمومی جداگانه scope creep بود (roadmap آن را نخواسته).
+- `InsufficientCreditException` رابط `ConflictExceptionInterface` هسته (`app/Core/Domain/Exceptions/Contracts`) را پیاده می‌کند — یعنی بدون هیچ تغییری در `Core`، `MCPExceptionHandler` آن را خودکار به `409 CONFLICT` نگاشت می‌کند (الگوی از پیش موجود، فقط برای اولین بار توسط یک دامنهٔ Nexus استفاده شد).
+- تأمین خودکار موجودی: `GrantStartingCreditsOnBusinessVerifiedListener` روی همان رویداد `BusinessWasVerified` (کنار listener موجود Agent) گوش می‌دهد — حتی وقتی `starting_balance` پیکربندی‌شده صفر است، رکورد `CreditBalance` باز می‌شود (نه skip می‌شود)، چون تمام مسیرهای پایین‌دستی (`GetCreditBalanceAction`، هر Action دروازه‌بانی‌شده در M2) به وجود این ردیف متکی‌اند.
+- `GetBusinessDashboardAction` (Phase 1/M6) به‌روزرسانی شد: `creditBalance` دیگر همیشه `null` نیست — مستقیماً از `CreditBalanceRepositoryInterface` می‌خواند (نه از طریق `GetCreditBalanceAction` که برای رکورد نبود Exception می‌زند)، چون یک Business دیده‌شده اینجا می‌تواند هنوز تأیید نشده باشد (رکورد Credit هنوز باز نشده) — `null` هنوز یعنی «هنوز فراهم نشده»، نه یک عدد جعلی.
+
+**فایل‌های اصلی:** `app/Domains/Nexus/Credit/{Domain,Application,Infrastructure}/**`، دو migration (`nexus_credit_balances`, `nexus_credit_transactions`)، binding و listener جدید در `NexusServiceProvider`.
+
+**تست:** ۲۱ تست جدید (۱۰ Unit روی `CreditBalance`/`CreditTransaction`، ۱۱ Feature روی ۴ Action + listener تأمین خودکار) — همه پاس. سوییت کامل `--filter=Nexus`: ۱۲۲ پاس (بدون رگرشن؛ یک تست موجود `GetBusinessDashboardActionTest` برای به‌روزرسانی به‌جای `null` انتظار `creditBalance = 0` بعد از تأیید را گرفت).
+
+**کامیت:** `feat(nexus): add Credit domain core (ledger, auto-provisioned balance)`.
+
+---
