@@ -157,3 +157,23 @@
 **آماده برای Phase 2 (Negotiation Engine)** طبق `docs/nexus-roadmap.md`.
 
 ---
+
+# Phase 2 — Negotiation Engine
+
+**دستور:** «برو فاز بعدی» (بعد از تأیید Phase 1). قبل از کدنویسی، دو Explore agent موازی روی الگوهای موجود (ثبت MCP capability سرتاسری، state machine، PDF، چت Showcase، Money VO) اجرا شد و پلن کامل تأیید شد — جزئیات در `docs/nexus-roadmap.md` بخش Phase 2.
+
+## Phase 2 / M1 — دامنه Marketplace
+
+**تصمیم کلیدی:** Marketplace هیچ جدول خودش ندارد — یک read model صرف روی `businesses` + `nexus_products`/`nexus_services` است، دقیقاً مثل الگوی `Infrastructure/Queries/*` ماژول Reporting در پلتفرم پایه (به‌جای اینکه `BusinessRepositoryInterface`/`ProductRepositoryInterface` را با متدهای مخصوص marketplace شلوغ کنیم).
+
+**فایل‌های اصلی:** `app/Domains/Nexus/Marketplace/Infrastructure/Queries/BusinessSearchQuery.php` (کوئری متمرکز)، `Application/Actions/{SearchMarketplaceAction,GetRecommendationsAction,RankSuppliersAction}.php`.
+
+- `SearchMarketplaceAction`: فقط businessهای verified، به‌جز خود caller؛ جستجو با نام کسب‌وکار یا نام محصول/خدمت؛ فیلتر صنعت اختیاری.
+- `GetRecommendationsAction`: businessهای verified همان صنعت (ساده‌ترین معیار صادقانه قبل از وجود Reputation در Phase 6).
+- `RankSuppliersAction`: رتبه‌بندی بر اساس تعداد آیتم کاتالوگ (تنها سیگنال واقعی موجود، نه یک امتیاز جعلی).
+
+**تست:** ۶ تست Feature جدید — همه پاس.
+
+**کامیت:** `feat(nexus): add Marketplace domain (search/recommendations/rank suppliers)`.
+
+---
