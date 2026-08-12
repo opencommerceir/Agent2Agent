@@ -329,6 +329,24 @@
         "accept": "پذیرش",
         "reject": "رد"
       }
+    },
+    "credit": {
+      "purchase": {
+        "title": "خرید کردیت",
+        "back_to_dashboard": "بازگشت به داشبورد",
+        "package": {
+          "starter": "استارتر",
+          "professional": "حرفه‌ای",
+          "enterprise": "سازمانی"
+        },
+        "credits": "کردیت",
+        "toman": "تومان",
+        "buy": "پرداخت با زیبال",
+        "confirmed_title": "پرداخت تأیید شد",
+        "confirmed_body": "کردیت به موجودی شما اضافه شد.",
+        "failed_title": "پرداخت ناموفق بود",
+        "failed_body": "موجودی کردیت شما تغییری نکرد."
+      }
     }
   }
 }

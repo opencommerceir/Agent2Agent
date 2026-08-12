@@ -4,6 +4,8 @@ use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessDashboardCont
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessLoginController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessLogoutController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\RegisterBusinessController;
+use App\Domains\Nexus\Credit\Interfaces\Http\Controllers\CreditPurchaseCallbackController;
+use App\Domains\Nexus\Credit\Interfaces\Http\Controllers\CreditPurchaseController;
 use App\Domains\Nexus\Negotiation\Interfaces\Http\Controllers\NegotiationViewerController;
 use Illuminate\Support\Facades\Route;
 
@@ -40,6 +42,19 @@ Route::middleware('web')->group(function () {
             Route::post('/logout', BusinessLogoutController::class)->name('logout');
             Route::get('/dashboard', [BusinessDashboardController::class, 'index'])->name('dashboard');
         });
+    });
+
+    // Credit purchase (Phase 3, M3) — package picker is 'business.auth'
+    // guarded (only a logged-in Business owner spends real money), but the
+    // gateway callback below is public (an external gateway's own browser
+    // redirect, same as Commerce's own PaymentCallbackController).
+    Route::prefix('nexus/credit')->name('nexus.credit.')->group(function () {
+        Route::middleware('business.auth:business')->prefix('purchase')->name('purchase.')->group(function () {
+            Route::get('/', [CreditPurchaseController::class, 'index'])->name('index');
+            Route::post('/', [CreditPurchaseController::class, 'store'])->name('store');
+        });
+
+        Route::get('/payments/{gateway}/callback', [CreditPurchaseCallbackController::class, 'show'])->name('purchase.callback');
     });
 
     // Live Negotiation Viewer (Phase 2, M7) — same 'business' guard as

@@ -348,3 +348,21 @@
 **کامیت:** `feat(nexus): wire CostGate into existing MCP capabilities`.
 
 ---
+
+## Phase 3 / M3 — Payment Integration (خرید کردیت با Zibal/Stripe)
+
+**یافتهٔ کلیدی پیش از کدنویسی:** `CommerceServiceProvider` (جایی که `ZibalPaymentGateway`/`StripePaymentGateway`/`PaymentGatewayRegistry` واقعاً ثبت می‌شدند) از Phase 0 در `bootstrap/providers.php` غیرفعال است — کلاس‌ها هنوز autoload می‌شوند ولی هیچ‌کدام bind/boot نمی‌شوند. طبق «Extend, Don't Rebuild»: همان کلاس‌های آداپتور واقعی Zibal/Stripe (HTTP، امضا، verify) دوباره استفاده شدند، ولی Nexus خودش یک `PaymentGatewayRegistry` singleton مستقل می‌سازد و در `NexusServiceProvider::boot()` همان دو گیت‌وی را زیر آن ثبت می‌کند — دقیقاً همان ۳ خط Commerce، فقط صاحبش عوض شده.
+
+**تصمیم کلیدی (مرز عبور Money):** `RedirectPaymentGatewayInterface::initiate()` امضایش روی `Money` خودِ Commerce تایپ شده، نه Credit. به‌جای بازسازی کامل ادغام HTTP واقعی Zibal/Stripe (که ناقض «هرگز rebuild نکن» بود)، این عبور مرز عمداً و فقط در یک نقطه (`PurchaseCreditsAction`) با یک تبدیل صریح انجام شد؛ لایهٔ Domain کردیت هرگز `Money` کامرس را import نمی‌کند.
+
+**فقط Zibal، فعلاً:** ۳ پکیج کردیت (`docs/claude/monetization.md`) به تومان قیمت‌گذاری شده‌اند (Starter ۵۰۰هزار→۱۰۰۰کردیت، Professional ۲میلیون→۵۰۰۰، Enterprise ۱۰میلیون→۳۰۰۰۰). چون Zibal فقط ریال می‌پذیرد، تبدیل تومان→ریال (×۱۰) دقیقاً همین یک‌جا (مرز فراخوانی گیت‌وی) انجام می‌شود. Stripe در رجیستری ثبت شده (اثبات اینکه سیم‌کشی connector کار می‌کند) ولی `PurchaseCreditsAction` صراحتاً برای `gateway=stripe` خطای مستند می‌دهد — Stripe اصلاً ریال/تومان پشتیبانی نمی‌کند و یک ست پکیج دلاری جداگانه نیاز دارد که خارج از اسکوپ همین فاز است (یک محدودیت صادقانهٔ مستند، نه باگ، هم‌سبک «امضای دیجیتال = هش ساده» Phase 2/M6).
+
+**`CreditPurchaseSession`** دقیقاً کپی شکل `PaymentSession` کامرس است (`ALLOWED_TRANSITIONS`، `assignId()`/`markInitiated()` یک‌باره‌ای) اما بدون cart/tax/discount/coupon (که برای خرید کردیت بی‌معنی‌اند). **`ConfirmCreditPurchaseAction`** هم دقیقاً همان الگوی `ConfirmRedirectPaymentAction` را کپی می‌کند: هرگز به claim فراخوان اعتماد نمی‌کند، همیشه با `verify()` واقعی گیت‌وی دوباره می‌پرسد، و روی session تکمیل‌شده idempotent است (کردیت دوباره اعطا نمی‌شود).
+
+**مسیرها:** `GET/POST /nexus/credit/purchase` (گارد `business.auth`) و `GET /nexus/credit/payments/{gateway}/callback` (عمومی، بدون session/auth — دقیقاً همان بی‌طرفی `PaymentCallbackController` کامرس، چون گیت‌وی خارجی هیچ هویت تنانتی نمی‌شناسد). Webhook واقعی Stripe در این مرحله ساخته نشد چون هیچ مسیر خریدی هنوز به Stripe نمی‌رسد که چیزی برای تأیید داشته باشد.
+
+**تست:** ۲۸ تست جدید (۱۰ Unit روی `CreditPackage`/`CreditPurchaseSession`، ۱۸ Feature روی `PurchaseCreditsAction`/`ConfirmCreditPurchaseAction`/جریان کامل HTTP) — همه با `MockRedirectPaymentGateway` خودِ Commerce (رجیستر شده زیر نام `'zibal'` در `setUp()`، بدون هیچ HTTP واقعی) — همه پاس. کل تست‌های Nexus: ۱۵۵ پاس. سوییت کامل: ۱۰۲۸ pass / ۲۸۳ fail (بدون رگرشن).
+
+**کامیت:** `feat(nexus): add credit purchase payment integration (Zibal)`.
+
+---

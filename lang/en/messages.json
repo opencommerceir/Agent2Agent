@@ -329,6 +329,24 @@
         "accept": "Accepted",
         "reject": "Rejected"
       }
+    },
+    "credit": {
+      "purchase": {
+        "title": "Buy credits",
+        "back_to_dashboard": "Back to dashboard",
+        "package": {
+          "starter": "Starter",
+          "professional": "Professional",
+          "enterprise": "Enterprise"
+        },
+        "credits": "credits",
+        "toman": "Toman",
+        "buy": "Buy with Zibal",
+        "confirmed_title": "Payment confirmed",
+        "confirmed_body": "credits were added to your balance.",
+        "failed_title": "Payment failed",
+        "failed_body": "Your credit balance was not changed."
+      }
     }
   }
 }

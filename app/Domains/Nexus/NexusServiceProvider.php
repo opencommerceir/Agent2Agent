@@ -21,8 +21,10 @@ use App\Domains\Nexus\Contract\Infrastructure\Repositories\EloquentContractRepos
 use App\Domains\Nexus\Credit\Application\Actions\GetCreditBalanceAction;
 use App\Domains\Nexus\Credit\Application\Listeners\GrantStartingCreditsOnBusinessVerifiedListener;
 use App\Domains\Nexus\Credit\Domain\Repositories\CreditBalanceRepositoryInterface;
+use App\Domains\Nexus\Credit\Domain\Repositories\CreditPurchaseSessionRepositoryInterface;
 use App\Domains\Nexus\Credit\Domain\Repositories\CreditTransactionRepositoryInterface;
 use App\Domains\Nexus\Credit\Infrastructure\Repositories\EloquentCreditBalanceRepository;
+use App\Domains\Nexus\Credit\Infrastructure\Repositories\EloquentCreditPurchaseSessionRepository;
 use App\Domains\Nexus\Credit\Infrastructure\Repositories\EloquentCreditTransactionRepository;
 use App\Domains\Nexus\Marketplace\Application\Actions\SearchMarketplaceAction;
 use App\Domains\Nexus\Negotiation\Application\Actions\AcceptDealAction;
@@ -38,6 +40,11 @@ use App\Domains\Nexus\Negotiation\Domain\ValueObjects\NegotiationTerms;
 use App\Domains\Nexus\Negotiation\Domain\Events\NegotiationWasAccepted;
 use App\Domains\Nexus\Negotiation\Infrastructure\Repositories\EloquentNegotiationMessageRepository;
 use App\Domains\Nexus\Negotiation\Infrastructure\Repositories\EloquentNegotiationRepository;
+use App\Modules\Commerce\Application\Services\PaymentGatewayRegistry;
+use App\Modules\Commerce\Application\Services\StripeConfig;
+use App\Modules\Commerce\Application\Services\StripePaymentGateway;
+use App\Modules\Commerce\Application\Services\ZibalConfig;
+use App\Modules\Commerce\Application\Services\ZibalPaymentGateway;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
@@ -61,6 +68,14 @@ class NexusServiceProvider extends ServiceProvider
         $this->app->bind(ContractRepositoryInterface::class, EloquentContractRepository::class);
         $this->app->bind(CreditBalanceRepositoryInterface::class, EloquentCreditBalanceRepository::class);
         $this->app->bind(CreditTransactionRepositoryInterface::class, EloquentCreditTransactionRepository::class);
+        $this->app->bind(CreditPurchaseSessionRepositoryInterface::class, EloquentCreditPurchaseSessionRepository::class);
+
+        // Nexus's own PaymentGatewayRegistry singleton — CommerceServiceProvider
+        // (where these adapter classes originally live) is disabled since
+        // Nexus Phase 0, so its own registry is never booted; Nexus
+        // registers the same adapter classes under its own instance
+        // instead of reimplementing the Zibal/Stripe HTTP integration.
+        $this->app->singleton(PaymentGatewayRegistry::class);
     }
 
     public function boot(): void
@@ -75,6 +90,16 @@ class NexusServiceProvider extends ServiceProvider
         Event::listen(BusinessWasVerified::class, CreateAgentOnBusinessVerifiedListener::class);
         Event::listen(BusinessWasVerified::class, GrantStartingCreditsOnBusinessVerifiedListener::class);
         Event::listen(NegotiationWasAccepted::class, GenerateContractOnNegotiationAcceptedListener::class);
+
+        // Real Payment Gateways (Phase 3/M3) — same Connector Pattern
+        // CommerceServiceProvider's own (dead, since Commerce is disabled)
+        // wiring already established; only 'zibal' is actually reachable
+        // from PurchaseCreditsAction today (Toman-priced packages), but
+        // 'stripe' is registered too so the connector wiring itself is
+        // proven for a future non-IRT package set.
+        $gateways = $this->app->make(PaymentGatewayRegistry::class);
+        $gateways->register('zibal', new ZibalPaymentGateway(ZibalConfig::fromConfig()));
+        $gateways->register('stripe', new StripePaymentGateway(StripeConfig::fromConfig()));
 
         $this->registerMcpCapabilityHandlers();
     }
