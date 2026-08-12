@@ -755,7 +755,7 @@
 
 **تست:** ۴ تست جدید (۲ روی محدودیت Pending Approval، ۱ روی محدودیت Escrow Release، ۱ روی صحت Net Revenue با هزینهٔ واقعی LLM — شامل اثبات صریح که `charged_cost_usd` عمداً استفاده نمی‌شود)، به‌علاوه به‌روزرسانی چند تست موجود که قبلاً روی رفتار سهل‌گیرانهٔ قدیم تکیه کرده بودند (`NegotiationTest` روی امضای جدید `requestApproval()`، `EscrowActionsTest`/`GetRevenueDashboardActionTest` روی release توسط seller). سوییت کامل: **۱۲۲۹ pass / ۲۸۳ fail** — بدون رگرشن (baseline Phase 5: ۱۲۲۵ pass؛ خالص +۴).
 
-**کامیت:** (هنوز کامیت نشده — منتظر تأیید کاربر.)
+**کامیت:** `fix(nexus): tighten pending-approval/escrow authorization, wire real LLM cost into net revenue`.
 
 **محدودیت شناخته‌شدهٔ باقی‌مانده که عمداً دست‌نخورده ماند:** حل واقعی Dispute (evidence/mediation/arbitration) هنوز فقط `RefundEscrowAction` دستی ادمین است — این صراحتاً قلمرو Phase 6 (Trust & Reputation) است، نه یک دغدغهٔ جامانده از فازهای قبل.
 
