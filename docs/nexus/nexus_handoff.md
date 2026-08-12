@@ -428,3 +428,46 @@
 **کامیت:** `feat(nexus): add Revenue Dashboard`.
 
 ---
+
+## Phase 3 / M7 — تأیید نهایی
+
+- `php artisan migrate --force` روی دیتابیس dev: همهٔ ۵ migration جدید (`nexus_credit_balances`, `nexus_credit_transactions`, `nexus_credit_purchase_sessions`, `nexus_escrows`, `nexus_platform_settings`) تمیز اجرا شدند (کنار چند migration دیگر پلتفرم پایه که بین این‌بار و آخرین اجرا اضافه شده بودند — `agent_messages`, `delegation_requests`, `reasoning_traces`, `payment_sessions`, بدون ارتباط با Nexus).
+- `php artisan test` کامل: **۱۰۶۳ pass / ۲۸۳ fail** — بدون رگرشن (baseline قبل از Phase 3: ۹۷۵ pass؛ خالص +۸۸ تست پاس اضافه‌شده به کل سوییت. مجموع تست‌های *نوشته‌شده* در M1 تا M6 حدود ۱۰۴ متد بود — عدد خالص کوچک‌تر است چون چند تست موجود Phase 1/2 به‌جای افزوده‌شدن، به‌روزرسانی شدند (مثلاً `GetBusinessDashboardActionTest`، `CostGateIntegrationTest`)، نه اینکه رگرسیونی رخ داده باشد؛ همان ۲۸۳ شکست ثابت ماژول‌های غیرفعال، بدون تغییر، در هر مرحله تأیید شد.
+- تست End-to-End دستی کامل روی سرور واقعی (`php artisan serve --port=9500`، همان مشکل رزرو پورت ویندوز Phase 2/M8 دوباره صادق بود) — این‌بار به‌جای کلیک مرورگری، از `php artisan tinker` روی همان سرور/دیتابیس واقعی استفاده شد (منطق یکسان، فقط بدون رندر HTML دستی):
+  1. ثبت‌نام و تأیید دو کسب‌وکار واقعی (Buyer/Seller) → `CreditBalance` واقعاً برای هر دو باز شد (تأیید زنجیرهٔ رویداد M1 روی دیتابیس واقعی، نه فقط تست).
+  2. `InitiateNegotiationAction` → `AcceptDealAction` روی مبلغ ۵٬۰۰۰٬۰۰۰ (واحد Negotiation) → Contract واقعی با PDF واقعی (۸۷۸KB، `%PDF-1.7` تأییدشده روی دیسک) → Escrow واقعی `Held` با `grossAmount=5000000`, `feePercent=0.5`, `feeAmount=25000`.
+  3. `MarginSettingsService::set('transaction_fee_percent', 2.5)` در وسط سناریو (بعد از Hold) → سپس Escrow را Release کردیم → `platformFeePercent` روی خودِ Escrow **همان ۰.۵٪ اصلی** ماند (snapshot در لحظهٔ hold، نه دوباره‌محاسبه‌شده با override جدید) — دقیقاً رفتار مورد انتظار «compute once, apply durably later».
+  4. `GetRevenueDashboardAction` بعد از Release: `escrowFeeRevenue = {amount: 250, count: 1}` — یعنی نرمال‌سازی واحد پول M6 (۲۵۰۰۰ واحد فرعی Negotiation ÷ ۱۰۰ = ۲۵۰ تومان واقعی) روی دادهٔ واقعی هم درست کار کرد.
+  5. موجودی نهایی Buyer: `1000 - 20 (propose) - 2 (accept) - 50 (contract.generate) - 100 (escrow.hold) = 828` — دقیقاً مطابق محاسبهٔ دستی.
+  6. تمام مسیرهای جدید (`/nexus/credit/purchase`, `/dashboard/nexus/margin-settings`, `/dashboard/nexus/revenue`, `/dashboard/nexus/escrows`) روی سرور واقعی چک شدند: صفحات عمومی `200`، صفحات گاردشده بدون session `302` (ریدایرکت به login) — بدون هیچ `500`.
+- `git log --oneline origin/main`: هر ۷ مرحلهٔ Phase 3 (M1 تا M7) کامیت و push شده‌اند.
+
+**کامیت:** `docs(nexus): Phase 3 complete — final handoff summary`.
+
+---
+
+## 🎯 خلاصه Phase 3 (Credit & Payment Economy) — تکمیل شد
+
+| دامنه | Entity/Service اصلی | Action ها | MCP Capability | تست |
+|---|---|---|---|---|
+| Credit (ledger) | `CreditBalance`, `CreditTransaction` | Grant, Deduct, Refund, GetBalance | `nexus.credit.balance` | ۲۱ |
+| Credit (CostGate) | — | SpendCreditsForAction | — (گیت روی ۵ Capability موجود + `contract.generate`) | ۱۵ |
+| Credit (Payment) | `CreditPurchaseSession`, `CreditPackage` | PurchaseCredits, ConfirmCreditPurchase | — | ۲۸ |
+| Contract (Escrow) | `Escrow` | Hold, Release, Dispute, Refund | — | ۲۰ |
+| Admin | `PlatformSetting`, `MarginSettingsService` | (get/set سرویس) | — | ۸ |
+| Analytics (Revenue) | — (read model) | GetRevenueDashboard | — | ۱۲ |
+| **مجموع** | | | | **~۱۰۴ تست نوشته‌شده / خالص +۸۸ در کل سوییت** |
+
+تصمیمات معماری ماندگار برای فازهای بعدی:
+1. **CostGate همیشه داخل خودِ Action، نه در پایپ‌لاین مشترک MCP** — طبق Decision 007 (بدون منطق تجاری در Core)؛ همیشه *بعد از* موفقیت گذار وضعیت اصلی شارژ می‌شود، هرگز قبلش (یک درخواست نامعتبر هرگز کردیت کم نمی‌کند).
+2. **کلیدهای پیکربندی هرگز نباید خودشان نقطه داشته باشند وقتی با `config()`ی dot-notation خوانده می‌شوند** — یک باگ واقعی که در M2 پیدا و مستند شد؛ آرایهٔ حاوی کلیدهای نقطه‌دار باید یک‌بار در سطح بالا خوانده شود و بعد با اندیس ساده (نه dot-path) به آن دسترسی پیدا کرد.
+3. **«Extend, Don't Rebuild» یعنی حتی از یک ماژول غیرفعال هم می‌توان کلاس‌های Infrastructure واقعی (نه بایندینگ‌ها) را دوباره استفاده کرد** — Nexus کلاس‌های واقعی Zibal/Stripe کامرس را زیر رجیستری مستقل خودش ثبت کرد، بدون بازسازی ادغام HTTP.
+4. **صداقت اسکوپ برای زیرساخت‌هایی که وجود ندارند (Escrow، امضای دیجیتال Phase 2)** یک الگوی تکرارشوندهٔ این پروژه است، نه یک استثنا — یک state-tracking layer با docblock صریح، نه شبیه‌سازی یک سیستم واقعی که وجود ندارد.
+5. **hot-reload واقعی = DB + Cache، نه `config()`** — اولین‌بار در این کدبیس ساخته شد (M5)؛ هر تنظیم قابل‌تغییر آینده باید همین الگو (`Cache::rememberForever` + `Cache::forget` روی نوشتن) را دنبال کند، نه یک فایل config جدید.
+6. **واحدهای پول بین دامنه‌های مختلف Nexus می‌توانند مقیاس متفاوتی داشته باشند** (Credit = تومان خام، Negotiation/Escrow = واحد فرعی ۲رقمی) — هر Query/Action ای که چند دامنه را با هم جمع می‌زند باید صریحاً نرمال‌سازی کند؛ این یک ناسازگاری از پیش موجود بین Phase 2 و Phase 3 است، نه یک باگ تازه.
+7. **محدودیت شناخته‌شدهٔ باقی‌مانده (تکرار از Phase 2):** Release/Dispute Escrow توسط هر دو طرف قابل انجام است، نه فقط طرف مربوطه — همان الگوی Pending Approval؛ باید در فاز بعد سخت‌گیرانه‌تر شود.
+8. **«Net revenue» = «Gross revenue» فعلاً** — تا وقتی هزینهٔ واقعی LLM (Phase 4) ردیابی شود.
+
+**آماده برای Phase 4 (LLM Provider System)** طبق `docs/nexus-roadmap.md`.
+
+---
