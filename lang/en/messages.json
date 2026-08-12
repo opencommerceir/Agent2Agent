@@ -582,6 +582,18 @@
         "deny": "Deny",
         "appeal_resolved": "Appeal resolved.",
         "empty": "Nothing here."
+      },
+      "verification": {
+        "title": "Verification System",
+        "pending_businesses": "Pending businesses",
+        "pending_products": "Pending products",
+        "pending_services": "Pending services",
+        "verify": "Verify",
+        "reject": "Reject",
+        "business_verified": "Business verified.",
+        "listing_verified": "Listing verified.",
+        "listing_rejected": "Listing rejected.",
+        "empty": "Nothing pending."
       }
     }
   }

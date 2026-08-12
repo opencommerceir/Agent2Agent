@@ -4,6 +4,7 @@ namespace App\Domains\Nexus\Business\Domain\Repositories;
 
 use App\Domains\Nexus\Business\Domain\Entities\Business;
 use App\Domains\Nexus\Business\Domain\ValueObjects\BusinessStatus;
+use App\Domains\Nexus\Business\Domain\ValueObjects\VerificationStatus;
 
 /**
  * Contract owned by the Domain layer. Infrastructure provides the
@@ -19,6 +20,11 @@ interface BusinessRepositoryInterface
      * @return list<Business>
      */
     public function findByStatus(BusinessStatus $status): array;
+
+    /**
+     * @return list<Business>
+     */
+    public function findByVerificationStatus(VerificationStatus $status): array;
 
     public function save(Business $business): Business;
 }

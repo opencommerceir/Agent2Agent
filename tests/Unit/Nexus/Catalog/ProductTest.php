@@ -3,6 +3,7 @@
 namespace Tests\Unit\Nexus\Catalog;
 
 use App\Domains\Nexus\Catalog\Domain\Entities\Product;
+use App\Domains\Nexus\Catalog\Domain\ValueObjects\ListingVerificationStatus;
 use App\Domains\Nexus\Catalog\Domain\ValueObjects\Money;
 use PHPUnit\Framework\TestCase;
 
@@ -19,6 +20,27 @@ class ProductTest extends TestCase
         $this->assertSame(50000, $product->price()->amount());
         $this->assertSame(10, $product->stockQuantity());
         $this->assertNull($product->attributes());
+        $this->assertSame(ListingVerificationStatus::Pending, $product->verificationStatus());
+        $this->assertFalse($product->isVerified());
+    }
+
+    public function test_verify_setsStatusToVerified(): void
+    {
+        $product = Product::add(1, 'محصول آزمایشی', 'Test Product', Money::fromAmount(50000, 'IRT'));
+
+        $product->verify();
+
+        $this->assertTrue($product->isVerified());
+    }
+
+    public function test_reject_setsStatusToRejected(): void
+    {
+        $product = Product::add(1, 'محصول آزمایشی', 'Test Product', Money::fromAmount(50000, 'IRT'));
+
+        $product->reject();
+
+        $this->assertSame(ListingVerificationStatus::Rejected, $product->verificationStatus());
+        $this->assertFalse($product->isVerified());
     }
 
     public function test_update_changesAllMutableFields(): void

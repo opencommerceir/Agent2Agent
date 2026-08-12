@@ -7,6 +7,7 @@ use App\Domains\Nexus\Business\Application\Actions\VerifyBusinessAction;
 use App\Domains\Nexus\Business\Domain\ValueObjects\BusinessType;
 use App\Domains\Nexus\Business\Domain\ValueObjects\Industry;
 use App\Domains\Nexus\Catalog\Application\Actions\AddProductAction;
+use App\Domains\Nexus\Catalog\Application\Actions\VerifyProductAction;
 use App\Domains\Nexus\Credit\Application\Actions\GrantCreditsAction;
 use App\Domains\Nexus\Credit\Domain\ValueObjects\CreditTransactionType;
 use App\Domains\Nexus\Marketplace\Application\Actions\SearchMarketplaceAction;
@@ -79,5 +80,24 @@ class SearchMarketplaceActionTest extends TestCase
         $businessIds = array_column($result['listings'], 'businessId');
         $this->assertContains($retail->id, $businessIds);
         $this->assertNotContains($tech->id, $businessIds);
+    }
+
+    public function test_execute_listingsCarryTheirVerificationStatus(): void
+    {
+        $caller = app(RegisterBusinessAction::class)->execute('من', 'Caller Co', BusinessType::Company, Industry::Technology);
+        app(VerifyBusinessAction::class)->execute($caller->id);
+        app(GrantCreditsAction::class)->execute($caller->id, 100000, CreditTransactionType::AdminGrant, 'test.seed');
+
+        $supplier = app(RegisterBusinessAction::class)->execute('تأمین‌کننده', 'Supplier Co', BusinessType::Company, Industry::Retail);
+        app(VerifyBusinessAction::class)->execute($supplier->id);
+        $verifiedProduct = app(AddProductAction::class)->execute($supplier->id, 'لپ‌تاپ', 'Laptop', 5000000, 'IRT', 10);
+        app(VerifyProductAction::class)->execute($verifiedProduct->id);
+        app(AddProductAction::class)->execute($supplier->id, 'ماوس', 'Mouse', 100000, 'IRT', 10);
+
+        $result = app(SearchMarketplaceAction::class)->execute($caller->id);
+
+        $products = collect($result['listings'][0]['products'])->keyBy('nameEn');
+        $this->assertTrue($products['Laptop']['verified']);
+        $this->assertFalse($products['Mouse']['verified']);
     }
 }

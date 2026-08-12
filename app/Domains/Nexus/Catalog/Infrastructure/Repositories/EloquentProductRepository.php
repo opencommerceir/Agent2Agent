@@ -4,6 +4,7 @@ namespace App\Domains\Nexus\Catalog\Infrastructure\Repositories;
 
 use App\Domains\Nexus\Catalog\Domain\Entities\Product as ProductEntity;
 use App\Domains\Nexus\Catalog\Domain\Repositories\ProductRepositoryInterface;
+use App\Domains\Nexus\Catalog\Domain\ValueObjects\ListingVerificationStatus;
 use App\Domains\Nexus\Catalog\Domain\ValueObjects\Money;
 use App\Domains\Nexus\Catalog\Infrastructure\Models\Product as ProductModel;
 use DateTimeImmutable;
@@ -36,6 +37,16 @@ class EloquentProductRepository implements ProductRepositoryInterface
             ->all();
     }
 
+    public function findByVerificationStatus(ListingVerificationStatus $status): array
+    {
+        return ProductModel::query()
+            ->where('verification_status', $status->value)
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (ProductModel $model) => $this->toEntity($model))
+            ->all();
+    }
+
     public function save(ProductEntity $product): ProductEntity
     {
         $model = $product->id()
@@ -49,6 +60,7 @@ class EloquentProductRepository implements ProductRepositoryInterface
         $model->price_currency = $product->price()->currency();
         $model->stock_quantity = $product->stockQuantity();
         $model->attributes = $product->attributes();
+        $model->verification_status = $product->verificationStatus()->value;
         $model->save();
 
         return $this->toEntity($model);
@@ -65,6 +77,7 @@ class EloquentProductRepository implements ProductRepositoryInterface
             stockQuantity: $model->stock_quantity,
             attributes: $model->attributes,
             createdAt: DateTimeImmutable::createFromInterface($model->created_at),
+            verificationStatus: ListingVerificationStatus::from($model->verification_status),
         );
     }
 }

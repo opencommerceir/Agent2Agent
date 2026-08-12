@@ -582,6 +582,18 @@
         "deny": "رد",
         "appeal_resolved": "درخواست تجدیدنظر رسیدگی شد.",
         "empty": "موردی وجود ندارد."
+      },
+      "verification": {
+        "title": "سیستم تأیید",
+        "pending_businesses": "کسب‌وکارهای در انتظار تأیید",
+        "pending_products": "محصولات در انتظار تأیید",
+        "pending_services": "خدمات در انتظار تأیید",
+        "verify": "تأیید",
+        "reject": "رد",
+        "business_verified": "کسب‌وکار تأیید شد.",
+        "listing_verified": "مورد تأیید شد.",
+        "listing_rejected": "مورد رد شد.",
+        "empty": "موردی در انتظار نیست."
       }
     }
   }

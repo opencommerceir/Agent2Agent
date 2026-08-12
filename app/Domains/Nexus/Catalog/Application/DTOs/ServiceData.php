@@ -15,6 +15,7 @@ final class ServiceData
         public readonly string $priceCurrency,
         public readonly ?int $durationMinutes,
         public readonly ?array $attributes,
+        public readonly string $verificationStatus,
     ) {
     }
 
@@ -29,11 +30,12 @@ final class ServiceData
             priceCurrency: $service->hourlyPrice()->currency(),
             durationMinutes: $service->durationMinutes(),
             attributes: $service->attributes(),
+            verificationStatus: $service->verificationStatus()->value,
         );
     }
 
     /**
-     * @return array{id: ?int, businessId: int, nameFa: string, nameEn: string, priceAmount: int, priceCurrency: string, durationMinutes: ?int, attributes: ?array}
+     * @return array{id: ?int, businessId: int, nameFa: string, nameEn: string, priceAmount: int, priceCurrency: string, durationMinutes: ?int, attributes: ?array, verificationStatus: string}
      */
     public function toArray(): array
     {
@@ -46,6 +48,7 @@ final class ServiceData
             'priceCurrency' => $this->priceCurrency,
             'durationMinutes' => $this->durationMinutes,
             'attributes' => $this->attributes,
+            'verificationStatus' => $this->verificationStatus,
         ];
     }
 }

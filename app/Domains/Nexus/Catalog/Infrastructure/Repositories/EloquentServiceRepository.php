@@ -4,6 +4,7 @@ namespace App\Domains\Nexus\Catalog\Infrastructure\Repositories;
 
 use App\Domains\Nexus\Catalog\Domain\Entities\Service as ServiceEntity;
 use App\Domains\Nexus\Catalog\Domain\Repositories\ServiceRepositoryInterface;
+use App\Domains\Nexus\Catalog\Domain\ValueObjects\ListingVerificationStatus;
 use App\Domains\Nexus\Catalog\Domain\ValueObjects\Money;
 use App\Domains\Nexus\Catalog\Infrastructure\Models\Service as ServiceModel;
 use DateTimeImmutable;
@@ -36,6 +37,16 @@ class EloquentServiceRepository implements ServiceRepositoryInterface
             ->all();
     }
 
+    public function findByVerificationStatus(ListingVerificationStatus $status): array
+    {
+        return ServiceModel::query()
+            ->where('verification_status', $status->value)
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (ServiceModel $model) => $this->toEntity($model))
+            ->all();
+    }
+
     public function save(ServiceEntity $service): ServiceEntity
     {
         $model = $service->id()
@@ -49,6 +60,7 @@ class EloquentServiceRepository implements ServiceRepositoryInterface
         $model->price_currency = $service->hourlyPrice()->currency();
         $model->duration_minutes = $service->durationMinutes();
         $model->attributes = $service->attributes();
+        $model->verification_status = $service->verificationStatus()->value;
         $model->save();
 
         return $this->toEntity($model);
@@ -65,6 +77,7 @@ class EloquentServiceRepository implements ServiceRepositoryInterface
             durationMinutes: $model->duration_minutes,
             attributes: $model->attributes,
             createdAt: DateTimeImmutable::createFromInterface($model->created_at),
+            verificationStatus: ListingVerificationStatus::from($model->verification_status),
         );
     }
 }

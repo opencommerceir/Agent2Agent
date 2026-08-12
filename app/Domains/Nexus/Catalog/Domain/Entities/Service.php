@@ -2,6 +2,7 @@
 
 namespace App\Domains\Nexus\Catalog\Domain\Entities;
 
+use App\Domains\Nexus\Catalog\Domain\ValueObjects\ListingVerificationStatus;
 use App\Domains\Nexus\Catalog\Domain\ValueObjects\Money;
 use DateTimeImmutable;
 
@@ -9,6 +10,9 @@ use DateTimeImmutable;
  * A time-based offering a Business sells (roadmap: "قیمت ساعتی، مدت،
  * زمان‌بندی"). $price is per-hour; $durationMinutes is the typical/default
  * booking length. Framework-free (Domain Layer Rules).
+ *
+ * `verificationStatus` (Phase 6/M5) — same shape and reasoning as
+ * Product's own: starts Pending on add(), untouched by update().
  */
 final class Service
 {
@@ -21,6 +25,7 @@ final class Service
         private ?int $durationMinutes,
         private ?array $attributes,
         private readonly DateTimeImmutable $createdAt,
+        private ListingVerificationStatus $verificationStatus = ListingVerificationStatus::Pending,
     ) {
     }
 
@@ -41,6 +46,7 @@ final class Service
             durationMinutes: $durationMinutes,
             attributes: $attributes,
             createdAt: new DateTimeImmutable(),
+            verificationStatus: ListingVerificationStatus::Pending,
         );
     }
 
@@ -51,6 +57,26 @@ final class Service
         $this->hourlyPrice = $hourlyPrice;
         $this->durationMinutes = $durationMinutes;
         $this->attributes = $attributes;
+    }
+
+    public function verify(): void
+    {
+        $this->verificationStatus = ListingVerificationStatus::Verified;
+    }
+
+    public function reject(): void
+    {
+        $this->verificationStatus = ListingVerificationStatus::Rejected;
+    }
+
+    public function isVerified(): bool
+    {
+        return $this->verificationStatus === ListingVerificationStatus::Verified;
+    }
+
+    public function verificationStatus(): ListingVerificationStatus
+    {
+        return $this->verificationStatus;
     }
 
     public function id(): ?int

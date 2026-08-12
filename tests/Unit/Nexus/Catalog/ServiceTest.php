@@ -3,6 +3,7 @@
 namespace Tests\Unit\Nexus\Catalog;
 
 use App\Domains\Nexus\Catalog\Domain\Entities\Service;
+use App\Domains\Nexus\Catalog\Domain\ValueObjects\ListingVerificationStatus;
 use App\Domains\Nexus\Catalog\Domain\ValueObjects\Money;
 use PHPUnit\Framework\TestCase;
 
@@ -18,6 +19,26 @@ class ServiceTest extends TestCase
         $this->assertSame('Test Service', $service->nameEn());
         $this->assertSame(200000, $service->hourlyPrice()->amount());
         $this->assertSame(60, $service->durationMinutes());
+        $this->assertSame(ListingVerificationStatus::Pending, $service->verificationStatus());
+        $this->assertFalse($service->isVerified());
+    }
+
+    public function test_verify_setsStatusToVerified(): void
+    {
+        $service = Service::add(1, 'خدمت آزمایشی', 'Test Service', Money::fromAmount(200000, 'IRT'));
+
+        $service->verify();
+
+        $this->assertTrue($service->isVerified());
+    }
+
+    public function test_reject_setsStatusToRejected(): void
+    {
+        $service = Service::add(1, 'خدمت آزمایشی', 'Test Service', Money::fromAmount(200000, 'IRT'));
+
+        $service->reject();
+
+        $this->assertSame(ListingVerificationStatus::Rejected, $service->verificationStatus());
     }
 
     public function test_update_changesAllMutableFields(): void

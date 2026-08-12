@@ -37,6 +37,16 @@ class EloquentBusinessRepository implements BusinessRepositoryInterface
             ->all();
     }
 
+    public function findByVerificationStatus(VerificationStatus $status): array
+    {
+        return BusinessModel::query()
+            ->where('verification_status', $status->value)
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (BusinessModel $model) => $this->toEntity($model))
+            ->all();
+    }
+
     public function save(BusinessEntity $business): BusinessEntity
     {
         $model = $business->id()

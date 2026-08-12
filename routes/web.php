@@ -8,6 +8,7 @@ use App\Http\Controllers\Dashboard\DashboardController;
 use App\Http\Controllers\Dashboard\NexusDisputeController;
 use App\Http\Controllers\Dashboard\NexusEscrowController;
 use App\Http\Controllers\Dashboard\NexusFraudController;
+use App\Http\Controllers\Dashboard\NexusVerificationController;
 use App\Http\Controllers\Dashboard\NexusGrowthController;
 use App\Http\Controllers\Dashboard\NexusLlmSettingsController;
 use App\Http\Controllers\Dashboard\NexusMarginSettingsController;
@@ -134,6 +135,14 @@ Route::middleware('auth')->group(function () {
             Route::post('/fraud/suspend', [NexusFraudController::class, 'suspend'])->name('fraud.suspend');
             Route::post('/fraud/{business}/reactivate', [NexusFraudController::class, 'reactivate'])->name('fraud.reactivate');
             Route::post('/fraud/appeals/{appeal}/resolve', [NexusFraudController::class, 'resolveAppeal'])->name('fraud.appeals.resolve');
+
+            // Verification System (Phase 6/M5).
+            Route::get('/verification', [NexusVerificationController::class, 'index'])->name('verification.index');
+            Route::post('/verification/businesses/{business}/verify', [NexusVerificationController::class, 'verifyBusiness'])->name('verification.businesses.verify');
+            Route::post('/verification/products/{product}/verify', [NexusVerificationController::class, 'verifyProduct'])->name('verification.products.verify');
+            Route::post('/verification/products/{product}/reject', [NexusVerificationController::class, 'rejectProduct'])->name('verification.products.reject');
+            Route::post('/verification/services/{service}/verify', [NexusVerificationController::class, 'verifyService'])->name('verification.services.verify');
+            Route::post('/verification/services/{service}/reject', [NexusVerificationController::class, 'rejectService'])->name('verification.services.reject');
         });
     });
 });

@@ -15,6 +15,7 @@ final class ProductData
         public readonly string $priceCurrency,
         public readonly int $stockQuantity,
         public readonly ?array $attributes,
+        public readonly string $verificationStatus,
     ) {
     }
 
@@ -29,11 +30,12 @@ final class ProductData
             priceCurrency: $product->price()->currency(),
             stockQuantity: $product->stockQuantity(),
             attributes: $product->attributes(),
+            verificationStatus: $product->verificationStatus()->value,
         );
     }
 
     /**
-     * @return array{id: ?int, businessId: int, nameFa: string, nameEn: string, priceAmount: int, priceCurrency: string, stockQuantity: int, attributes: ?array}
+     * @return array{id: ?int, businessId: int, nameFa: string, nameEn: string, priceAmount: int, priceCurrency: string, stockQuantity: int, attributes: ?array, verificationStatus: string}
      */
     public function toArray(): array
     {
@@ -46,6 +48,7 @@ final class ProductData
             'priceCurrency' => $this->priceCurrency,
             'stockQuantity' => $this->stockQuantity,
             'attributes' => $this->attributes,
+            'verificationStatus' => $this->verificationStatus,
         ];
     }
 }

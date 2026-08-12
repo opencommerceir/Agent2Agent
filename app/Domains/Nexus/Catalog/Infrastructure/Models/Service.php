@@ -16,6 +16,7 @@ class Service extends Model
         'price_currency',
         'duration_minutes',
         'attributes',
+        'verification_status',
     ];
 
     protected $casts = [

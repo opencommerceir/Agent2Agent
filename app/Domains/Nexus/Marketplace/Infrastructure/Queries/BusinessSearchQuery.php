@@ -85,25 +85,29 @@ class BusinessSearchQuery
         $products = Product::query()
             ->where('business_id', $business->id)
             ->when($query, fn ($q) => $q->where(fn ($inner) => $inner->where('name_fa', 'like', "%{$query}%")->orWhere('name_en', 'like', "%{$query}%")))
-            ->get(['id', 'name_fa', 'name_en', 'price_amount', 'price_currency']);
+            ->get(['id', 'name_fa', 'name_en', 'price_amount', 'price_currency', 'verification_status']);
 
         $services = Service::query()
             ->where('business_id', $business->id)
             ->when($query, fn ($q) => $q->where(fn ($inner) => $inner->where('name_fa', 'like', "%{$query}%")->orWhere('name_en', 'like', "%{$query}%")))
-            ->get(['id', 'name_fa', 'name_en', 'price_amount', 'price_currency']);
+            ->get(['id', 'name_fa', 'name_en', 'price_amount', 'price_currency', 'verification_status']);
 
         return new MarketplaceListingData(
             businessId: $business->id,
             nameFa: $business->name_fa,
             nameEn: $business->name_en,
             industry: $business->industry,
+            // 'verified' (Phase 6/M5) lets a calling Agent weigh a listing's
+            // trust signal before ever proposing a Negotiation over it.
             products: $products->map(fn (Product $p) => [
                 'id' => $p->id, 'nameFa' => $p->name_fa, 'nameEn' => $p->name_en,
                 'priceAmount' => $p->price_amount, 'priceCurrency' => $p->price_currency,
+                'verified' => $p->verification_status === 'verified',
             ])->all(),
             services: $services->map(fn (Service $s) => [
                 'id' => $s->id, 'nameFa' => $s->name_fa, 'nameEn' => $s->name_en,
                 'priceAmount' => $s->price_amount, 'priceCurrency' => $s->price_currency,
+                'verified' => $s->verification_status === 'verified',
             ])->all(),
         );
     }
