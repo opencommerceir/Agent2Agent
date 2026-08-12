@@ -4,6 +4,7 @@ use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessDashboardCont
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessLoginController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessLogoutController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\RegisterBusinessController;
+use App\Domains\Nexus\Negotiation\Interfaces\Http\Controllers\NegotiationViewerController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -39,5 +40,16 @@ Route::middleware('web')->group(function () {
             Route::post('/logout', BusinessLogoutController::class)->name('logout');
             Route::get('/dashboard', [BusinessDashboardController::class, 'index'])->name('dashboard');
         });
+    });
+
+    // Live Negotiation Viewer (Phase 2, M7) — same 'business' guard as
+    // the portal above, kept under its own prefix/name since it belongs
+    // to the Negotiation domain, not Business.
+    Route::middleware('business.auth:business')->prefix('nexus/negotiations')->name('nexus.negotiations.')->group(function () {
+        Route::get('/', [NegotiationViewerController::class, 'index'])->name('index');
+        Route::get('/{negotiation}', [NegotiationViewerController::class, 'show'])->name('show');
+        Route::get('/{negotiation}/messages', [NegotiationViewerController::class, 'messages'])->name('messages');
+        Route::post('/{negotiation}/approve', [NegotiationViewerController::class, 'approve'])->name('approve');
+        Route::post('/{negotiation}/reject', [NegotiationViewerController::class, 'reject'])->name('reject');
     });
 });

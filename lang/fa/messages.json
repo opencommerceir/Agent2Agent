@@ -294,6 +294,41 @@
         "telecommunications": "مخابرات",
         "other": "سایر"
       }
+    },
+    "negotiation": {
+      "index": {
+        "title": "مذاکرات",
+        "empty": "هنوز مذاکره‌ای وجود ندارد.",
+        "counterparty": "طرف مقابل",
+        "status": "وضعیت",
+        "round": "دور",
+        "view": "مشاهده"
+      },
+      "show": {
+        "title": "مذاکره",
+        "with": "با",
+        "round": "دور",
+        "pending_approval_banner": "این معامله از سقف اختیار Agent فراتر رفته و نیاز به تأیید شما دارد.",
+        "approve": "تأیید",
+        "reject": "رد",
+        "reasoning": "استدلال",
+        "confidence": "میزان اطمینان",
+        "no_messages": "هنوز پیامی وجود ندارد."
+      },
+      "status": {
+        "proposed": "پیشنهاد شده",
+        "countered": "پیشنهاد متقابل",
+        "pending_approval": "در انتظار تأیید",
+        "accepted": "پذیرفته شده",
+        "rejected": "رد شده",
+        "expired": "منقضی شده"
+      },
+      "message_type": {
+        "proposal": "پیشنهاد",
+        "counter": "پیشنهاد متقابل",
+        "accept": "پذیرش",
+        "reject": "رد"
+      }
     }
   }
 }

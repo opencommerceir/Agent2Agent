@@ -1,0 +1,98 @@
+<?php
+
+namespace App\Domains\Nexus\Negotiation\Interfaces\Http\Controllers;
+
+use App\Domains\Nexus\Business\Domain\Repositories\BusinessRepositoryInterface;
+use App\Domains\Nexus\Business\Infrastructure\Models\BusinessOwner;
+use App\Domains\Nexus\Negotiation\Application\Actions\ApprovePendingNegotiationAction;
+use App\Domains\Nexus\Negotiation\Application\Actions\GetNegotiationAction;
+use App\Domains\Nexus\Negotiation\Application\Actions\ListMyNegotiationsAction;
+use App\Domains\Nexus\Negotiation\Application\Actions\ListNegotiationMessagesAction;
+use App\Domains\Nexus\Negotiation\Application\Actions\PollNegotiationMessagesAction;
+use App\Domains\Nexus\Negotiation\Application\Actions\RejectPendingNegotiationAction;
+use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\View\View;
+
+/**
+ * The Live Negotiation Viewer (docs/nexus-roadmap.md, Phase 2) — a
+ * Business owner watches their own Agent negotiate and approves/rejects
+ * deals paused for human approval. Controllers stay thin: every method
+ * resolves the acting Business id then delegates to an Action, which
+ * re-checks party authorization itself (Actions rule, not this
+ * controller's job to enforce).
+ */
+class NegotiationViewerController extends Controller
+{
+    public function __construct(
+        private readonly ListMyNegotiationsAction $listMyNegotiations,
+        private readonly GetNegotiationAction $getNegotiation,
+        private readonly ListNegotiationMessagesAction $listMessages,
+        private readonly PollNegotiationMessagesAction $pollMessages,
+        private readonly ApprovePendingNegotiationAction $approvePending,
+        private readonly RejectPendingNegotiationAction $rejectPending,
+        private readonly BusinessRepositoryInterface $businesses,
+    ) {
+    }
+
+    public function index(): View
+    {
+        $negotiations = $this->listMyNegotiations->execute($this->actingBusinessId());
+
+        return view('nexus::negotiations.index', ['negotiations' => $negotiations]);
+    }
+
+    public function show(int $negotiation): View
+    {
+        $businessId = $this->actingBusinessId();
+        $negotiationData = $this->getNegotiation->execute($negotiation, $businessId);
+        $messages = $this->listMessages->execute($negotiation, $businessId);
+
+        $otherPartyId = $negotiationData->initiatorBusinessId === $businessId
+            ? $negotiationData->counterpartyBusinessId
+            : $negotiationData->initiatorBusinessId;
+        $otherParty = $this->businesses->findById($otherPartyId);
+
+        return view('nexus::negotiations.show', [
+            'negotiation' => $negotiationData,
+            'messages' => $messages,
+            'actingBusinessId' => $businessId,
+            'otherPartyNameFa' => $otherParty?->nameFa() ?? '—',
+            'otherPartyNameEn' => $otherParty?->nameEn() ?? '—',
+        ]);
+    }
+
+    public function messages(int $negotiation, Request $request): JsonResponse
+    {
+        $businessId = $this->actingBusinessId();
+        $afterId = (int) $request->integer('after', 0);
+        $messages = $this->pollMessages->execute($negotiation, $businessId, $afterId);
+
+        return response()->json(['messages' => array_map(fn ($m) => $m->toArray(), $messages)]);
+    }
+
+    public function approve(int $negotiation): RedirectResponse
+    {
+        $this->approvePending->execute($negotiation, $this->actingBusinessId());
+
+        return redirect()->route('nexus.negotiations.show', $negotiation);
+    }
+
+    public function reject(int $negotiation, Request $request): RedirectResponse
+    {
+        $this->rejectPending->execute($negotiation, $this->actingBusinessId(), $request->string('reason')->toString() ?: null);
+
+        return redirect()->route('nexus.negotiations.show', $negotiation);
+    }
+
+    private function actingBusinessId(): int
+    {
+        /** @var BusinessOwner $owner */
+        $owner = Auth::guard('business')->user();
+
+        return $owner->business_id;
+    }
+}

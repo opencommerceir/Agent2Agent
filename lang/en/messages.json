@@ -294,6 +294,41 @@
         "telecommunications": "Telecommunications",
         "other": "Other"
       }
+    },
+    "negotiation": {
+      "index": {
+        "title": "Negotiations",
+        "empty": "No negotiations yet.",
+        "counterparty": "Counterparty",
+        "status": "Status",
+        "round": "Round",
+        "view": "View"
+      },
+      "show": {
+        "title": "Negotiation",
+        "with": "with",
+        "round": "Round",
+        "pending_approval_banner": "This deal exceeds the Agent's authority limit and needs your approval.",
+        "approve": "Approve",
+        "reject": "Reject",
+        "reasoning": "Reasoning",
+        "confidence": "Confidence",
+        "no_messages": "No messages yet."
+      },
+      "status": {
+        "proposed": "Proposed",
+        "countered": "Countered",
+        "pending_approval": "Pending Approval",
+        "accepted": "Accepted",
+        "rejected": "Rejected",
+        "expired": "Expired"
+      },
+      "message_type": {
+        "proposal": "Proposal",
+        "counter": "Counter-offer",
+        "accept": "Accepted",
+        "reject": "Rejected"
+      }
     }
   }
 }

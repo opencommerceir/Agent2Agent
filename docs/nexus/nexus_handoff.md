@@ -251,3 +251,17 @@
 **کامیت:** `feat(nexus): add Contract domain (auto-generate bilingual PDF + hash signature on acceptance)`.
 
 ---
+
+## Phase 2 / M7 — Live Negotiation Viewer
+
+صفحه‌ای که صاحب کسب‌وکار می‌تواند مذاکرهٔ زندهٔ Agent خودش را ببیند و معاملات بالای سقف اختیار را تأیید/رد کند. چون هیچ زیرساخت WebSocket/broadcast در پروژه وجود ندارد (`BROADCAST_CONNECTION=log`، بدون `config/broadcasting.php`)، صفحه هر ۳ ثانیه با `setInterval` + `fetch` روی یک endpoint سبک JSON (`GET /nexus/negotiations/{id}/messages?after={id}`) poll می‌کند — بدون اختراع زیرساخت real-time جدید.
+
+سه Action جدید و کوچک برای پشتیبانی از viewer: `ListMyNegotiationsAction` (صفحهٔ فهرست، نام دوزبانه طرف مقابل را هم resolve می‌کند)، `ListNegotiationMessagesAction` (بار اول صفحه)، `PollNegotiationMessagesAction` (فقط پیام‌های بعد از یک id — endpoint polling). هرکدام به‌طور مستقل عضویت caller را چک می‌کنند (نه اعتماد به چک قبلی کنترلر) — همان الگوی self-contained authorization که همهٔ Actionهای این پروژه دارند.
+
+**فایل‌های اصلی:** `NegotiationViewerController` (Negotiation/Interfaces/Http)، `resources/views/nexus/negotiations/{index,show}.blade.php`، مسیرهای جدید زیر گروه `business.auth:business` موجود در `routes/nexus/web.php`.
+
+**تست:** ۵ تست Feature جدید — نمایش صفحه برای یک طرف واقعی، endpoint polling (فقط پیام‌های جدید برمی‌گرداند)، Approve واقعی (که Contract واقعی هم می‌سازد، چون مسیر رویدادی M6 دست نمی‌خورد)، Reject، و فهرست مذاکرات.
+
+**کامیت:** `feat(nexus): add Live Negotiation Viewer (polling UI, human approve/reject)`.
+
+---
