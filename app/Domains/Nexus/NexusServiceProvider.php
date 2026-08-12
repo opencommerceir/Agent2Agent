@@ -32,6 +32,13 @@ use App\Domains\Nexus\Credit\Domain\Repositories\CreditTransactionRepositoryInte
 use App\Domains\Nexus\Credit\Infrastructure\Repositories\EloquentCreditBalanceRepository;
 use App\Domains\Nexus\Credit\Infrastructure\Repositories\EloquentCreditPurchaseSessionRepository;
 use App\Domains\Nexus\Credit\Infrastructure\Repositories\EloquentCreditTransactionRepository;
+use App\Domains\Nexus\Llm\Application\Services\LLMProviderRegistry;
+use App\Domains\Nexus\Llm\Infrastructure\Providers\AnthropicLLMProvider;
+use App\Domains\Nexus\Llm\Infrastructure\Providers\GroqLLMProvider;
+use App\Domains\Nexus\Llm\Infrastructure\Providers\LocalLlamaLLMProvider;
+use App\Domains\Nexus\Llm\Infrastructure\Providers\OpenAILLMProvider;
+use App\Domains\Nexus\Llm\Infrastructure\Providers\OpenRouterLLMProvider;
+use App\Domains\Nexus\Llm\Infrastructure\Providers\SelfHostedQwenLLMProvider;
 use App\Domains\Nexus\Marketplace\Application\Actions\SearchMarketplaceAction;
 use App\Domains\Nexus\Negotiation\Application\Actions\AcceptDealAction;
 use App\Domains\Nexus\Negotiation\Application\Actions\GetNegotiationAction;
@@ -84,6 +91,10 @@ class NexusServiceProvider extends ServiceProvider
         // registers the same adapter classes under its own instance
         // instead of reimplementing the Zibal/Stripe HTTP integration.
         $this->app->singleton(PaymentGatewayRegistry::class);
+
+        // Phase 4 — LLM Provider System. Same Connector Pattern as
+        // PaymentGatewayRegistry above, populated in boot() below.
+        $this->app->singleton(LLMProviderRegistry::class);
     }
 
     public function boot(): void
@@ -110,7 +121,50 @@ class NexusServiceProvider extends ServiceProvider
         $gateways->register('zibal', new ZibalPaymentGateway(ZibalConfig::fromConfig()));
         $gateways->register('stripe', new StripePaymentGateway(StripeConfig::fromConfig()));
 
+        $this->registerLlmProviders();
         $this->registerMcpCapabilityHandlers();
+    }
+
+    /**
+     * Phase 4 — one entry per config('nexus.platform.llm.providers.*') key,
+     * same "register the real adapter classes explicitly" shape the
+     * payment gateway block above already uses (no config-loop reflection).
+     */
+    private function registerLlmProviders(): void
+    {
+        $providers = $this->app->make(LLMProviderRegistry::class);
+        $config = config('nexus.platform.llm.providers');
+
+        $providers->register('openai', new OpenAILLMProvider(
+            $config['openai']['api_key'] ?? '',
+            $config['openai']['model'],
+            $config['openai']['base_url'],
+        ));
+        $providers->register('claude', new AnthropicLLMProvider(
+            $config['claude']['api_key'] ?? '',
+            $config['claude']['model'],
+            $config['claude']['base_url'],
+        ));
+        $providers->register('openrouter', new OpenRouterLLMProvider(
+            $config['openrouter']['api_key'] ?? '',
+            $config['openrouter']['model'],
+            $config['openrouter']['base_url'],
+        ));
+        $providers->register('groq', new GroqLLMProvider(
+            $config['groq']['api_key'] ?? '',
+            $config['groq']['model'],
+            $config['groq']['base_url'],
+        ));
+        $providers->register('qwen-14b-local', new SelfHostedQwenLLMProvider(
+            $config['qwen-14b-local']['api_key'] ?? '',
+            $config['qwen-14b-local']['model'],
+            $config['qwen-14b-local']['base_url'],
+        ));
+        $providers->register('llama-3.2-3b-local', new LocalLlamaLLMProvider(
+            $config['llama-3.2-3b-local']['api_key'] ?? '',
+            $config['llama-3.2-3b-local']['model'],
+            $config['llama-3.2-3b-local']['base_url'],
+        ));
     }
 
     /**

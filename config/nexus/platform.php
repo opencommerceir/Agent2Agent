@@ -32,7 +32,13 @@ return [
             'openai' => [
                 'api_key' => env('NEXUS_OPENAI_API_KEY'),
                 'model' => env('NEXUS_OPENAI_MODEL', 'gpt-4o'),
-                'base_url' => env('NEXUS_OPENAI_BASE_URL', 'https://api.openai.com'),
+                // Includes /v1, same "base_url already carries the API
+                // version path segment" convention every other
+                // AbstractOpenAiCompatibleProvider subclass below uses —
+                // deliberately not bare https://api.openai.com (the shape
+                // AgentOrchestrator's own OpenAIClient uses, which instead
+                // hardcodes /v1 into its own request path constant).
+                'base_url' => env('NEXUS_OPENAI_BASE_URL', 'https://api.openai.com/v1'),
             ],
             'claude' => [
                 'api_key' => env('NEXUS_CLAUDE_API_KEY'),
