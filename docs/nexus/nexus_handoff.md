@@ -618,3 +618,125 @@
 **آماده برای Phase 5 (Viral Growth Engine)** طبق `docs/nexus-roadmap.md`.
 
 ---
+
+# Phase 5 — Viral Growth Engine
+
+**دستور:** «فاز 5 رو باید درست کنی» (بعد از تأیید Phase 4). قبل از کدنویسی، دو Explore agent موازی روی زیرساخت موجود (سیستم Notification/Mail، وضعیت اسکلت Reputation/Marketplace/Analytics، الگوی MCP capability/event-wiring، الگوی کد تولید کوپن) اجرا شد و پلن کامل ۶ مرحله‌ای (M1–M6) تأیید شد.
+
+**یافتهٔ کلیدی پیش از کدنویسی:** هیچ دامنهٔ از پیش‌ساخته‌ای برای «Growth» در اسکلت اولیهٔ ۱۰-دامنه‌ای Phase 0 وجود نداشت (Referral/Invite/Coalition هیچ‌کدام جا نمی‌افتند در Business/Agent/Catalog/Negotiation/Contract/Credit/Reputation/Marketplace/Analytics/Admin). دقیقاً همان دلیلی که Phase 4، دامنهٔ کاملاً جدید `Llm` را بدون اسکلت از قبل ساخت، این فاز هم دامنهٔ جدید `app/Domains/Nexus/Growth` را ساخت (Referral + Invite + Coalition)؛ Network Visualization و Viral Analytics به‌جای دامنهٔ جدید، به دامنه‌های read-model موجود (Marketplace، Analytics) اضافه شدند — چون هر دو صرفاً می‌خوانند، نه می‌نویسند، دقیقاً همان استثنای Inter-Module Communication که از Phase 1/M6 مستند است. ماژول *فعال* `App\Modules\Notifications` (با `EmailSender`/`SendNotificationAction` واقعی) پیدا شد و برای ارسال دعوت‌نامه استفاده شد — بدون ساخت یک پایپ‌لاین ایمیل دوم.
+
+## Phase 5 / M1 — Referral System core (پاداش دوطرفه، ردیابی چندلایه)
+
+**تصمیم کلیدی:** هر Business تأییدشده یک `ReferralCode` منحصربه‌فرد خودکار می‌گیرد (`IssueReferralCodeOnBusinessVerifiedListener` روی همان `BusinessWasVerified`، کنار listenerهای Agent/Credit موجود — الگوی auto-provisioning تکرارشونده). ثبت‌نام با `?ref=CODE` یک `ReferralSignup` با وضعیت Pending می‌سازد (`RecordReferralSignupAction`، فراخوانی‌شده از خودِ Controller نه از داخل `RegisterBusinessAction` — امضا/تست‌های آن Action دست‌نخورده ماند). پاداش فقط در لحظهٔ Verified شدنِ معرفی‌شونده پرداخت می‌شود (`GrantReferralRewardOnBusinessVerifiedListener`) — یک معرفی برای کسب‌وکاری که هرگز تأیید نشود، هیچ‌وقت پاداشی نمی‌گیرد، دقیقاً همان صداقتی که تأمین کردیت شروع از Phase 3/M1 قبلاً رعایت کرده بود. Multi-tier: اگر معرف خودش قبلاً معرفی‌شده و پاداش‌گرفته بود، معرفِ او هم یک پاداش تیر-۲ کوچک‌تر می‌گیرد — فقط یک گام، نه زنجیرهٔ نامحدود.
+
+**فایل‌های اصلی:** `app/Domains/Nexus/Growth/{Domain,Application,Infrastructure,Interfaces}/**` (ReferralCode/ReferralSignup)، دو migration، `CreditTransactionType::ReferralBonus` جدید، بخش `growth` جدید در `config/nexus/platform.php`، capability `nexus.referral.status` (رایگان، مثل `nexus.credit.balance`)، صفحهٔ `/nexus/growth/referrals`.
+
+**تست:** ۲۰ تست جدید (Unit روی Entityها + Feature روی چرخهٔ کامل ثبت‌نام→Verify→پاداش دوطرفه→تیر-۲، capability MCP، کنترلر) — همه پاس.
+
+**کامیت:** `feat(nexus): add Referral System core (two-sided rewards, multi-tier)`.
+
+---
+
+## Phase 5 / M2 — Agent-Invites-Agent (ردیابی دعوت + ارسال ایمیل واقعی)
+
+**تصمیم کلیدی:** `SendAgentInviteAction` از ماژول *فعال* `Notifications` (`SendNotificationAction`) استفاده می‌کند، نه یک پایپ‌لاین ایمیل جدید — یک دعوت خام به یک ایمیل بیرونی، بدون Customer/Agent id مالک، پس `$recipientType`/`$recipientId` عمداً `null` می‌مانند (طبق مستندات خودِ `SendNotificationAction`: preference-check کاملاً skip می‌شود). یک `NotificationType::AgentInvite` جدید افزوده شد (تغییر additive، بدون شکستن چیزی).
+
+**صداقت ردیابی:** `Invite` فقط دو وضعیت دارد (`Sent`/`Converted`) — نه «باز شد»/«کلیک شد»، چون هیچ زیرساخت pixel/redirect-tracking در این کدبیس وجود ندارد (همان صداقت اسکوپِ Escrow). تبدیل («Converted») فقط وقتی رخ می‌دهد که همان کد معرفی واقعاً در ثبت‌نام استفاده شود (`RecordReferralSignupAction` قدیمی‌ترین Invite بازِ همان کد را می‌بندد) — سیگنالی قابل اثبات، نه فرض «ایمیل باز شد».
+
+**CostGate:** `nexus.invite.send` هزینهٔ کوچک ثابتی دارد (config جدید، نه در `docs/claude/monetization.md` — مستند و مستدل به‌عنوان افزودهٔ جدید Phase 5) تا از اسپم جلوگیری کند؛ برخلاف `nexus.referral.status`/`nexus.credit.balance` که رایگان می‌مانند.
+
+**فایل‌های اصلی:** `Invite` (Entity/Repo/Model)، `SendAgentInviteAction`، `ListSentInvitesAction`، capability `nexus.invite.send`، صفحهٔ `/nexus/growth/invites`.
+
+**تست:** ۱۴ تست جدید Growth + ۲ تست جدید در `RegisterBusinessControllerTest` (مسیر `?ref=` واقعی از طریق کنترلر) — همه پاس.
+
+**کامیت:** `feat(nexus): add Agent-Invites-Agent (Invite tracking + email delivery)`.
+
+---
+
+## Phase 5 / M3 — Group Buying Coalitions (خرید گروهی)
+
+**تصمیم کلیدی:** `Coalition` مستقیماً VOهای خودِ Negotiation (`Money`, `CatalogItemType`) را دوباره‌استفاده می‌کند، نه یک کپی چهارم — چون هدف یک Coalition دقیقاً یک Negotiation واقعی است (`CloseCoalitionAction`)، یک کپی مستقل فقط بلافاصله دوباره تبدیل می‌شد؛ برخلاف Money مستقل هر دامنهٔ دیگر (که مقداری واقعاً مال خودشان را نگه می‌دارند). سازمان‌دهنده خودش اولین عضو Coalition است (کمیت خودش هم در سفارش انبوه حساب می‌شود).
+
+**بستن Coalition:** وقتی حداقل تعداد عضو رسید، `CloseCoalitionAction` کمیت همهٔ اعضا را جمع می‌زند، تخفیف را روی قیمت واحد اعمال می‌کند (`Coalition::discountedUnitPrice()`)، و دقیقاً یک `Negotiation` واقعی با `InitiateNegotiationAction` موجود باز می‌کند (Extend, Don't Rebuild — بدون مکانیزم «معاملهٔ انبوه» موازی؛ CostGate آن Action هم رایگان اعمال می‌شود، بدون تکرار). تخفیف واقعاً اعمال‌شدن، تضمین‌شده نیست — تأمین‌کننده هدف هنوز باید مثل هر Negotiation دیگری propose/counter/accept/reject کند (همان صداقت Escrow).
+
+**بستن حلقه:** `CompleteCoalitionOnNegotiationAcceptedListener` روی `NegotiationWasAccepted` گوش می‌دهد و اگر آن Negotiation متعلق به یک Coalition بود، آن را Completed می‌کند — no-op برای اکثریت قریب‌به‌اتفاق Negotiationهای غیرمرتبط. **محدودیت مستند:** چون هیچ `NegotiationWasRejected` در کدبیس وجود ندارد (Phase 2/M3)، رد شدن معاملهٔ انبوه هیچ سیگنال خودکاری ندارد — `CancelCoalitionAction` مسیر خروج دستی سازمان‌دهنده است.
+
+**فایل‌های اصلی:** `Coalition`/`CoalitionMember` (Entity/Repo/Model)، ۷ Action (Create/Join/Leave/Get/ListOpen/Close/Cancel)، ۶ capability (`nexus.coalition.{create,join,list,close,leave,cancel}`)، صفحات `/nexus/growth/coalitions`.
+
+**تست:** ۳۰ تست جدید — شامل یک سناریوی کامل واقعی (بدون mock): تشکیل → پیوستن → بستن → پذیرش Negotiation توسط تأمین‌کننده → Coalition واقعاً Completed — همه پاس.
+
+**کامیت:** `feat(nexus): add Group Buying coalitions (bulk-discount negotiation)`.
+
+---
+
+## Phase 5 / M4 — Network Visualization (نمایش گراف شبکه)
+
+**تصمیم کلیدی:** دامنهٔ جدیدی ساخته نشد — `NetworkQuery` به دامنهٔ *موجود* Marketplace اضافه شد (همان الگوی `BusinessSearchQuery`: یک Query class ساده، نه Repository، چون Marketplace اصلاً جدول خودش ندارد). «رابطه» فقط یک واقعیتِ واقعاً ثبت‌شده است — یک Negotiation Accepted، یا عضویت مشترک در یک Coalition — هرگز یک امتیاز affinity ساختگی (همان صداقتی که `RankSuppliersAction` قبلاً دربارهٔ نبود Reputation اعمال کرده بود).
+
+**گراف محدود، نه کامل پلتفرم:** `GetBusinessNetworkAction` شرکای مستقیم + هم‌عضوهای Coalition + یک گام جلوتر («شرکای شرکای شما») را می‌سازد، با سقف‌های صریح (حداکثر ۵ شریک بسط‌داده‌شده، حداکثر ۱۰ پیشنهاد) — یک گراف قابل‌خواندن و bounded، نه یک BFS کامل روی کل گراف مذاکرات پلتفرم.
+
+**بدون وابستگی JS جدید:** صفحهٔ `/nexus/network` یک گراف رادیال ساده با SVG درون‌خطی و کمی جاوااسکریپت خام رسم می‌کند (مختصات با مثلثات ساده محاسبه می‌شوند) — دقیقاً همان فلسفهٔ «بدون اختراع زیرساخت جدید» که Phase 2/M7 برای polling به‌جای WebSocket دنبال کرد.
+
+**فایل‌های اصلی:** `NetworkQuery`، `GetBusinessNetworkAction`، `BusinessNetworkData`، capability `nexus.marketplace.network` (رایگان)، صفحهٔ `/nexus/network`.
+
+**تست:** ۱۰ تست جدید (شامل تست صریح «شریک مستقیم هرگز دوباره به‌عنوان پیشنهادی لیست نمی‌شود») — همه پاس.
+
+**کامیت:** `feat(nexus): add Network Visualization (Marketplace domain extension)`.
+
+---
+
+## Phase 5 / M5 — Viral Analytics (K-factor، Cohort، A/B Test)
+
+**تصمیم کلیدی:** `GrowthAnalyticsQuery` به دامنهٔ *موجود* Analytics اضافه شد (همان الگوی `RevenueQuery`: Query class ساده، نه Repository، برای خواندن چندلایه). K-factor با فرمول استاندارد محاسبه می‌شود: (میانگین دعوت ارسالی به‌ازای هر کسب‌وکار دعوت‌کننده) × (نرخ تبدیل آن دعوت‌ها) — صفر بدون داده، نه خطای تقسیم‌بر‌صفر (همان صداقت `RevenueCalculatorTest` برای نرخ رشد).
+
+**یافتهٔ صادقانه:** جدول `businesses` ستون `verified_at` ندارد (`VerifyBusinessAction` فقط `verification_status` را تغییر می‌دهد) — پس Cohort بر اساس **هفتهٔ ثبت‌نام** (`created_at`) گروه‌بندی شد، نه «هفتهٔ تأیید» که سند roadmap به آن اشاره کرده بود؛ سیگنال واقعاً موجود، نه یکی ساختگی.
+
+**A/B Testing:** `Invite::messageVariant` (پیش‌فرض `'a'`) از M2 از قبل وجود داشت دقیقاً برای همین — `inviteVariants()` نرخ تبدیل را به‌ازای هر نسخه پیام گروه‌بندی می‌کند.
+
+**فایل‌های اصلی:** `GrowthAnalyticsQuery`، `GetGrowthDashboardAction`، `NexusGrowthController`، صفحهٔ ادمین `/dashboard/nexus/growth` (گارد `auth`/`admin` هستهٔ پلتفرم، نه Jarvis — همان مرز Phase 1/M1).
+
+**تست:** ۷ تست جدید — همه پاس.
+
+**کامیت:** `feat(nexus): add Viral Analytics (K-factor, cohorts, A/B test dashboard)`.
+
+---
+
+## Phase 5 / M6 — تأیید نهایی
+
+- `php artisan migrate --force` روی دیتابیس dev: همهٔ ۵ migration جدید (`nexus_referral_codes`, `nexus_referral_signups`, `nexus_invites`, `nexus_coalitions`, `nexus_coalition_members`) تمیز اجرا شدند.
+- `php artisan test` کامل: **۱۲۲۵ pass / ۲۸۳ fail** — بدون رگرشن (baseline قبل از Phase 5: ۱۱۴۵ pass؛ همان ۲۸۳ شکست ثابت ماژول‌های غیرفعال، بدون تغییر، در هر مرحله تأیید شد).
+- تست End-to-End دستی کامل روی دیتابیس واقعی (از طریق `php artisan tinker <file>` — همان جایگزین مستندشدهٔ کلیک مرورگری از Phase 2/3/4 به‌خاطر مشکل شناخته‌شدهٔ رزرو پورت ویندوز؛ این‌بار یک نکتهٔ ابزاری تازه هم کشف شد: فایل باید با `<?php` شروع شود وگرنه `tinker` به‌جای اجرا، فقط سورس را echo می‌کند):
+  1. ثبت‌نام Root Co → تأیید → کد معرفی خودکار صادر شد (`REF-KD1IA3`).
+  2. ثبت‌نام Referee Co با آن کد → تأیید → هر دو طرف واقعاً پاداش گرفتند (۲۰۰/۱۰۰ کردیت)، `tier1Count=1`.
+  3. Root Co یک Invite واقعی به یک ایمیل بیرونی فرستاد (`status=sent`) → یک کسب‌وکار سوم (Lead Co) با همان کد ثبت‌نام کرد → Invite واقعاً `status=converted` شد.
+  4. Root Co یک Coalition واقعی علیه یک تأمین‌کننده تشکیل داد (تخفیف ۱۵٪) → Lead Co پیوست → بسته شد (یک Negotiation واقعی با کمیت تجمیعی ۱۵ و قیمت تخفیف‌خورده باز شد) → تأمین‌کننده پذیرفت → Coalition واقعاً `completed` شد.
+  5. گراف شبکهٔ Root Co درست بود: تأمین‌کننده به‌عنوان `direct` (از Negotiation پذیرفته‌شدهٔ Coalition)، Lead Co به‌عنوان `coalition`.
+  6. داشبورد Viral Analytics روی همین داده‌های واقعی: K-factor=۱، یک دعوت ارسالی، یک دعوت تبدیل‌شده، نرخ تبدیل ۱۰۰٪ — دقیقاً مطابق محاسبهٔ دستی.
+- `php artisan route:list`: هر ۱۳ مسیر جدید (`nexus/growth/{referrals,invites,coalitions*}`, `nexus/network`, `dashboard/nexus/growth`) درست ثبت شده‌اند؛ ترتیب `coalitions/create` قبل از `coalitions/{coalition}` تأیید شد (بدون تداخل روت).
+- `git log --oneline`: هر ۵ مرحلهٔ Phase 5 (M1 تا M5) کامیت شده‌اند.
+
+**کامیت:** `docs(nexus): Phase 5 complete — final handoff summary`.
+
+---
+
+## 🎯 خلاصه Phase 5 (Viral Growth Engine) — تکمیل شد
+
+| دامنه | Entity/Service اصلی | Action‌های کلیدی | MCP Capability | تست |
+|---|---|---|---|---|
+| Growth (Referral) | `ReferralCode`, `ReferralSignup` | Issue, RecordSignup, GetStatus | `nexus.referral.status` | ۲۰ |
+| Growth (Invite) | `Invite` | SendAgentInvite, ListSent | `nexus.invite.send` | ۱۶ |
+| Growth (Coalition) | `Coalition`, `CoalitionMember` | Create, Join, Leave, Close, Cancel, ListOpen | `nexus.coalition.{create,join,list,close,leave,cancel}` | ۳۰ |
+| Marketplace (Network) | — (read model) | GetBusinessNetwork | `nexus.marketplace.network` | ۱۰ |
+| Analytics (Growth) | — (read model) | GetGrowthDashboard | — | ۷ |
+| **مجموع** | | | | **~۸۳ تست نوشته‌شده / خالص +۸۰ در کل سوییت** |
+
+تصمیمات معماری ماندگار برای فازهای بعدی:
+1. **دامنهٔ جدید فقط وقتی که هیچ‌کدام از ۱۰ دامنهٔ اولیه جا نمی‌افتد** — همان استثنایی که Phase 4 برای `Llm` گرفت، این‌بار برای `Growth` (Referral/Invite/Coalition) تکرار شد؛ read-modelهای صرف (Network، Viral Analytics) به‌جای دامنهٔ جدید، به دامنه‌های موجود اضافه می‌شوند.
+2. **پاداش/تبدیل همیشه روی یک رویداد واقعی و قابل‌اثبات پرداخت می‌شود، نه یک نیت** — پاداش معرفی روی Verified، تبدیل Invite روی ثبت‌نام واقعی با همان کد — هیچ‌کدام روی «ایمیل باز شد» یا «کلیک شد» (که این کدبیس اصلاً نمی‌تواند ردیابی کند).
+3. **وقتی هدف یک Action دیگر دقیقاً یک نوع داده را نیاز دارد، VO آن دامنه را دوباره‌استفاده کن، کپی نکن** — Coalition مستقیماً `Money`/`CatalogItemType` خودِ Negotiation را استفاده کرد، برخلاف الگوی معمول «هر دامنه Money خودش را می‌سازد» (Phase 1 خلاصه، قاعدهٔ ۴) — چون Coalition ذاتاً به یک Negotiation واقعی ختم می‌شود، نه یک مقدار پولی مستقل.
+4. **نبود یک ستون/رویداد، دلیلی برای ساختن یکی ساختگی نیست** — Cohort بر اساس هفتهٔ ثبت‌نام (نه تأیید، چون `verified_at` وجود ندارد)؛ لغو Coalition از حالت Negotiating دستی ماند (چون `NegotiationWasRejected` وجود ندارد) — هر دو مستند، نه سهل‌انگاری.
+5. **محدودیت شناخته‌شدهٔ تکرارشونده (از Phase 2/3):** حل اختلاف/لغو دستی هنوز به هر دو طرف اجازه می‌دهد (Coalition اینجا هم همین الگو را دارد)؛ سخت‌گیرانه‌کردن آن کاندید فازهای بعدی باقی می‌ماند.
+
+**آماده برای Phase 6 (Trust & Reputation)** طبق `docs/nexus-roadmap.md`.
+
+---
