@@ -3,6 +3,7 @@
 namespace Tests\Unit\Nexus\Business;
 
 use App\Domains\Nexus\Business\Domain\Entities\Business;
+use App\Domains\Nexus\Business\Domain\ValueObjects\BusinessStatus;
 use App\Domains\Nexus\Business\Domain\ValueObjects\BusinessType;
 use App\Domains\Nexus\Business\Domain\ValueObjects\Industry;
 use App\Domains\Nexus\Business\Domain\ValueObjects\VerificationStatus;
@@ -36,6 +37,26 @@ class BusinessTest extends TestCase
         $this->assertFalse($business->isVerified());
         $this->assertNull($business->logoPath());
         $this->assertNull($business->documents());
+        $this->assertSame(BusinessStatus::Active, $business->status());
+        $this->assertTrue($business->isActive());
+    }
+
+    public function test_suspend_thenReactivate_toggleActiveIndependentlyOfVerification(): void
+    {
+        $business = Business::register(1, 1, 'شرکت آزمایشی', 'Test Company', BusinessType::Company, Industry::Technology);
+        $business->verify();
+
+        $business->suspend();
+
+        $this->assertSame(BusinessStatus::Suspended, $business->status());
+        $this->assertFalse($business->isActive());
+        // Suspension is independent of verification — a suspended
+        // Business's identity is still verified.
+        $this->assertTrue($business->isVerified());
+
+        $business->reactivate();
+
+        $this->assertTrue($business->isActive());
     }
 
     public function test_verify_onPendingBusiness_setsStatusToVerified(): void

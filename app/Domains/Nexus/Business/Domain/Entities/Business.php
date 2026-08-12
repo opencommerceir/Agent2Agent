@@ -2,6 +2,7 @@
 
 namespace App\Domains\Nexus\Business\Domain\Entities;
 
+use App\Domains\Nexus\Business\Domain\ValueObjects\BusinessStatus;
 use App\Domains\Nexus\Business\Domain\ValueObjects\BusinessType;
 use App\Domains\Nexus\Business\Domain\ValueObjects\Industry;
 use App\Domains\Nexus\Business\Domain\ValueObjects\VerificationStatus;
@@ -13,6 +14,13 @@ use DateTimeImmutable;
  * — "هر Business = یک Tenant جدید" (docs/nexus-roadmap.md, Phase 1) —
  * reusing the existing multi-tenancy boundary rather than inventing a new
  * one. Framework-free by design (Domain Layer Rules).
+ *
+ * `status` (Phase 6/M4) is deliberately a separate concept from
+ * `verificationStatus` (Phase 1's admin KYC gate) — a Business can be
+ * Verified AND Suspended at once; fraud revokes standing to transact, it
+ * doesn't retroactively un-verify identity. Mirrors Core's own
+ * Agent::AgentStatus shape (active/suspended), the only existing
+ * suspend/activate precedent in this codebase.
  */
 final class Business
 {
@@ -28,6 +36,7 @@ final class Business
         private ?string $logoPath,
         private ?array $documents,
         private readonly DateTimeImmutable $createdAt,
+        private BusinessStatus $status = BusinessStatus::Active,
     ) {
     }
 
@@ -53,12 +62,33 @@ final class Business
             logoPath: $logoPath,
             documents: $documents,
             createdAt: new DateTimeImmutable(),
+            status: BusinessStatus::Active,
         );
     }
 
     public function verify(): void
     {
         $this->verificationStatus = VerificationStatus::Verified;
+    }
+
+    public function suspend(): void
+    {
+        $this->status = BusinessStatus::Suspended;
+    }
+
+    public function reactivate(): void
+    {
+        $this->status = BusinessStatus::Active;
+    }
+
+    public function isActive(): bool
+    {
+        return $this->status === BusinessStatus::Active;
+    }
+
+    public function status(): BusinessStatus
+    {
+        return $this->status;
     }
 
     public function updateProfile(string $nameFa, string $nameEn, BusinessType $type, Industry $industry): void

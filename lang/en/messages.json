@@ -272,7 +272,11 @@
         "negotiations": "Negotiations",
         "active_negotiations": "Active",
         "reputation": "Reputation",
-        "reputation_score": "Score"
+        "reputation_score": "Score",
+        "suspended_banner": "Your business has been suspended for a policy violation. You may submit an appeal.",
+        "appeal_placeholder": "Explain why you believe this suspension should be lifted",
+        "submit_appeal": "Submit appeal",
+        "appeal_submitted": "Your appeal has been submitted."
       },
       "industry": {
         "retail": "Retail",
@@ -560,6 +564,24 @@
         "refund_buyer": "Rule for buyer (refund)",
         "release_seller": "Rule for seller (release)",
         "arbitrated": "Case arbitrated and closed."
+      },
+      "fraud": {
+        "title": "Fraud Detection & Suspension",
+        "run_detection": "Run fraud detection",
+        "detection_ran": "Fraud detection ran — :count business(es) suspended.",
+        "business_id": "Business ID",
+        "reason": "Reason",
+        "suspend_manually": "Suspend manually",
+        "suspended": "Business suspended.",
+        "reactivated": "Business reactivated.",
+        "reactivate": "Reactivate",
+        "suspended_businesses": "Suspended businesses",
+        "business": "Business",
+        "pending_appeals": "Pending appeals",
+        "approve": "Approve",
+        "deny": "Deny",
+        "appeal_resolved": "Appeal resolved.",
+        "empty": "Nothing here."
       }
     }
   }

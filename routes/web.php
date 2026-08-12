@@ -7,6 +7,7 @@ use App\Http\Controllers\Dashboard\AnalyticsController;
 use App\Http\Controllers\Dashboard\DashboardController;
 use App\Http\Controllers\Dashboard\NexusDisputeController;
 use App\Http\Controllers\Dashboard\NexusEscrowController;
+use App\Http\Controllers\Dashboard\NexusFraudController;
 use App\Http\Controllers\Dashboard\NexusGrowthController;
 use App\Http\Controllers\Dashboard\NexusLlmSettingsController;
 use App\Http\Controllers\Dashboard\NexusMarginSettingsController;
@@ -126,6 +127,13 @@ Route::middleware('auth')->group(function () {
             Route::post('/llm-settings/test-connection', [NexusLlmSettingsController::class, 'testConnection'])->name('llm-settings.test-connection');
 
             Route::get('/growth', [NexusGrowthController::class, 'index'])->name('growth.index');
+
+            // Fraud Detection + Suspension (Phase 6/M4).
+            Route::get('/fraud', [NexusFraudController::class, 'index'])->name('fraud.index');
+            Route::post('/fraud/run-detection', [NexusFraudController::class, 'runDetection'])->name('fraud.run-detection');
+            Route::post('/fraud/suspend', [NexusFraudController::class, 'suspend'])->name('fraud.suspend');
+            Route::post('/fraud/{business}/reactivate', [NexusFraudController::class, 'reactivate'])->name('fraud.reactivate');
+            Route::post('/fraud/appeals/{appeal}/resolve', [NexusFraudController::class, 'resolveAppeal'])->name('fraud.appeals.resolve');
         });
     });
 });

@@ -1,5 +1,6 @@
 <?php
 
+use App\Console\Commands\DetectFraudSignalsCommand;
 use App\Console\Commands\ExpireLoyaltyPointsCommand;
 use App\Console\Commands\GenerateAnalyticsSnapshotCommand;
 use App\Console\Commands\MarkAbandonedCartsCommand;
@@ -46,3 +47,8 @@ Schedule::command(WarmCacheCommand::class)->daily()->at('00:00')->withoutOverlap
 // billing engine's scheduled entry point: queues a Job per Subscription due
 // for renewal and per SubscriptionInvoice due for a retry attempt.
 Schedule::command(ProcessDueSubscriptionsCommand::class)->daily()->at('00:00')->withoutOverlapping();
+
+// Nexus Phase 6/M4 — rule-based fraud detection; hourly is frequent enough
+// that a Business crossing the dispute-loss threshold is caught soon
+// after an arbiter's ruling, without re-scanning constantly.
+Schedule::command(DetectFraudSignalsCommand::class)->hourly()->withoutOverlapping();

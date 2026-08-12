@@ -22,6 +22,7 @@ class Business extends Model
         'type',
         'industry',
         'verification_status',
+        'status',
         'logo_path',
         'documents',
     ];

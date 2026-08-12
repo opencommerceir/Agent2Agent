@@ -3,7 +3,9 @@
 namespace Tests\Feature\Nexus\Business;
 
 use App\Domains\Nexus\Business\Application\Actions\RegisterBusinessAction;
+use App\Domains\Nexus\Business\Application\Actions\SuspendBusinessAction;
 use App\Domains\Nexus\Business\Application\Actions\VerifyBusinessAction;
+use App\Domains\Nexus\Business\Domain\Repositories\SuspensionAppealRepositoryInterface;
 use App\Domains\Nexus\Business\Domain\ValueObjects\BusinessType;
 use App\Domains\Nexus\Business\Domain\ValueObjects\Industry;
 use App\Domains\Nexus\Business\Infrastructure\Models\BusinessOwner;
@@ -57,5 +59,33 @@ class BusinessDashboardTest extends TestCase
         $response->assertViewHas('productCount', 1);
         $response->assertViewHas('serviceCount', 1);
         $response->assertViewHas('agent', fn ($agent) => $agent !== null && $agent->nameEn() === 'Test Company');
+    }
+
+    public function test_index_whileSuspended_showsBannerAndAppealForm(): void
+    {
+        [$business, $owner] = $this->makeOwner();
+        app(VerifyBusinessAction::class)->execute($business->id);
+        app(SuspendBusinessAction::class)->execute($business->id, 'test suspension');
+
+        $response = $this->actingAs($owner, 'business')->get(route('nexus.business.dashboard'));
+
+        $response->assertOk();
+        $response->assertSee(t('messages.nexus.business.dashboard.suspended_banner'));
+    }
+
+    public function test_submitSuspensionAppeal_createsAppeal(): void
+    {
+        [$business, $owner] = $this->makeOwner();
+        app(VerifyBusinessAction::class)->execute($business->id);
+        app(SuspendBusinessAction::class)->execute($business->id, 'test suspension');
+
+        $response = $this->actingAs($owner, 'business')->post(route('nexus.business.dashboard.appeal'), [
+            'message' => 'please review my case',
+        ]);
+
+        $response->assertRedirect(route('nexus.business.dashboard'));
+        $appeals = app(SuspensionAppealRepositoryInterface::class)->findByStatus(\App\Domains\Nexus\Business\Domain\ValueObjects\SuspensionAppealStatus::Pending);
+        $this->assertCount(1, $appeals);
+        $this->assertSame('please review my case', $appeals[0]->message());
     }
 }

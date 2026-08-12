@@ -12,7 +12,11 @@ use App\Domains\Nexus\Agent\Domain\Repositories\AgentRepositoryInterface;
 use App\Domains\Nexus\Agent\Infrastructure\Repositories\EloquentAgentRepository;
 use App\Domains\Nexus\Business\Domain\Events\BusinessWasVerified;
 use App\Domains\Nexus\Business\Domain\Repositories\BusinessRepositoryInterface;
+use App\Domains\Nexus\Business\Domain\Repositories\SuspensionAppealRepositoryInterface;
+use App\Domains\Nexus\Business\Domain\Repositories\SuspensionRecordRepositoryInterface;
 use App\Domains\Nexus\Business\Infrastructure\Repositories\EloquentBusinessRepository;
+use App\Domains\Nexus\Business\Infrastructure\Repositories\EloquentSuspensionAppealRepository;
+use App\Domains\Nexus\Business\Infrastructure\Repositories\EloquentSuspensionRecordRepository;
 use App\Domains\Nexus\Catalog\Domain\Repositories\ProductRepositoryInterface;
 use App\Domains\Nexus\Catalog\Domain\Repositories\ServiceRepositoryInterface;
 use App\Domains\Nexus\Catalog\Infrastructure\Repositories\EloquentProductRepository;
@@ -107,6 +111,8 @@ class NexusServiceProvider extends ServiceProvider
 
         $this->app->bind(PlatformSettingRepositoryInterface::class, EloquentPlatformSettingRepository::class);
         $this->app->bind(BusinessRepositoryInterface::class, EloquentBusinessRepository::class);
+        $this->app->bind(SuspensionRecordRepositoryInterface::class, EloquentSuspensionRecordRepository::class);
+        $this->app->bind(SuspensionAppealRepositoryInterface::class, EloquentSuspensionAppealRepository::class);
         $this->app->bind(AgentRepositoryInterface::class, EloquentAgentRepository::class);
         $this->app->bind(ProductRepositoryInterface::class, EloquentProductRepository::class);
         $this->app->bind(ServiceRepositoryInterface::class, EloquentServiceRepository::class);

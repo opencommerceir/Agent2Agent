@@ -255,6 +255,14 @@ return [
         // dispute that gets resolved in your favor costs nothing).
         'dispute_penalty_per_loss' => (int) env('NEXUS_REPUTATION_DISPUTE_PENALTY_PER_LOSS', 50),
         'dispute_penalty_max' => (int) env('NEXUS_REPUTATION_DISPUTE_PENALTY_MAX', 300),
+
+        // Phase 6/M4 — Fraud Detection's only rule: DetectFraudSignalsAction
+        // auto-suspends a Business once an arbiter has ruled against it
+        // this many times within the rolling window below.
+        'fraud' => [
+            'dispute_loss_threshold' => (int) env('NEXUS_FRAUD_DISPUTE_LOSS_THRESHOLD', 3),
+            'dispute_loss_window_days' => (int) env('NEXUS_FRAUD_DISPUTE_LOSS_WINDOW_DAYS', 30),
+        ],
     ],
 
     /*

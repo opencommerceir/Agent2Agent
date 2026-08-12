@@ -45,6 +45,7 @@ Route::middleware('web')->group(function () {
         Route::middleware('business.auth:business')->group(function () {
             Route::post('/logout', BusinessLogoutController::class)->name('logout');
             Route::get('/dashboard', [BusinessDashboardController::class, 'index'])->name('dashboard');
+            Route::post('/dashboard/appeal', [BusinessDashboardController::class, 'submitSuspensionAppeal'])->name('dashboard.appeal');
         });
     });
 

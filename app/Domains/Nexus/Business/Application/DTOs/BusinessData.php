@@ -21,6 +21,7 @@ final class BusinessData
         public readonly string $verificationStatus,
         public readonly ?string $logoPath,
         public readonly ?array $documents,
+        public readonly string $status,
     ) {
     }
 
@@ -37,11 +38,12 @@ final class BusinessData
             verificationStatus: $business->verificationStatus()->value,
             logoPath: $business->logoPath(),
             documents: $business->documents(),
+            status: $business->status()->value,
         );
     }
 
     /**
-     * @return array{id: ?int, tenantId: int, organizationId: int, nameFa: string, nameEn: string, type: string, industry: string, verificationStatus: string, logoPath: ?string, documents: ?array}
+     * @return array{id: ?int, tenantId: int, organizationId: int, nameFa: string, nameEn: string, type: string, industry: string, verificationStatus: string, logoPath: ?string, documents: ?array, status: string}
      */
     public function toArray(): array
     {
@@ -56,6 +58,7 @@ final class BusinessData
             'verificationStatus' => $this->verificationStatus,
             'logoPath' => $this->logoPath,
             'documents' => $this->documents,
+            'status' => $this->status,
         ];
     }
 }

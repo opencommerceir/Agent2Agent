@@ -272,7 +272,11 @@
         "negotiations": "مذاکرات",
         "active_negotiations": "فعال",
         "reputation": "اعتبار",
-        "reputation_score": "امتیاز"
+        "reputation_score": "امتیاز",
+        "suspended_banner": "کسب‌وکار شما به دلیل تخلف معلق شده است. می‌توانید درخواست تجدیدنظر ثبت کنید.",
+        "appeal_placeholder": "توضیح دهید چرا فکر می‌کنید این تعلیق باید لغو شود",
+        "submit_appeal": "ثبت درخواست تجدیدنظر",
+        "appeal_submitted": "درخواست تجدیدنظر شما ثبت شد."
       },
       "industry": {
         "retail": "خرده‌فروشی",
@@ -560,6 +564,24 @@
         "refund_buyer": "رأی به نفع خریدار (بازگرداندن)",
         "release_seller": "رأی به نفع فروشنده (آزادسازی)",
         "arbitrated": "پرونده داوری و بسته شد."
+      },
+      "fraud": {
+        "title": "تشخیص تقلب و تعلیق",
+        "run_detection": "اجرای تشخیص تقلب",
+        "detection_ran": "تشخیص تقلب اجرا شد — :count کسب‌وکار تعلیق شد.",
+        "business_id": "شناسه کسب‌وکار",
+        "reason": "دلیل",
+        "suspend_manually": "تعلیق دستی",
+        "suspended": "کسب‌وکار تعلیق شد.",
+        "reactivated": "کسب‌وکار فعال شد.",
+        "reactivate": "فعال‌سازی مجدد",
+        "suspended_businesses": "کسب‌وکارهای تعلیق‌شده",
+        "business": "کسب‌وکار",
+        "pending_appeals": "درخواست‌های تجدیدنظر در انتظار",
+        "approve": "تأیید",
+        "deny": "رد",
+        "appeal_resolved": "درخواست تجدیدنظر رسیدگی شد.",
+        "empty": "موردی وجود ندارد."
       }
     }
   }

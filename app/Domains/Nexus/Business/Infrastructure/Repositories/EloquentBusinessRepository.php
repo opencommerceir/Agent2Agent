@@ -4,6 +4,7 @@ namespace App\Domains\Nexus\Business\Infrastructure\Repositories;
 
 use App\Domains\Nexus\Business\Domain\Entities\Business as BusinessEntity;
 use App\Domains\Nexus\Business\Domain\Repositories\BusinessRepositoryInterface;
+use App\Domains\Nexus\Business\Domain\ValueObjects\BusinessStatus;
 use App\Domains\Nexus\Business\Domain\ValueObjects\BusinessType;
 use App\Domains\Nexus\Business\Domain\ValueObjects\Industry;
 use App\Domains\Nexus\Business\Domain\ValueObjects\VerificationStatus;
@@ -26,6 +27,16 @@ class EloquentBusinessRepository implements BusinessRepositoryInterface
         return $model ? $this->toEntity($model) : null;
     }
 
+    public function findByStatus(BusinessStatus $status): array
+    {
+        return BusinessModel::query()
+            ->where('status', $status->value)
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (BusinessModel $model) => $this->toEntity($model))
+            ->all();
+    }
+
     public function save(BusinessEntity $business): BusinessEntity
     {
         $model = $business->id()
@@ -39,6 +50,7 @@ class EloquentBusinessRepository implements BusinessRepositoryInterface
         $model->type = $business->type()->value;
         $model->industry = $business->industry()->value;
         $model->verification_status = $business->verificationStatus()->value;
+        $model->status = $business->status()->value;
         $model->logo_path = $business->logoPath();
         $model->documents = $business->documents();
         $model->save();
@@ -60,6 +72,7 @@ class EloquentBusinessRepository implements BusinessRepositoryInterface
             logoPath: $model->logo_path,
             documents: $model->documents,
             createdAt: DateTimeImmutable::createFromInterface($model->created_at),
+            status: BusinessStatus::from($model->status),
         );
     }
 }

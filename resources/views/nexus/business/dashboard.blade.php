@@ -4,6 +4,23 @@
 
 @section('content')
     <div class="mx-auto max-w-4xl space-y-4">
+        @if (session('status'))
+            <div class="rounded-md border border-nexus-success/40 bg-nexus-success/10 px-4 py-2 text-sm text-nexus-success">{{ session('status') }}</div>
+        @endif
+
+        @if ($business->status()->value === 'suspended')
+            <x-nexus-panel style="border-color: var(--color-nexus-error)">
+                <p class="mb-3 text-sm text-nexus-error">{{ t('messages.nexus.business.dashboard.suspended_banner') }}</p>
+                <form method="POST" action="{{ route('nexus.business.dashboard.appeal') }}" class="space-y-2">
+                    @csrf
+                    <textarea name="message" rows="3" required class="block w-full rounded-md border border-nexus-border bg-nexus-surface-1 px-3 py-1.5 text-sm text-nexus-text" placeholder="{{ t('messages.nexus.business.dashboard.appeal_placeholder') }}"></textarea>
+                    <button type="submit" class="rounded-md bg-nexus-cyan/20 px-4 py-1.5 text-sm font-semibold text-nexus-cyan hover:bg-nexus-cyan/30">
+                        {{ t('messages.nexus.business.dashboard.submit_appeal') }}
+                    </button>
+                </form>
+            </x-nexus-panel>
+        @endif
+
         <x-nexus-panel>
             <div class="flex items-center justify-between">
                 <div>
