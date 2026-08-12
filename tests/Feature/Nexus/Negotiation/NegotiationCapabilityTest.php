@@ -18,6 +18,8 @@ use App\Domains\Nexus\Business\Application\DTOs\BusinessData;
 use App\Domains\Nexus\Business\Domain\Repositories\BusinessRepositoryInterface;
 use App\Domains\Nexus\Business\Domain\ValueObjects\BusinessType;
 use App\Domains\Nexus\Business\Domain\ValueObjects\Industry;
+use App\Domains\Nexus\Credit\Application\Actions\GrantCreditsAction;
+use App\Domains\Nexus\Credit\Domain\ValueObjects\CreditTransactionType;
 use Database\Seeders\NexusNegotiationCapabilitiesSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -135,6 +137,10 @@ class NegotiationCapabilityTest extends TestCase
     {
         $business = app(RegisterBusinessAction::class)->execute("نام {$nameEn}", $nameEn, BusinessType::Company, Industry::Technology);
         app(VerifyBusinessAction::class)->execute($business->id);
+        // Phase 3/M2's CostGate now gates propose/counter/accept/reject —
+        // a generous flat top-up so this domain's own tests keep exercising
+        // negotiation mechanics, not credit exhaustion.
+        app(GrantCreditsAction::class)->execute($business->id, 100000, CreditTransactionType::AdminGrant, 'test.seed');
 
         return $business;
     }

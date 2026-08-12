@@ -8,6 +8,8 @@ use App\Domains\Nexus\Business\Application\DTOs\BusinessData;
 use App\Domains\Nexus\Business\Domain\ValueObjects\BusinessType;
 use App\Domains\Nexus\Business\Domain\ValueObjects\Industry;
 use App\Domains\Nexus\Contract\Domain\Repositories\ContractRepositoryInterface;
+use App\Domains\Nexus\Credit\Application\Actions\GrantCreditsAction;
+use App\Domains\Nexus\Credit\Domain\ValueObjects\CreditTransactionType;
 use App\Domains\Nexus\Negotiation\Application\Actions\AcceptDealAction;
 use App\Domains\Nexus\Negotiation\Application\Actions\InitiateNegotiationAction;
 use App\Domains\Nexus\Negotiation\Application\Actions\RejectDealAction;
@@ -35,6 +37,12 @@ class GenerateContractActionTest extends TestCase
     {
         $business = app(RegisterBusinessAction::class)->execute($nameFa, $nameEn, BusinessType::Company, Industry::Technology);
         app(VerifyBusinessAction::class)->execute($business->id);
+        // Phase 3/M2's CostGate now gates propose/accept (and, via
+        // GenerateContractOnNegotiationAcceptedListener, the initiator's
+        // contract.generate charge too) — a generous flat top-up so this
+        // pipeline test keeps exercising contract generation, not credit
+        // exhaustion.
+        app(GrantCreditsAction::class)->execute($business->id, 100000, CreditTransactionType::AdminGrant, 'test.seed');
 
         return $business;
     }

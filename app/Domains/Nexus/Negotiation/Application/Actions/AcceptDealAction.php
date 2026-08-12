@@ -3,6 +3,7 @@
 namespace App\Domains\Nexus\Negotiation\Application\Actions;
 
 use App\Domains\Nexus\Agent\Domain\Repositories\AgentRepositoryInterface;
+use App\Domains\Nexus\Credit\Application\Actions\SpendCreditsForActionAction;
 use App\Domains\Nexus\Negotiation\Application\DTOs\NegotiationData;
 use App\Domains\Nexus\Negotiation\Application\Services\NegotiationReasoningService;
 use App\Domains\Nexus\Negotiation\Domain\Entities\NegotiationMessage;
@@ -33,6 +34,7 @@ final class AcceptDealAction
         private readonly NegotiationMessageRepositoryInterface $messages,
         private readonly AgentRepositoryInterface $agents,
         private readonly NegotiationReasoningService $reasoning,
+        private readonly SpendCreditsForActionAction $costGate,
     ) {
     }
 
@@ -58,6 +60,13 @@ final class AcceptDealAction
         } else {
             $negotiation->accept();
         }
+
+        // Charged once the transition actually succeeds (an invalid-state
+        // transitionTo() throw never reaches here) — an accept attempt
+        // that goes to pending_approval still costs the same as one that
+        // accepts directly; both are equally "the accepting Agent decided
+        // to commit," per this Action's own accept-vs-approve docblock.
+        $this->costGate->execute($actingBusinessId, 'nexus.negotiation.accept', $negotiationId);
 
         $negotiation = $this->negotiations->save($negotiation);
 

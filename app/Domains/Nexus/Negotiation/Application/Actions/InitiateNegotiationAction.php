@@ -3,6 +3,7 @@
 namespace App\Domains\Nexus\Negotiation\Application\Actions;
 
 use App\Domains\Nexus\Business\Domain\Repositories\BusinessRepositoryInterface;
+use App\Domains\Nexus\Credit\Application\Actions\SpendCreditsForActionAction;
 use App\Domains\Nexus\Negotiation\Application\DTOs\NegotiationData;
 use App\Domains\Nexus\Negotiation\Application\Services\NegotiationReasoningService;
 use App\Domains\Nexus\Negotiation\Domain\Entities\Negotiation;
@@ -29,6 +30,7 @@ final class InitiateNegotiationAction
         private readonly NegotiationMessageRepositoryInterface $messages,
         private readonly BusinessRepositoryInterface $businesses,
         private readonly NegotiationReasoningService $reasoning,
+        private readonly SpendCreditsForActionAction $costGate,
     ) {
     }
 
@@ -50,6 +52,8 @@ final class InitiateNegotiationAction
         if (! $initiator || ! $counterparty) {
             throw new InvalidArgumentException('Both the initiator and counterparty Business must exist.');
         }
+
+        $this->costGate->execute($initiatorBusinessId, 'nexus.negotiation.propose');
 
         $negotiation = Negotiation::propose(
             initiatorBusinessId: $initiatorBusinessId,

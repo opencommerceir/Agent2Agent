@@ -7,6 +7,8 @@ use App\Domains\Nexus\Business\Application\Actions\VerifyBusinessAction;
 use App\Domains\Nexus\Business\Domain\ValueObjects\BusinessType;
 use App\Domains\Nexus\Business\Domain\ValueObjects\Industry;
 use App\Domains\Nexus\Catalog\Application\Actions\AddProductAction;
+use App\Domains\Nexus\Credit\Application\Actions\GrantCreditsAction;
+use App\Domains\Nexus\Credit\Domain\ValueObjects\CreditTransactionType;
 use App\Domains\Nexus\Marketplace\Application\Actions\SearchMarketplaceAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -19,6 +21,10 @@ class SearchMarketplaceActionTest extends TestCase
     {
         $caller = app(RegisterBusinessAction::class)->execute('من', 'Caller Co', BusinessType::Company, Industry::Technology);
         app(VerifyBusinessAction::class)->execute($caller->id);
+        // Phase 3/M2's CostGate now gates nexus.marketplace.search — a
+        // generous flat top-up so this domain's own tests keep exercising
+        // search mechanics, not credit exhaustion.
+        app(GrantCreditsAction::class)->execute($caller->id, 100000, CreditTransactionType::AdminGrant, 'test.seed');
 
         $verified = app(RegisterBusinessAction::class)->execute('تأیید شده', 'Verified Co', BusinessType::Company, Industry::Retail);
         app(VerifyBusinessAction::class)->execute($verified->id);
@@ -37,6 +43,10 @@ class SearchMarketplaceActionTest extends TestCase
     {
         $caller = app(RegisterBusinessAction::class)->execute('من', 'Caller Co', BusinessType::Company, Industry::Technology);
         app(VerifyBusinessAction::class)->execute($caller->id);
+        // Phase 3/M2's CostGate now gates nexus.marketplace.search — a
+        // generous flat top-up so this domain's own tests keep exercising
+        // search mechanics, not credit exhaustion.
+        app(GrantCreditsAction::class)->execute($caller->id, 100000, CreditTransactionType::AdminGrant, 'test.seed');
 
         $supplier = app(RegisterBusinessAction::class)->execute('تأمین‌کننده', 'Supplier Co', BusinessType::Company, Industry::Retail);
         app(VerifyBusinessAction::class)->execute($supplier->id);
@@ -53,6 +63,10 @@ class SearchMarketplaceActionTest extends TestCase
     {
         $caller = app(RegisterBusinessAction::class)->execute('من', 'Caller Co', BusinessType::Company, Industry::Technology);
         app(VerifyBusinessAction::class)->execute($caller->id);
+        // Phase 3/M2's CostGate now gates nexus.marketplace.search — a
+        // generous flat top-up so this domain's own tests keep exercising
+        // search mechanics, not credit exhaustion.
+        app(GrantCreditsAction::class)->execute($caller->id, 100000, CreditTransactionType::AdminGrant, 'test.seed');
 
         $retail = app(RegisterBusinessAction::class)->execute('خرده‌فروش', 'Retail Co', BusinessType::Company, Industry::Retail);
         app(VerifyBusinessAction::class)->execute($retail->id);

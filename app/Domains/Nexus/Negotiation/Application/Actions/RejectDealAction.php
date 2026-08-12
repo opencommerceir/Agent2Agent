@@ -2,6 +2,7 @@
 
 namespace App\Domains\Nexus\Negotiation\Application\Actions;
 
+use App\Domains\Nexus\Credit\Application\Actions\SpendCreditsForActionAction;
 use App\Domains\Nexus\Negotiation\Application\DTOs\NegotiationData;
 use App\Domains\Nexus\Negotiation\Application\Services\NegotiationReasoningService;
 use App\Domains\Nexus\Negotiation\Domain\Entities\NegotiationMessage;
@@ -16,6 +17,7 @@ final class RejectDealAction
         private readonly NegotiationRepositoryInterface $negotiations,
         private readonly NegotiationMessageRepositoryInterface $messages,
         private readonly NegotiationReasoningService $reasoning,
+        private readonly SpendCreditsForActionAction $costGate,
     ) {
     }
 
@@ -32,6 +34,7 @@ final class RejectDealAction
         }
 
         $negotiation->reject($reason);
+        $this->costGate->execute($actingBusinessId, 'nexus.negotiation.reject', $negotiationId);
         $negotiation = $this->negotiations->save($negotiation);
 
         $this->messages->save(NegotiationMessage::record(

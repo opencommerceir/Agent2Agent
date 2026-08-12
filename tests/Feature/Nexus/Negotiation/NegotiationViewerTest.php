@@ -10,6 +10,8 @@ use App\Domains\Nexus\Business\Application\DTOs\BusinessData;
 use App\Domains\Nexus\Business\Domain\ValueObjects\BusinessType;
 use App\Domains\Nexus\Business\Domain\ValueObjects\Industry;
 use App\Domains\Nexus\Business\Infrastructure\Models\BusinessOwner;
+use App\Domains\Nexus\Credit\Application\Actions\GrantCreditsAction;
+use App\Domains\Nexus\Credit\Domain\ValueObjects\CreditTransactionType;
 use App\Domains\Nexus\Negotiation\Application\Actions\AcceptDealAction;
 use App\Domains\Nexus\Negotiation\Application\Actions\InitiateNegotiationAction;
 use App\Domains\Nexus\Negotiation\Domain\ValueObjects\CatalogItemType;
@@ -32,6 +34,11 @@ class NegotiationViewerTest extends TestCase
             'email' => $email,
             'password' => 'password123',
         ]);
+        // Phase 3/M2's CostGate now gates propose/accept (and, via the
+        // contract-generation listener, the initiator too) — a generous
+        // flat top-up so this domain's own tests keep exercising the
+        // viewer, not credit exhaustion.
+        app(GrantCreditsAction::class)->execute($business->id, 100000, CreditTransactionType::AdminGrant, 'test.seed');
 
         return [$business, $owner];
     }

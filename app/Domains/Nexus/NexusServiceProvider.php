@@ -18,6 +18,7 @@ use App\Domains\Nexus\Catalog\Infrastructure\Repositories\EloquentServiceReposit
 use App\Domains\Nexus\Contract\Application\Listeners\GenerateContractOnNegotiationAcceptedListener;
 use App\Domains\Nexus\Contract\Domain\Repositories\ContractRepositoryInterface;
 use App\Domains\Nexus\Contract\Infrastructure\Repositories\EloquentContractRepository;
+use App\Domains\Nexus\Credit\Application\Actions\GetCreditBalanceAction;
 use App\Domains\Nexus\Credit\Application\Listeners\GrantStartingCreditsOnBusinessVerifiedListener;
 use App\Domains\Nexus\Credit\Domain\Repositories\CreditBalanceRepositoryInterface;
 use App\Domains\Nexus\Credit\Domain\Repositories\CreditTransactionRepositoryInterface;
@@ -97,6 +98,14 @@ class NexusServiceProvider extends ServiceProvider
                 query: $input['query'] ?? null,
                 industry: $input['industry'] ?? null,
             );
+        });
+
+        $handlers->register('nexus.credit.balance', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            $balance = $this->app->make(GetCreditBalanceAction::class)->execute($callingBusinessId);
+
+            return $balance->toArray();
         });
 
         $this->registerNegotiationCapabilityHandlers($handlers);

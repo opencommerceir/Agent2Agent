@@ -38,14 +38,26 @@ return [
     |--------------------------------------------------------------------------
     |
     | Businesses and Agents spend credits to negotiate and transact on the
-    | marketplace. Defined here as foundation-only defaults — the Credit
-    | domain (Phase 1+) owns the actual ledger/spend logic.
+    | marketplace. The Credit domain (Phase 3) owns the actual ledger/spend
+    | logic (app/Domains/Nexus/Credit) — `action_costs` is its price list,
+    | read by SpendCreditsForActionAction (the roadmap's "CostGate") on
+    | every gated MCP capability. Values from docs/claude/monetization.md;
+    | a $0/missing key means the action is free (read-only capabilities
+    | like nexus.negotiation.status are simply never charged).
     |
     */
     'credit' => [
         'currency' => env('NEXUS_CREDIT_CURRENCY', 'IRT'),
         'starting_balance' => (int) env('NEXUS_CREDIT_STARTING_BALANCE', 0),
-        'negotiation_cost' => (int) env('NEXUS_CREDIT_NEGOTIATION_COST', 1),
+
+        'action_costs' => [
+            'nexus.marketplace.search' => (int) env('NEXUS_COST_MARKETPLACE_SEARCH', 5),
+            'nexus.negotiation.propose' => (int) env('NEXUS_COST_NEGOTIATION_PROPOSE', 20),
+            'nexus.negotiation.counter' => (int) env('NEXUS_COST_NEGOTIATION_COUNTER', 2),
+            'nexus.negotiation.accept' => (int) env('NEXUS_COST_NEGOTIATION_ACCEPT', 2),
+            'nexus.negotiation.reject' => (int) env('NEXUS_COST_NEGOTIATION_REJECT', 2),
+            'contract.generate' => (int) env('NEXUS_COST_CONTRACT_GENERATE', 50),
+        ],
     ],
 
     /*

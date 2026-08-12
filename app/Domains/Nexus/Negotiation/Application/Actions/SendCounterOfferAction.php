@@ -2,6 +2,7 @@
 
 namespace App\Domains\Nexus\Negotiation\Application\Actions;
 
+use App\Domains\Nexus\Credit\Application\Actions\SpendCreditsForActionAction;
 use App\Domains\Nexus\Negotiation\Application\DTOs\NegotiationData;
 use App\Domains\Nexus\Negotiation\Application\Services\NegotiationReasoningService;
 use App\Domains\Nexus\Negotiation\Domain\Entities\NegotiationMessage;
@@ -23,6 +24,7 @@ final class SendCounterOfferAction
         private readonly NegotiationRepositoryInterface $negotiations,
         private readonly NegotiationMessageRepositoryInterface $messages,
         private readonly NegotiationReasoningService $reasoning,
+        private readonly SpendCreditsForActionAction $costGate,
     ) {
     }
 
@@ -41,7 +43,11 @@ final class SendCounterOfferAction
         $previousTerms = $negotiation->currentTerms();
         $roundCountBeforeCounter = $negotiation->roundCount();
 
+        // Round-limit is checked inside counter() — charge only once the
+        // counter-offer is actually accepted onto the Negotiation, never
+        // for a request that's about to be rejected as invalid.
         $negotiation->counter($terms);
+        $this->costGate->execute($actingBusinessId, 'nexus.negotiation.counter', $negotiationId);
         $negotiation = $this->negotiations->save($negotiation);
 
         $this->messages->save(NegotiationMessage::record(

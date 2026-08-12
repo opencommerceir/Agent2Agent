@@ -326,3 +326,25 @@
 **کامیت:** `feat(nexus): add Credit domain core (ledger, auto-provisioned balance)`.
 
 ---
+
+## Phase 3 / M2 — CostGate روی MCP Capabilityهای موجود
+
+**تصمیم کلیدی:** طبق Decision 007 («Core نباید هیچ منطق تجاری داشته باشد»)، CostGate نمی‌تواند در `AbstractMCPGatewayController`/`CapabilityExecutionService` زندگی کند — دقیقاً همان محدودیتی که چک `authority_limits` در `AcceptDealAction` از قبل رعایت می‌کرد. `SpendCreditsForActionAction` (خودِ «CostGate» roadmap) داخل هر Action گیت‌شده صدا زده می‌شود، نه در پایپ‌لاین مشترک MCP.
+
+**باگ واقعی پیدا و رفع شد پیش از commit:** چون نام Capabilityها خودشان نقطه دارند (`nexus.marketplace.search`)، خواندن مستقیم `config("...action_costs.{$actionKey}")` با dot-notation لاراول اشتباه است — لاراول رشته را از روی نقطه می‌شکند و به‌جای یک کلید تخت، دنبال آرایه‌های تودرتو می‌گردد (که وجود ندارند) و همیشه `null`/۰ برمی‌گرداند، یعنی CostGate بی‌صدا هیچ‌وقت واقعاً چک نمی‌شد. راه‌حل: کل آرایهٔ `action_costs` یک‌بار با `config('nexus.platform.credit.action_costs')` خوانده می‌شود، بعد با اندیس آرایهٔ ساده (نه dot-notation) به کلید نقطه‌دار دسترسی پیدا می‌شود.
+
+**نقطهٔ شارژ در هر Action دقیقاً بعد از موفقیت گذار وضعیت، نه قبلش:** در `SendCounterOfferAction`/`AcceptDealAction`/`RejectDealAction`، چک credit بعد از فراخوانی موفق `counter()`/`accept()`/`reject()` انجام می‌شود (نه قبلش) — یک درخواست نامعتبر (مثل عبور از سقف دور مذاکره) هرگز کردیت کم نمی‌کند. در `InitiateNegotiationAction`/`SearchMarketplaceAction` که هیچ Exception‌ای بعد از اعتبارسنجی رخ نمی‌دهد، چک بعد از تمام اعتبارسنجی‌ها و درست قبل از عملیات اصلی قرار گرفت.
+
+**`contract.generate` روی Business آغازگر مذاکره شارژ می‌شود:** رویداد `NegotiationWasAccepted` فقط خودِ Entity را حمل می‌کند، نه اینکه کدام مسیر (`AcceptDealAction` یک طرف، یا `ApprovePendingNegotiationAction` یک انسان) باعث آن شد — پس `GenerateContractOnNegotiationAcceptedListener` قطعی همیشه `initiatorBusinessId()` را شارژ می‌کند. یک ساده‌سازی مستند، نه سهل‌انگاری (همان سبک محدودیت شناخته‌شدهٔ «هر دو طرف می‌توانند Pending Approval را resolve کنند» در Phase 2/M4).
+
+**Capability جدید:** `nexus.credit.balance` (فقط خواندن، رایگان — چک موجودی خودش هرگز نباید هزینه داشته باشد، وگرنه یک Business با موجودی دقیقاً صفر هیچ‌وقت نمی‌فهمید) با همان الگوی manifest→Seeder→handler.
+
+**رگرسیون تست‌های فازهای قبل:** با فعال شدن هزینه واقعی، تست‌های موجود Marketplace/Negotiation/Contract (که قبلاً هیچ کردیتی نمی‌گرفتند) شکست می‌خوردند؛ هر فایل تست با یک کمک‌متد مشترک (`verifiedBusiness()`/`verifiedBusinessWithOwner()`) یک شارژ سخاوتمندانهٔ ثابت (۱۰۰٬۰۰۰ کردیت) بعد از تأیید هر Business اضافه کرد — تغییری در منطق دامنه، فقط fixture.
+
+**فایل‌های اصلی:** `app/Domains/Nexus/Credit/Application/Actions/SpendCreditsForActionAction.php`، `app/Domains/Nexus/Credit/Interfaces/MCP/CreditCapabilities.php`، `database/seeders/NexusCreditCapabilitiesSeeder.php`، `config/nexus/platform.php` (`credit.action_costs`)، ۶ فایل Action/Listener موجود (Marketplace+Negotiation+Contract) به‌روزرسانی شدند.
+
+**تست:** ۱۵ تست جدید (۳ روی خودِ `SpendCreditsForActionAction`، ۱۰ integration روی هر ۵ Action گیت‌شده + شارژ `contract.generate`، ۲ روی `nexus.credit.balance` از طریق MCP) — همه پاس. کل تست‌های Nexus: ۱۳۷ پاس. سوییت کامل: ۱۰۱۰ pass / ۲۸۳ fail (بدون رگرشن — همان baseline ثابت ۲۸۳ شکست ماژول‌های غیرفعال).
+
+**کامیت:** `feat(nexus): wire CostGate into existing MCP capabilities`.
+
+---
