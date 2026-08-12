@@ -33,12 +33,14 @@ use App\Domains\Nexus\Credit\Infrastructure\Repositories\EloquentCreditBalanceRe
 use App\Domains\Nexus\Credit\Infrastructure\Repositories\EloquentCreditPurchaseSessionRepository;
 use App\Domains\Nexus\Credit\Infrastructure\Repositories\EloquentCreditTransactionRepository;
 use App\Domains\Nexus\Llm\Application\Services\LLMProviderRegistry;
+use App\Domains\Nexus\Llm\Domain\Repositories\LLMUsageLogRepositoryInterface;
 use App\Domains\Nexus\Llm\Infrastructure\Providers\AnthropicLLMProvider;
 use App\Domains\Nexus\Llm\Infrastructure\Providers\GroqLLMProvider;
 use App\Domains\Nexus\Llm\Infrastructure\Providers\LocalLlamaLLMProvider;
 use App\Domains\Nexus\Llm\Infrastructure\Providers\OpenAILLMProvider;
 use App\Domains\Nexus\Llm\Infrastructure\Providers\OpenRouterLLMProvider;
 use App\Domains\Nexus\Llm\Infrastructure\Providers\SelfHostedQwenLLMProvider;
+use App\Domains\Nexus\Llm\Infrastructure\Repositories\EloquentLLMUsageLogRepository;
 use App\Domains\Nexus\Marketplace\Application\Actions\SearchMarketplaceAction;
 use App\Domains\Nexus\Negotiation\Application\Actions\AcceptDealAction;
 use App\Domains\Nexus\Negotiation\Application\Actions\GetNegotiationAction;
@@ -84,6 +86,7 @@ class NexusServiceProvider extends ServiceProvider
         $this->app->bind(CreditBalanceRepositoryInterface::class, EloquentCreditBalanceRepository::class);
         $this->app->bind(CreditTransactionRepositoryInterface::class, EloquentCreditTransactionRepository::class);
         $this->app->bind(CreditPurchaseSessionRepositoryInterface::class, EloquentCreditPurchaseSessionRepository::class);
+        $this->app->bind(LLMUsageLogRepositoryInterface::class, EloquentLLMUsageLogRepository::class);
 
         // Nexus's own PaymentGatewayRegistry singleton — CommerceServiceProvider
         // (where these adapter classes originally live) is disabled since
