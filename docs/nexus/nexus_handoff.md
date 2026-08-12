@@ -265,3 +265,41 @@
 **کامیت:** `feat(nexus): add Live Negotiation Viewer (polling UI, human approve/reject)`.
 
 ---
+
+## Phase 2 / M8 — تأیید نهایی
+
+- `php artisan migrate --force` روی دیتابیس تازه: همهٔ ۳ migration جدید (`negotiations`, `negotiation_messages`, `contracts`) تمیز اجرا شدند.
+- `php artisan test` کامل: **۹۷۵ pass / ۲۸۳ fail** — بدون رگرشن (baseline قبل از Phase 2: ۹۲۱ pass؛ ۵۴ تست جدید Nexus همگی pass: Marketplace ۸، Negotiation ۴۱، Contract ۲، Viewer ۵... مجموع دقیق‌تر: از ۹۲۱ به ۹۷۵ یعنی ۵۴ تست جدید).
+- تست End-to-End دستی کامل (نه فقط PHPUnit) — یک نکتهٔ محیطی واقعی پیدا و دور زده شد: بازهٔ پورت ۸۰۹۰–۸۱۸۹ توسط ویندوز (احتمالاً Hyper-V/WSL) رزرو شده بود (`netsh interface ipv4 show excludedportrange`) و `php artisan serve` را می‌شکست؛ با پورت ۹۵۰۰ حل شد. سناریوی کامل روی سرور واقعی:
+  1. ثبت‌نام و تأیید دو کسب‌وکار واقعی (Buyer/Seller)، هرکدام Agent واقعی با Core Token گرفتند.
+  2. `nexus.marketplace.search` (با Bearer واقعی) کسب‌وکار دیگر را پیدا کرد.
+  3. `nexus.negotiation.propose` → `nexus.negotiation.accept` روی مبلغی بالاتر از `authority_limits.max_deal_value` خریدار → وضعیت واقعاً `pending_approval` شد.
+  4. صاحب کسب‌وکار خریدار با session واقعی (`/nexus/business/login`) وارد شد، صفحهٔ لیست و نمایش مذاکره را دید (banner تأیید انسانی نمایش داده شد)، و با POST واقعی به `/nexus/negotiations/{id}/approve` تأیید کرد.
+  5. وضعیت به `accepted` تغییر کرد و یک Contract واقعی با PDF واقعی (۸۷۸KB، قبلاً از نظر رندر فارسی صحت‌سنجی شده) روی دیسک ساخته شد.
+- `git log --oneline origin/main`: هر ۸ مرحلهٔ Phase 2 (M1 تا M8) کامیت و push شده‌اند.
+
+**کامیت:** `docs(nexus): Phase 2 complete — final handoff summary`.
+
+---
+
+## 🎯 خلاصه Phase 2 (Negotiation Engine) — تکمیل شد
+
+| دامنه | Entity/Service اصلی | Action ها | MCP Capability | تست |
+|---|---|---|---|---|
+| Marketplace | — (read model) | Search, GetRecommendations, RankSuppliers | `nexus.marketplace.search` | ۸ |
+| Negotiation | `Negotiation`, `NegotiationMessage` | Initiate, SendCounterOffer, Accept, Reject, Approve/RejectPending, Get, List, Poll | `nexus.negotiation.{propose,counter,accept,reject,status}` | ۴۱ |
+| Contract | `Contract` | GenerateContract (event-driven) | — | ۲ |
+| Live Viewer | — (کنترلر + polling) | — | — | ۵ |
+| **مجموع** | | | | **۵۶ (پاس)** |
+
+تصمیمات معماری ماندگار برای فازهای بعدی:
+1. **اولین aggregate cross-tenant پروژه** — الگوی «هر دو طرف صریح ذخیره می‌شوند + authorization بر اساس عضویت، نه tenant_id واحد» برای هر دامنهٔ آیندهٔ چندطرفه (Marketplace رتبه‌بندی گروهی، Contract چندجانبه در فازهای بعد) قابل استفاده مجدد است.
+2. **الگوی کامل MCP Capability** (manifest → Seeder ایدمپوتنت → `CapabilityHandlerRegistry::register()` → Action، با `ResolveActingBusinessAction` برای یافتن Business از AuthContext) اکنون دوبار (Marketplace, Negotiation) اثبات شده — برای Contract/Reputation در فازهای بعد مستقیم کپی می‌شود.
+3. **Reasoning قطعی، نه LLM** — تا وقتی که استراتژی LLM واقعی (Phase 4 خود roadmap) پیاده نشده، هر «تفکر Agent» باید rule-based و zero-cost باشد.
+4. **امضای دیجیتال = هش ساده** — تا زمانی که نیاز واقعی به PKI/امضای واقعی حقوقی مطرح شود.
+5. **Viewer زنده = polling، نه WebSocket** — تا وقتی زیرساخت broadcast واقعی (Reverb/Pusher) اضافه نشده.
+6. **محدودیت شناخته‌شده باقی‌مانده:** فقط طرفی که آستانه‌اش رد شده باید بتواند Pending Approval را resolve کند؛ فعلاً هر دو طرف می‌توانند — باید در فاز بعد سخت‌گیرانه‌تر شود.
+
+**آماده برای Phase 3 (Credit & Payment Economy)** طبق `docs/nexus-roadmap.md`.
+
+---
