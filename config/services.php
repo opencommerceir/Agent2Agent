@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    // Nexus Business portal SSO (Phase 7/M6) — Socialite's own conventional
+    // config location; GoogleSsoProvider reads this via config('services.google').
+    'google' => [
+        'client_id' => env('NEXUS_GOOGLE_CLIENT_ID'),
+        'client_secret' => env('NEXUS_GOOGLE_CLIENT_SECRET'),
+        'redirect' => env('NEXUS_GOOGLE_REDIRECT_URI'),
+    ],
+
 ];

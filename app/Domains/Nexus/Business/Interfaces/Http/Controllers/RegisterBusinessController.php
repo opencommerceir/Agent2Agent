@@ -7,11 +7,11 @@ use App\Domains\Nexus\Business\Domain\ValueObjects\BusinessType;
 use App\Domains\Nexus\Business\Domain\ValueObjects\Industry;
 use App\Domains\Nexus\Business\Domain\ValueObjects\TeamMemberRole;
 use App\Domains\Nexus\Business\Infrastructure\Models\BusinessOwner;
+use App\Domains\Nexus\Business\Interfaces\Http\Controllers\Concerns\FinishesBusinessLogin;
 use App\Domains\Nexus\Business\Interfaces\Http\Requests\RegisterBusinessRequest;
 use App\Domains\Nexus\Growth\Application\Actions\RecordReferralSignupAction;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 
 /**
@@ -29,6 +29,8 @@ use Illuminate\View\View;
  */
 class RegisterBusinessController extends Controller
 {
+    use FinishesBusinessLogin;
+
     public function __construct(
         private readonly RegisterBusinessAction $registerBusiness,
         private readonly RecordReferralSignupAction $recordReferralSignup,
@@ -70,8 +72,7 @@ class RegisterBusinessController extends Controller
             'role' => TeamMemberRole::Owner->value,
         ]);
 
-        Auth::guard('business')->login($owner);
-        $request->session()->regenerate();
+        $this->finishBusinessLogin($owner, $request);
 
         return redirect()->route('nexus.business.dashboard')->with('status', t('messages.nexus.business.registered'));
     }

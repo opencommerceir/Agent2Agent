@@ -70,6 +70,23 @@ class BusinessLoginTest extends TestCase
         $this->assertGuest('business');
     }
 
+    public function test_store_setsSessionsTableUserId_regressionForBusinessGuardDefaultResolutionGap(): void
+    {
+        // phpunit.xml forces SESSION_DRIVER=array everywhere else in this
+        // suite; this one test needs the real 'database' driver to verify
+        // FinishesBusinessLogin's explicit fix against the actual table,
+        // not a driver that never touches it.
+        config(['session.driver' => 'database']);
+        $owner = $this->makeOwner();
+
+        $this->post(route('nexus.business.login.store'), [
+            'email' => 'ali@example.com',
+            'password' => 'password123',
+        ]);
+
+        $this->assertDatabaseHas('sessions', ['user_id' => $owner->id]);
+    }
+
     public function test_store_withMustChangePassword_redirectsToForcePasswordChangeInsteadOfDashboard(): void
     {
         $business = app(RegisterBusinessAction::class)->execute('شرکت آزمایشی', 'Test Company', BusinessType::Company, Industry::Technology);

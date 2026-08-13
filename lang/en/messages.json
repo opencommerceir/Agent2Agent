@@ -249,7 +249,24 @@
         "remember": "Remember me",
         "submit": "Log in",
         "no_account": "Don't have a business account yet?",
-        "invalid_credentials": "These credentials do not match our records."
+        "invalid_credentials": "These credentials do not match our records.",
+        "or": "or",
+        "continue_with_google": "Continue with Google"
+      },
+      "oauth": {
+        "no_account_found": "No business account found for :email. Signing in with Google never creates a new account.",
+        "link_title": "Link Google Account",
+        "link_description": "An account already exists for :email. Enter its current password to link your :provider account.",
+        "link_password": "Password",
+        "link_submit": "Link Account",
+        "link_wrong_password": "That password is incorrect.",
+        "linked": "Your Google account was linked successfully."
+      },
+      "sessions": {
+        "title": "Active Sessions",
+        "current": "Current session",
+        "last_activity": "Last activity",
+        "revoke": "Revoke"
       },
       "team": {
         "title": "Team Members",

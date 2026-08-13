@@ -38,6 +38,16 @@
                 </button>
             </form>
 
+            <div class="my-4 flex items-center gap-3 text-xs text-nexus-text-muted">
+                <div class="h-px flex-1 bg-nexus-border"></div>
+                {{ t('messages.nexus.business.login.or') }}
+                <div class="h-px flex-1 bg-nexus-border"></div>
+            </div>
+
+            <a href="{{ route('nexus.business.oauth.redirect', 'google') }}" class="block w-full rounded-md border border-nexus-border px-4 py-2 text-center text-sm text-nexus-text hover:bg-nexus-surface-1">
+                {{ t('messages.nexus.business.login.continue_with_google') }}
+            </a>
+
             <p class="mt-4 text-center text-sm text-nexus-text-muted">
                 {{ t('messages.nexus.business.login.no_account') }}
                 <a href="{{ route('nexus.business.register') }}" class="text-nexus-cyan hover:underline">{{ t('messages.nexus.business.register.submit') }}</a>

@@ -112,6 +112,8 @@ use App\Domains\Nexus\Reputation\Application\Actions\ListReviewsForBusinessActio
 use App\Domains\Nexus\Reputation\Application\Actions\SubmitReviewAction;
 use App\Domains\Nexus\Reputation\Domain\Repositories\ReviewRepositoryInterface;
 use App\Domains\Nexus\Reputation\Infrastructure\Repositories\EloquentReviewRepository;
+use App\Domains\Nexus\Sso\Application\Services\SsoProviderRegistry;
+use App\Domains\Nexus\Sso\Infrastructure\Providers\GoogleSsoProvider;
 use App\Modules\Commerce\Application\Services\PaymentGatewayRegistry;
 use App\Modules\Commerce\Application\Services\StripeConfig;
 use App\Modules\Commerce\Application\Services\StripePaymentGateway;
@@ -174,6 +176,11 @@ class NexusServiceProvider extends ServiceProvider
         // Phase 4 — LLM Provider System. Same Connector Pattern as
         // PaymentGatewayRegistry above, populated in boot() below.
         $this->app->singleton(LLMProviderRegistry::class);
+
+        // Phase 7/M6 — SSO. Same Connector Pattern, populated in boot()
+        // below (M6 registers 'google' for real; M8 adds 'saml'/'ldap'
+        // stubs to this same instance).
+        $this->app->singleton(SsoProviderRegistry::class);
     }
 
     public function boot(): void
@@ -206,6 +213,13 @@ class NexusServiceProvider extends ServiceProvider
 
         $this->registerLlmProviders();
         $this->registerMcpCapabilityHandlers();
+
+        // Phase 7/M6 — the one real, live SSO adapter this phase wires
+        // end-to-end (see GoogleSsoProvider's own docblock for why only
+        // Google, same "prove it with one real implementation" restraint
+        // Zibal-only had in Phase 3/M3). Phase 7/M8 registers 'saml'/'ldap'
+        // stubs onto this same singleton.
+        $this->app->make(SsoProviderRegistry::class)->register('google', new GoogleSsoProvider());
     }
 
     /**

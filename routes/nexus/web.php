@@ -3,7 +3,9 @@
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessDashboardController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessLoginController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessLogoutController;
+use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessOauthController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessPasswordController;
+use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessSessionController;
 use App\Domains\Nexus\Approval\Interfaces\Http\Controllers\ApprovalPolicyController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessTeamController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\RegisterBusinessController;
@@ -45,6 +47,16 @@ Route::middleware('web')->group(function () {
             Route::post('/register', [RegisterBusinessController::class, 'store'])->name('register.store');
             Route::get('/login', [BusinessLoginController::class, 'create'])->name('login');
             Route::post('/login', [BusinessLoginController::class, 'store'])->name('login.store');
+
+            // Google OAuth (Phase 7/M6) — guest-only, same as the password
+            // login form above; the link-confirmation step also happens
+            // before the caller is logged in, so it lives in this group too.
+            Route::prefix('oauth')->name('oauth.')->group(function () {
+                Route::get('/{provider}/redirect', [BusinessOauthController::class, 'redirect'])->name('redirect');
+                Route::get('/{provider}/callback', [BusinessOauthController::class, 'callback'])->name('callback');
+                Route::get('/link', [BusinessOauthController::class, 'showLinkConfirmation'])->name('link.show');
+                Route::post('/link', [BusinessOauthController::class, 'confirmLink'])->name('link.store');
+            });
         });
 
         Route::middleware('business.auth:business')->group(function () {
@@ -56,6 +68,14 @@ Route::middleware('web')->group(function () {
             // team member (InviteTeamMemberAction's temporary password).
             Route::get('/password/force-change', [BusinessPasswordController::class, 'edit'])->name('password.force-change');
             Route::post('/password/force-change', [BusinessPasswordController::class, 'update'])->name('password.force-change.store');
+
+            // Active session list/revoke (Phase 7/M6) — reads
+            // sessions.user_id directly, the payoff of the login-time fix
+            // in FinishesBusinessLogin.
+            Route::prefix('sessions')->name('sessions.')->group(function () {
+                Route::get('/', [BusinessSessionController::class, 'index'])->name('index');
+                Route::delete('/{session}', [BusinessSessionController::class, 'destroy'])->name('destroy');
+            });
 
             // Business Team Members & Roles (Phase 7/M3) — Owner-only
             // invite/role-change/remove, enforced inside each Action.
