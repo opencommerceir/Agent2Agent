@@ -2,6 +2,7 @@
 
 namespace App\Domains\Nexus\Business\Infrastructure\Models;
 
+use App\Domains\Nexus\Business\Domain\ValueObjects\TeamMemberRole;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -23,6 +24,8 @@ class BusinessOwner extends Authenticatable
         'name',
         'email',
         'password',
+        'role',
+        'must_change_password',
     ];
 
     protected $hidden = [
@@ -35,6 +38,8 @@ class BusinessOwner extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'role' => TeamMemberRole::class,
+            'must_change_password' => 'boolean',
         ];
     }
 

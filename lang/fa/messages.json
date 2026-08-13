@@ -251,6 +251,33 @@
         "no_account": "هنوز حساب کسب‌وکار ندارید؟",
         "invalid_credentials": "این اطلاعات با سوابق ما مطابقت ندارد."
       },
+      "team": {
+        "title": "اعضای تیم",
+        "invite": "دعوت عضو جدید",
+        "name": "نام",
+        "email": "ایمیل",
+        "role": "نقش",
+        "submit": "ارسال دعوت",
+        "change_role": "تغییر نقش",
+        "remove": "حذف",
+        "must_change_password": "در انتظار تغییر رمز عبور",
+        "role_option": {
+          "owner": "مالک",
+          "manager": "مدیر",
+          "cfo": "مدیر مالی",
+          "staff": "کارمند"
+        }
+      },
+      "password": {
+        "force_change": {
+          "title": "تغییر رمز عبور موقت",
+          "description": "شما با یک رمز عبور موقت وارد شدید. لطفاً یک رمز عبور جدید تنظیم کنید.",
+          "new_password": "رمز عبور جدید",
+          "confirm_password": "تکرار رمز عبور جدید",
+          "submit": "تنظیم رمز عبور"
+        },
+        "changed": "رمز عبور شما با موفقیت تغییر کرد."
+      },
       "type": {
         "company": "شرکت",
         "individual": "شخص حقیقی"

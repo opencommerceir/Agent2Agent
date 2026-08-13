@@ -37,4 +37,9 @@ enum NotificationType: string
     // its own (not event-driven — sent synchronously the moment the
     // capability is invoked).
     case AgentInvite = 'agent_invite';
+
+    // Nexus Phase 7 (Business Team Members) — InviteTeamMemberAction's own
+    // "here's your temporary password" email, same caller-supplied-recipient
+    // shape AgentInvite already established. No Listener of its own.
+    case TeamMemberInvited = 'team_member_invited';
 }

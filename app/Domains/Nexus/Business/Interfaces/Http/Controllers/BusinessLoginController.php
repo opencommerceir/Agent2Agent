@@ -34,6 +34,14 @@ class BusinessLoginController extends Controller
 
         $request->session()->regenerate();
 
+        // Phase 7/M3 — a team member invited with a temporary password
+        // (InviteTeamMemberAction) is routed here before anywhere else,
+        // regardless of `intended()`; a fresh registrant's Owner row never
+        // has this flag set, so this is a no-op for the pre-Phase-7 flow.
+        if (Auth::guard('business')->user()->must_change_password) {
+            return redirect()->route('nexus.business.password.force-change');
+        }
+
         return redirect()->intended(route('nexus.business.dashboard'));
     }
 }

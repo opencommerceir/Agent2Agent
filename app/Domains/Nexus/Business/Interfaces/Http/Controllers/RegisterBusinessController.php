@@ -5,6 +5,7 @@ namespace App\Domains\Nexus\Business\Interfaces\Http\Controllers;
 use App\Domains\Nexus\Business\Application\Actions\RegisterBusinessAction;
 use App\Domains\Nexus\Business\Domain\ValueObjects\BusinessType;
 use App\Domains\Nexus\Business\Domain\ValueObjects\Industry;
+use App\Domains\Nexus\Business\Domain\ValueObjects\TeamMemberRole;
 use App\Domains\Nexus\Business\Infrastructure\Models\BusinessOwner;
 use App\Domains\Nexus\Business\Interfaces\Http\Requests\RegisterBusinessRequest;
 use App\Domains\Nexus\Growth\Application\Actions\RecordReferralSignupAction;
@@ -66,6 +67,7 @@ class RegisterBusinessController extends Controller
             'name' => $request->string('owner_name')->toString(),
             'email' => $request->string('email')->toString(),
             'password' => $request->string('password')->toString(),
+            'role' => TeamMemberRole::Owner->value,
         ]);
 
         Auth::guard('business')->login($owner);

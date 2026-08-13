@@ -251,6 +251,33 @@
         "no_account": "Don't have a business account yet?",
         "invalid_credentials": "These credentials do not match our records."
       },
+      "team": {
+        "title": "Team Members",
+        "invite": "Invite New Member",
+        "name": "Name",
+        "email": "Email",
+        "role": "Role",
+        "submit": "Send Invitation",
+        "change_role": "Change Role",
+        "remove": "Remove",
+        "must_change_password": "Pending password change",
+        "role_option": {
+          "owner": "Owner",
+          "manager": "Manager",
+          "cfo": "CFO",
+          "staff": "Staff"
+        }
+      },
+      "password": {
+        "force_change": {
+          "title": "Change Temporary Password",
+          "description": "You logged in with a temporary password. Please set a new password.",
+          "new_password": "New Password",
+          "confirm_password": "Confirm New Password",
+          "submit": "Set Password"
+        },
+        "changed": "Your password was changed successfully."
+      },
       "type": {
         "company": "Company",
         "individual": "Individual"

@@ -3,6 +3,8 @@
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessDashboardController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessLoginController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessLogoutController;
+use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessPasswordController;
+use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessTeamController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\RegisterBusinessController;
 use App\Domains\Nexus\Credit\Interfaces\Http\Controllers\CreditPurchaseCallbackController;
 use App\Domains\Nexus\Credit\Interfaces\Http\Controllers\CreditPurchaseController;
@@ -47,6 +49,20 @@ Route::middleware('web')->group(function () {
             Route::post('/logout', BusinessLogoutController::class)->name('logout');
             Route::get('/dashboard', [BusinessDashboardController::class, 'index'])->name('dashboard');
             Route::post('/dashboard/appeal', [BusinessDashboardController::class, 'submitSuspensionAppeal'])->name('dashboard.appeal');
+
+            // Phase 7/M3 — forced password change for a freshly-invited
+            // team member (InviteTeamMemberAction's temporary password).
+            Route::get('/password/force-change', [BusinessPasswordController::class, 'edit'])->name('password.force-change');
+            Route::post('/password/force-change', [BusinessPasswordController::class, 'update'])->name('password.force-change.store');
+
+            // Business Team Members & Roles (Phase 7/M3) — Owner-only
+            // invite/role-change/remove, enforced inside each Action.
+            Route::prefix('team')->name('team.')->group(function () {
+                Route::get('/', [BusinessTeamController::class, 'index'])->name('index');
+                Route::post('/', [BusinessTeamController::class, 'store'])->name('store');
+                Route::post('/{member}/role', [BusinessTeamController::class, 'updateRole'])->name('role.update');
+                Route::post('/{member}/remove', [BusinessTeamController::class, 'destroy'])->name('destroy');
+            });
         });
     });
 
