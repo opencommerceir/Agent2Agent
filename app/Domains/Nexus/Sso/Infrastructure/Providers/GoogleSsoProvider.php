@@ -47,4 +47,9 @@ final class GoogleSsoProvider implements SsoProviderInterface
             name: $googleUser->getName() ?? $googleUser->getNickname() ?? $googleUser->getEmail(),
         );
     }
+
+    public function isConfigured(): bool
+    {
+        return filled(config('services.google.client_id')) && filled(config('services.google.client_secret'));
+    }
 }

@@ -13,6 +13,7 @@ use App\Http\Controllers\Dashboard\NexusGrowthController;
 use App\Http\Controllers\Dashboard\NexusLlmSettingsController;
 use App\Http\Controllers\Dashboard\NexusMarginSettingsController;
 use App\Http\Controllers\Dashboard\NexusRevenueController;
+use App\Http\Controllers\Dashboard\NexusSsoProvidersController;
 use App\Http\Controllers\Dashboard\NotificationController;
 use App\Http\Controllers\Dashboard\OrderController;
 use App\Http\Controllers\Dashboard\PerformanceController;
@@ -120,6 +121,10 @@ Route::middleware('auth')->group(function () {
 
             Route::get('/margin-settings', [NexusMarginSettingsController::class, 'index'])->name('margin-settings.index');
             Route::put('/margin-settings', [NexusMarginSettingsController::class, 'update'])->name('margin-settings.update');
+
+            // SSO Providers (Phase 7/M8) — read-only "what's live vs.
+            // stubbed" view over SsoProviderRegistry.
+            Route::get('/sso-providers', [NexusSsoProvidersController::class, 'index'])->name('sso-providers.index');
 
             Route::get('/revenue', [NexusRevenueController::class, 'index'])->name('revenue.index');
 

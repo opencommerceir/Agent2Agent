@@ -28,4 +28,15 @@ interface SsoProviderInterface
     public function redirectUrl(): string;
 
     public function handleCallback(): SsoIdentity;
+
+    /**
+     * Whether this provider has real, usable configuration behind it —
+     * distinct from `supportsInteractiveLogin()`: a stub can be "not
+     * configured" AND "doesn't support interactive login" at once, but the
+     * two questions are independent (a provider could in principle be
+     * fully configured yet still non-interactive, e.g. a future
+     * backend-only directory sync). NexusSsoProvidersController surfaces
+     * both.
+     */
+    public function isConfigured(): bool;
 }

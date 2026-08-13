@@ -288,4 +288,30 @@ return [
         'secondary' => env('NEXUS_THEME_SECONDARY', '#A855F7'),
         'background' => env('NEXUS_THEME_BACKGROUND', '#05060A'),
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | SSO (Phase 7/M6-M8)
+    |--------------------------------------------------------------------------
+    |
+    | Google's own credentials live in config('services.google') (Socialite's
+    | conventional location) — this section is only for the enterprise
+    | protocols with no package installed yet (SamlSsoProvider/LdapSsoProvider,
+    | both honestly stubbed, see their own docblocks). Real config keys so an
+    | admin configuring a real IdP later has a real, discoverable place to
+    | put entity ID/certificate/host — not a placeholder that gets renamed
+    | once real wiring happens.
+    |
+    */
+    'sso' => [
+        'saml' => [
+            'entity_id' => env('NEXUS_SAML_ENTITY_ID'),
+            'sso_url' => env('NEXUS_SAML_SSO_URL'),
+            'certificate' => env('NEXUS_SAML_CERTIFICATE'),
+        ],
+        'ldap' => [
+            'host' => env('NEXUS_LDAP_HOST'),
+            'base_dn' => env('NEXUS_LDAP_BASE_DN'),
+        ],
+    ],
 ];

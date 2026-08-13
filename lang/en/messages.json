@@ -696,6 +696,15 @@
         "negotiation_fee_percent": "Negotiation success fee (%)",
         "saved": "Margin settings saved — takes effect immediately."
       },
+      "sso_providers": {
+        "title": "SSO Providers",
+        "provider": "Provider",
+        "interactive_login": "Interactive login",
+        "configured": "Configured",
+        "yes": "Yes",
+        "no": "No",
+        "stub_note": "SAML/LDAP are registered as real connectors but not wired to a real Identity Provider yet — no package installed, no IdP reachable in this environment."
+      },
       "llm_settings": {
         "title": "LLM Providers",
         "feature_providers": "Provider per feature",

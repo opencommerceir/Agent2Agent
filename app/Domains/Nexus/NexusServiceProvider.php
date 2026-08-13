@@ -114,6 +114,8 @@ use App\Domains\Nexus\Reputation\Domain\Repositories\ReviewRepositoryInterface;
 use App\Domains\Nexus\Reputation\Infrastructure\Repositories\EloquentReviewRepository;
 use App\Domains\Nexus\Sso\Application\Services\SsoProviderRegistry;
 use App\Domains\Nexus\Sso\Infrastructure\Providers\GoogleSsoProvider;
+use App\Domains\Nexus\Sso\Infrastructure\Providers\LdapSsoProvider;
+use App\Domains\Nexus\Sso\Infrastructure\Providers\SamlSsoProvider;
 use App\Modules\Commerce\Application\Services\PaymentGatewayRegistry;
 use App\Modules\Commerce\Application\Services\StripeConfig;
 use App\Modules\Commerce\Application\Services\StripePaymentGateway;
@@ -217,9 +219,19 @@ class NexusServiceProvider extends ServiceProvider
         // Phase 7/M6 — the one real, live SSO adapter this phase wires
         // end-to-end (see GoogleSsoProvider's own docblock for why only
         // Google, same "prove it with one real implementation" restraint
-        // Zibal-only had in Phase 3/M3). Phase 7/M8 registers 'saml'/'ldap'
-        // stubs onto this same singleton.
-        $this->app->make(SsoProviderRegistry::class)->register('google', new GoogleSsoProvider());
+        // Zibal-only had in Phase 3/M3).
+        $ssoProviders = $this->app->make(SsoProviderRegistry::class);
+        $ssoProviders->register('google', new GoogleSsoProvider());
+
+        // Phase 7/M8 — real classes, honestly stubbed (see their own
+        // docblocks): registered so the admin surface
+        // (NexusSsoProvidersController) can show them as "not configured"
+        // rather than pretending they don't exist.
+        $samlConfig = config('nexus.platform.sso.saml');
+        $ssoProviders->register('saml', new SamlSsoProvider($samlConfig['entity_id'], $samlConfig['sso_url'], $samlConfig['certificate']));
+
+        $ldapConfig = config('nexus.platform.sso.ldap');
+        $ssoProviders->register('ldap', new LdapSsoProvider($ldapConfig['host'], $ldapConfig['base_dn']));
     }
 
     /**
