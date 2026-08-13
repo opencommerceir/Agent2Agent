@@ -654,6 +654,10 @@
           "title": "GraphQL",
           "description": "A single POST endpoint (nexus/api/v1/graphql) covering the same five resources as the REST API above, so you can fetch several in one round trip. Each field is checked against your API key's scopes independently — a missing scope on one field reports an error for just that field, not the whole request."
         },
+        "sdks": {
+          "title": "Official SDKs",
+          "description": "Client libraries implementing this API, in-repo at packages/nexus-sdk-{php,node,python,go} — not yet published to a package registry."
+        },
         "errors": {
           "title": "Errors",
           "description": "Every error responds with the same envelope, regardless of endpoint."

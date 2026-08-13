@@ -1,0 +1,24 @@
+{
+    "name": "opencommerce/nexus-sdk",
+    "description": "Official PHP client for the Nexus Public REST API.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.2",
+        "ext-curl": "*",
+        "ext-json": "*"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Nexus\\Sdk\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Nexus\\Sdk\\Tests\\": "tests/"
+        }
+    }
+}

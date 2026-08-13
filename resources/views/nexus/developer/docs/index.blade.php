@@ -86,5 +86,15 @@
             <pre class="overflow-x-auto rounded-md border border-nexus-border bg-nexus-surface-1 p-3 text-xs text-nexus-text">$expected = 'sha256=' . hash_hmac('sha256', $rawRequestBody, $yourWebhookSecret);
 hash_equals($expected, $_SERVER['HTTP_X_NEXUS_SIGNATURE']);</pre>
         </x-nexus-panel>
+
+        <x-nexus-panel :title="t('messages.nexus.developer.docs.sdks.title')">
+            <p class="mb-2 text-sm text-nexus-text-muted">{{ t('messages.nexus.developer.docs.sdks.description') }}</p>
+            <div class="flex flex-wrap gap-1.5">
+                <x-status-badge status="success" label="PHP" />
+                <x-status-badge status="success" label="Node.js" />
+                <x-status-badge status="success" label="Python" />
+                <x-status-badge status="warning" label="Go" />
+            </div>
+        </x-nexus-panel>
     </div>
 @endsection
