@@ -243,6 +243,7 @@ return [
         'transaction_fee_percent' => (float) env('NEXUS_MARGIN_TRANSACTION_FEE', 0.5),
         'subscription_markup_percent' => (float) env('NEXUS_MARGIN_SUBSCRIPTION_MARKUP', 20.0),
         'negotiation_fee_percent' => (float) env('NEXUS_MARGIN_NEGOTIATION_FEE', 1.0),
+        'agent_template_fee_percent' => (float) env('NEXUS_MARGIN_AGENT_TEMPLATE_FEE', 20.0),
     ],
 
     /*

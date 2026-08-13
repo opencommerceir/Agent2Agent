@@ -48,6 +48,18 @@ final class MarginSettingsService
         return $this->get('negotiation_fee_percent');
     }
 
+    /**
+     * Phase 9/M7 — the platform's cut of a template publisher's earnings
+     * when another Business installs their AgentStrategyTemplate. Same
+     * reuse-this-service-not-a-new-mechanism rule every prior new fee
+     * (transaction_fee_percent, negotiation_fee_percent, ...) already
+     * followed here rather than inventing a parallel settings table.
+     */
+    public function agentTemplateFeePercent(): float
+    {
+        return $this->get('agent_template_fee_percent');
+    }
+
     public function set(string $key, float $value): void
     {
         $existing = $this->settings->findByKey($key);

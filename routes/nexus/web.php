@@ -17,6 +17,7 @@ use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessTeamControlle
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\RegisterBusinessController;
 use App\Domains\Nexus\Credit\Interfaces\Http\Controllers\CreditPurchaseCallbackController;
 use App\Domains\Nexus\Credit\Interfaces\Http\Controllers\CreditPurchaseController;
+use App\Domains\Nexus\Developer\Interfaces\Http\Controllers\AgentMarketplaceController;
 use App\Domains\Nexus\Developer\Interfaces\Http\Controllers\ApiDocsController;
 use App\Domains\Nexus\Developer\Interfaces\Http\Controllers\ApiKeyController;
 use App\Domains\Nexus\Developer\Interfaces\Http\Controllers\IntegrationConnectionController;
@@ -289,5 +290,15 @@ Route::middleware('web')->group(function () {
         Route::post('/', [IntegrationConnectionController::class, 'store'])->name('store');
         Route::post('/{connection}/sync', [IntegrationConnectionController::class, 'sync'])->name('sync');
         Route::post('/{connection}/revoke', [IntegrationConnectionController::class, 'revoke'])->name('revoke');
+    });
+
+    // Agent Developer Platform (Phase 9, M7) — portal-only, same
+    // 'business.auth' guard as the rest of the Developer domain's portal.
+    Route::middleware('business.auth:business')->prefix('nexus/developer/agent-marketplace')->name('nexus.developer.agent-marketplace.')->group(function () {
+        Route::get('/', [AgentMarketplaceController::class, 'index'])->name('index');
+        Route::get('/{template}/preview', [AgentMarketplaceController::class, 'preview'])->name('preview');
+        Route::post('/{template}/install', [AgentMarketplaceController::class, 'install'])->name('install');
+        Route::post('/publish', [AgentMarketplaceController::class, 'publish'])->name('publish');
+        Route::post('/{template}/unpublish', [AgentMarketplaceController::class, 'unpublish'])->name('unpublish');
     });
 });

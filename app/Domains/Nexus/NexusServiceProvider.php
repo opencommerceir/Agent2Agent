@@ -64,9 +64,13 @@ use App\Domains\Nexus\Developer\Application\Listeners\DispatchWebhookOnContractG
 use App\Domains\Nexus\Developer\Application\Listeners\DispatchWebhookOnEscrowReleasedListener;
 use App\Domains\Nexus\Developer\Application\Listeners\DispatchWebhookOnNegotiationAcceptedListener;
 use App\Domains\Nexus\Developer\Domain\Repositories\ApiKeyRepositoryInterface;
+use App\Domains\Nexus\Developer\Domain\Repositories\AgentStrategyTemplateRepositoryInterface;
+use App\Domains\Nexus\Developer\Domain\Repositories\AgentTemplateInstallRepositoryInterface;
 use App\Domains\Nexus\Developer\Domain\Repositories\IntegrationConnectionRepositoryInterface;
 use App\Domains\Nexus\Developer\Domain\Repositories\WebhookDeliveryLogRepositoryInterface;
 use App\Domains\Nexus\Developer\Domain\Repositories\WebhookSubscriptionRepositoryInterface;
+use App\Domains\Nexus\Developer\Infrastructure\Repositories\EloquentAgentStrategyTemplateRepository;
+use App\Domains\Nexus\Developer\Infrastructure\Repositories\EloquentAgentTemplateInstallRepository;
 use App\Domains\Nexus\Developer\Infrastructure\Repositories\EloquentApiKeyRepository;
 use App\Domains\Nexus\Developer\Infrastructure\Repositories\EloquentIntegrationConnectionRepository;
 use App\Domains\Nexus\Developer\Infrastructure\Repositories\EloquentWebhookDeliveryLogRepository;
@@ -213,6 +217,8 @@ class NexusServiceProvider extends ServiceProvider
         $this->app->bind(WebhookSubscriptionRepositoryInterface::class, EloquentWebhookSubscriptionRepository::class);
         $this->app->bind(WebhookDeliveryLogRepositoryInterface::class, EloquentWebhookDeliveryLogRepository::class);
         $this->app->bind(IntegrationConnectionRepositoryInterface::class, EloquentIntegrationConnectionRepository::class);
+        $this->app->bind(AgentStrategyTemplateRepositoryInterface::class, EloquentAgentStrategyTemplateRepository::class);
+        $this->app->bind(AgentTemplateInstallRepositoryInterface::class, EloquentAgentTemplateInstallRepository::class);
 
         // Nexus's own PaymentGatewayRegistry singleton — CommerceServiceProvider
         // (where these adapter classes originally live) is disabled since

@@ -19,4 +19,9 @@ enum CreditTransactionType: string
     // ReferralBonus already established.
     case PoolContribution = 'pool_contribution';
     case PoolDeduction = 'pool_deduction';
+
+    // Phase 9/M7 — a template publisher's revenue share when another
+    // Business installs their AgentStrategyTemplate. Additive case, same
+    // pattern ReferralBonus/PoolContribution already established.
+    case AgentTemplateEarning = 'agent_template_earning';
 }
