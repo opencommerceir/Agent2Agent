@@ -17,6 +17,7 @@ use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessTeamControlle
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\RegisterBusinessController;
 use App\Domains\Nexus\Credit\Interfaces\Http\Controllers\CreditPurchaseCallbackController;
 use App\Domains\Nexus\Credit\Interfaces\Http\Controllers\CreditPurchaseController;
+use App\Domains\Nexus\Developer\Interfaces\Http\Controllers\ApiKeyController;
 use App\Domains\Nexus\Growth\Interfaces\Http\Controllers\CoalitionController;
 use App\Domains\Nexus\Growth\Interfaces\Http\Controllers\InviteController;
 use App\Domains\Nexus\Growth\Interfaces\Http\Controllers\ReferralController;
@@ -252,5 +253,15 @@ Route::middleware('web')->group(function () {
         Route::post('/members/{member}/leave', [PrivateMarketplaceController::class, 'leave'])->name('members.leave');
         Route::post('/{marketplace}/listings', [PrivateMarketplaceController::class, 'addListing'])->name('listings.store');
         Route::post('/{marketplace}/listings/{listing}/remove', [PrivateMarketplaceController::class, 'removeListing'])->name('listings.remove');
+    });
+
+    // Public API key management (Phase 9, M1) — portal-only (no MCP
+    // capability, same "human administrative structure" reasoning
+    // Admin/Margin/LLM Settings already follow); the keys issued here
+    // authenticate against the Public REST API added in Phase 9/M2.
+    Route::middleware('business.auth:business')->prefix('nexus/developer/api-keys')->name('nexus.developer.api-keys.')->group(function () {
+        Route::get('/', [ApiKeyController::class, 'index'])->name('index');
+        Route::post('/', [ApiKeyController::class, 'store'])->name('store');
+        Route::post('/{apiKey}/revoke', [ApiKeyController::class, 'revoke'])->name('revoke');
     });
 });

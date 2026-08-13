@@ -536,6 +536,33 @@
         "direction": "Direction"
       }
     },
+    "developer": {
+      "api_keys": {
+        "title": "API Keys",
+        "description": "API keys authenticate third-party software or your own integrations against the Nexus Public REST API.",
+        "label": "Label (optional)",
+        "label_placeholder": "e.g. Warehouse system",
+        "scopes": "Scopes",
+        "scope": {
+          "business.read": "Read business profile",
+          "catalog.read": "Read catalog",
+          "marketplace.read": "Read marketplace",
+          "negotiation.read": "Read negotiations",
+          "credit.read": "Read credit balance"
+        },
+        "issue": "Issue new key",
+        "empty": "No API keys issued yet.",
+        "reveal_title": "Your API key",
+        "reveal_warning": "This key is shown only once — copy it somewhere safe right now.",
+        "last_used": "Last used",
+        "never": "Never",
+        "revoke": "Revoke key",
+        "status": {
+          "active": "Active",
+          "revoked": "Revoked"
+        }
+      }
+    },
     "holding": {
       "title": "Holding",
       "no_holding": "You are not part of any Holding yet.",

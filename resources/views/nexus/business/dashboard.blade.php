@@ -56,6 +56,9 @@
                     <a href="{{ route('nexus.business.mfa.edit') }}" class="rounded-md border border-nexus-purple/40 px-3 py-1.5 text-sm text-nexus-purple hover:bg-nexus-purple/10">
                         {{ t('messages.nexus.business.mfa.settings.title') }}
                     </a>
+                    <a href="{{ route('nexus.developer.api-keys.index') }}" class="rounded-md border border-nexus-purple/40 px-3 py-1.5 text-sm text-nexus-purple hover:bg-nexus-purple/10">
+                        {{ t('messages.nexus.developer.api_keys.title') }}
+                    </a>
                     <form method="POST" action="{{ route('nexus.business.logout') }}">
                         @csrf
                         <button type="submit" class="rounded-md border border-nexus-border px-3 py-1.5 text-sm text-nexus-text hover:bg-nexus-surface-1">

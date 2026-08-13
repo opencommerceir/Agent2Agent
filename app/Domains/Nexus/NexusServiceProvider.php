@@ -59,6 +59,8 @@ use App\Domains\Nexus\Contract\Infrastructure\Repositories\EloquentContractRepos
 use App\Domains\Nexus\Contract\Infrastructure\Repositories\EloquentDisputeCaseRepository;
 use App\Domains\Nexus\Contract\Infrastructure\Repositories\EloquentEscrowRepository;
 use App\Domains\Nexus\Credit\Application\Actions\GetCreditBalanceAction;
+use App\Domains\Nexus\Developer\Domain\Repositories\ApiKeyRepositoryInterface;
+use App\Domains\Nexus\Developer\Infrastructure\Repositories\EloquentApiKeyRepository;
 use App\Domains\Nexus\Credit\Application\Listeners\GrantStartingCreditsOnBusinessVerifiedListener;
 use App\Domains\Nexus\Credit\Domain\Repositories\CreditBalanceRepositoryInterface;
 use App\Domains\Nexus\Credit\Domain\Repositories\CreditPurchaseSessionRepositoryInterface;
@@ -194,6 +196,7 @@ class NexusServiceProvider extends ServiceProvider
         $this->app->bind(AuditLogEntryRepositoryInterface::class, EloquentAuditLogEntryRepository::class);
         $this->app->bind(AutomationRuleRepositoryInterface::class, EloquentAutomationRuleRepository::class);
         $this->app->bind(AutomationRunLogRepositoryInterface::class, EloquentAutomationRunLogRepository::class);
+        $this->app->bind(ApiKeyRepositoryInterface::class, EloquentApiKeyRepository::class);
 
         // Nexus's own PaymentGatewayRegistry singleton — CommerceServiceProvider
         // (where these adapter classes originally live) is disabled since
