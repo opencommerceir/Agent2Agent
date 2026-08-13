@@ -159,6 +159,13 @@ return [
             // outbound-effect capability in this table already is priced.
             'nexus.invite.send' => (int) env('NEXUS_COST_GROWTH_INVITE_SEND', 5),
             'nexus.coalition.create' => (int) env('NEXUS_COST_GROWTH_COALITION_CREATE', 10),
+            // Phase 7/M5 — Private Marketplaces. Search priced the same as
+            // nexus.marketplace.search (membership doesn't make lookups
+            // free); listing a new item is a small anti-spam fee, same
+            // reasoning as nexus.invite.send but cheaper since it never
+            // reaches an outside inbox.
+            'nexus.private_marketplace.search' => (int) env('NEXUS_COST_PRIVATE_MARKETPLACE_SEARCH', 5),
+            'nexus.private_marketplace.list_listing' => (int) env('NEXUS_COST_PRIVATE_MARKETPLACE_LIST_LISTING', 3),
         ],
     ],
 

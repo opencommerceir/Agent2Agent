@@ -99,6 +99,14 @@ use App\Domains\Nexus\Negotiation\Domain\ValueObjects\NegotiationTerms;
 use App\Domains\Nexus\Negotiation\Domain\Events\NegotiationWasAccepted;
 use App\Domains\Nexus\Negotiation\Infrastructure\Repositories\EloquentNegotiationMessageRepository;
 use App\Domains\Nexus\Negotiation\Infrastructure\Repositories\EloquentNegotiationRepository;
+use App\Domains\Nexus\PrivateMarketplace\Application\Actions\AddListingAction;
+use App\Domains\Nexus\PrivateMarketplace\Application\Actions\SearchPrivateMarketplaceAction;
+use App\Domains\Nexus\PrivateMarketplace\Domain\Repositories\PrivateMarketplaceListingRepositoryInterface;
+use App\Domains\Nexus\PrivateMarketplace\Domain\Repositories\PrivateMarketplaceMemberRepositoryInterface;
+use App\Domains\Nexus\PrivateMarketplace\Domain\Repositories\PrivateMarketplaceRepositoryInterface;
+use App\Domains\Nexus\PrivateMarketplace\Infrastructure\Repositories\EloquentPrivateMarketplaceListingRepository;
+use App\Domains\Nexus\PrivateMarketplace\Infrastructure\Repositories\EloquentPrivateMarketplaceMemberRepository;
+use App\Domains\Nexus\PrivateMarketplace\Infrastructure\Repositories\EloquentPrivateMarketplaceRepository;
 use App\Domains\Nexus\Reputation\Application\Actions\CalculateReputationScoreAction;
 use App\Domains\Nexus\Reputation\Application\Actions\ListReviewsForBusinessAction;
 use App\Domains\Nexus\Reputation\Application\Actions\SubmitReviewAction;
@@ -152,6 +160,9 @@ class NexusServiceProvider extends ServiceProvider
         $this->app->bind(ApprovalPolicyRepositoryInterface::class, EloquentApprovalPolicyRepository::class);
         $this->app->bind(ApprovalRequestRepositoryInterface::class, EloquentApprovalRequestRepository::class);
         $this->app->bind(ApprovalDecisionRepositoryInterface::class, EloquentApprovalDecisionRepository::class);
+        $this->app->bind(PrivateMarketplaceRepositoryInterface::class, EloquentPrivateMarketplaceRepository::class);
+        $this->app->bind(PrivateMarketplaceMemberRepositoryInterface::class, EloquentPrivateMarketplaceMemberRepository::class);
+        $this->app->bind(PrivateMarketplaceListingRepositoryInterface::class, EloquentPrivateMarketplaceListingRepository::class);
 
         // Nexus's own PaymentGatewayRegistry singleton — CommerceServiceProvider
         // (where these adapter classes originally live) is disabled since
@@ -296,6 +307,34 @@ class NexusServiceProvider extends ServiceProvider
         $this->registerCoalitionCapabilityHandlers($handlers);
         $this->registerNegotiationCapabilityHandlers($handlers);
         $this->registerReputationCapabilityHandlers($handlers);
+        $this->registerPrivateMarketplaceCapabilityHandlers($handlers);
+    }
+
+    private function registerPrivateMarketplaceCapabilityHandlers(CapabilityHandlerRegistry $handlers): void
+    {
+        $handlers->register('nexus.private_marketplace.search', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            return $this->app->make(SearchPrivateMarketplaceAction::class)->execute(
+                (int) $input['marketplace_id'],
+                $callingBusinessId,
+            );
+        });
+
+        $handlers->register('nexus.private_marketplace.list_listing', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            $listing = $this->app->make(AddListingAction::class)->execute(
+                marketplaceId: (int) $input['marketplace_id'],
+                listingBusinessId: $callingBusinessId,
+                catalogItemType: CatalogItemType::from($input['catalog_item_type']),
+                catalogItemId: (int) $input['catalog_item_id'],
+                specialPriceAmount: (int) $input['special_price_amount'],
+                specialPriceCurrency: $input['special_price_currency'],
+            );
+
+            return ['listing' => $listing->toArray()];
+        });
     }
 
     private function registerReputationCapabilityHandlers(CapabilityHandlerRegistry $handlers): void

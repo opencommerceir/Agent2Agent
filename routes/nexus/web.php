@@ -15,6 +15,7 @@ use App\Domains\Nexus\Growth\Interfaces\Http\Controllers\ReferralController;
 use App\Domains\Nexus\Holding\Interfaces\Http\Controllers\HoldingController;
 use App\Domains\Nexus\Marketplace\Interfaces\Http\Controllers\NetworkController;
 use App\Domains\Nexus\Negotiation\Interfaces\Http\Controllers\NegotiationViewerController;
+use App\Domains\Nexus\PrivateMarketplace\Interfaces\Http\Controllers\PrivateMarketplaceController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -150,5 +151,23 @@ Route::middleware('web')->group(function () {
         Route::post('/subsidiaries/{subsidiary}/accept', [HoldingController::class, 'accept'])->name('subsidiaries.accept');
         Route::post('/subsidiaries/{subsidiary}/reject', [HoldingController::class, 'reject'])->name('subsidiaries.reject');
         Route::post('/subsidiaries/{subsidiary}/leave', [HoldingController::class, 'leave'])->name('subsidiaries.leave');
+    });
+
+    // Private Marketplaces (Phase 7, M5) — invite-only groups with
+    // confidentially-priced listings, same 'business.auth' guard as the
+    // rest of the business-facing portal.
+    Route::middleware('business.auth:business')->prefix('nexus/private-marketplaces')->name('nexus.private-marketplace.')->group(function () {
+        Route::get('/', [PrivateMarketplaceController::class, 'index'])->name('index');
+        Route::get('/create', [PrivateMarketplaceController::class, 'create'])->name('create');
+        Route::post('/', [PrivateMarketplaceController::class, 'store'])->name('store');
+        Route::get('/{marketplace}', [PrivateMarketplaceController::class, 'show'])->name('show');
+        Route::post('/{marketplace}/archive', [PrivateMarketplaceController::class, 'archive'])->name('archive');
+        Route::post('/{marketplace}/invite', [PrivateMarketplaceController::class, 'invite'])->name('invite');
+        Route::post('/{marketplace}/members/{member}/remove', [PrivateMarketplaceController::class, 'removeMember'])->name('members.remove');
+        Route::post('/members/{member}/accept', [PrivateMarketplaceController::class, 'accept'])->name('members.accept');
+        Route::post('/members/{member}/reject', [PrivateMarketplaceController::class, 'reject'])->name('members.reject');
+        Route::post('/members/{member}/leave', [PrivateMarketplaceController::class, 'leave'])->name('members.leave');
+        Route::post('/{marketplace}/listings', [PrivateMarketplaceController::class, 'addListing'])->name('listings.store');
+        Route::post('/{marketplace}/listings/{listing}/remove', [PrivateMarketplaceController::class, 'removeListing'])->name('listings.remove');
     });
 });

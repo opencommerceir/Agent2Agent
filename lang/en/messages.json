@@ -467,6 +467,41 @@
         "contribute": "Contribute to Pool"
       }
     },
+    "private_marketplace": {
+      "title": "Private Marketplaces",
+      "how_it_works": "Create an invite-only marketplace and share confidential pricing only with members.",
+      "create_new": "Create Private Marketplace",
+      "empty": "You are not part of any Private Marketplace yet.",
+      "owner_badge": "Owner",
+      "archive": "Archive",
+      "invitations": {
+        "title": "Private Marketplace Invitations",
+        "empty": "No new invitations.",
+        "accept": "Accept",
+        "reject": "Reject"
+      },
+      "form": {
+        "name_fa": "Marketplace Name (Persian)",
+        "name_en": "Marketplace Name (English)",
+        "branding_color": "Brand Accent Color",
+        "submit": "Create Private Marketplace"
+      },
+      "invite": {
+        "target_business_id": "Member Business ID",
+        "submit": "Invite to Marketplace"
+      },
+      "members": {
+        "title": "Members",
+        "empty": "No members added yet."
+      },
+      "listings": {
+        "title": "Marketplace Listings",
+        "item_id": "Item ID",
+        "price": "Special Price",
+        "add": "Add Listing",
+        "empty": "No listings yet."
+      }
+    },
     "negotiation": {
       "index": {
         "title": "Negotiations",
