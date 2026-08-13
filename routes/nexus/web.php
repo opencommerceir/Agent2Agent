@@ -9,6 +9,7 @@ use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessOauthControll
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessPasswordController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessSessionController;
 use App\Domains\Nexus\Analytics\Interfaces\Http\Controllers\BusinessAnalyticsController;
+use App\Domains\Nexus\Analytics\Interfaces\Http\Controllers\MarketIntelligenceController;
 use App\Domains\Nexus\Approval\Interfaces\Http\Controllers\ApprovalPolicyController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessTeamController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\RegisterBusinessController;
@@ -205,6 +206,11 @@ Route::middleware('web')->group(function () {
     Route::middleware('business.auth:business')->prefix('nexus/analytics')->name('nexus.analytics.')->group(function () {
         Route::get('/', [BusinessAnalyticsController::class, 'index'])->name('index');
         Route::get('/export', [BusinessAnalyticsController::class, 'export'])->name('export');
+
+        // Market Intelligence (Phase 8, M2) — price trend/demand signal/
+        // anonymized competitor stats for an industry (default: the
+        // caller's own).
+        Route::get('/market', [MarketIntelligenceController::class, 'index'])->name('market');
     });
 
     // Private Marketplaces (Phase 7, M5) — invite-only groups with

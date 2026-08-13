@@ -166,6 +166,12 @@ return [
             // reaches an outside inbox.
             'nexus.private_marketplace.search' => (int) env('NEXUS_COST_PRIVATE_MARKETPLACE_SEARCH', 5),
             'nexus.private_marketplace.list_listing' => (int) env('NEXUS_COST_PRIVATE_MARKETPLACE_LIST_LISTING', 3),
+            // Phase 8/M2 — Market Intelligence reaches beyond the caller's
+            // own numbers into an aggregate view of other Businesses, same
+            // reasoning nexus.marketplace.search is priced instead of free
+            // (nexus.analytics.business, Phase 8/M1, IS free — it only
+            // ever returns the caller's own data).
+            'nexus.analytics.market' => (int) env('NEXUS_COST_ANALYTICS_MARKET', 5),
         ],
     ],
 

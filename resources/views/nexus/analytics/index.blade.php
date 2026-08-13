@@ -7,9 +7,14 @@
         <x-nexus-panel>
             <div class="flex items-center justify-between">
                 <h1 class="text-sm text-nexus-text">{{ t('messages.nexus.analytics.title') }}</h1>
-                <a href="{{ route('nexus.analytics.export') }}" class="rounded-md border border-nexus-cyan/40 px-3 py-1.5 text-sm text-nexus-cyan hover:bg-nexus-cyan/10">
-                    {{ t('messages.nexus.analytics.export') }}
-                </a>
+                <div class="flex gap-2">
+                    <a href="{{ route('nexus.analytics.market') }}" class="rounded-md border border-nexus-purple/40 px-3 py-1.5 text-sm text-nexus-purple hover:bg-nexus-purple/10">
+                        {{ t('messages.nexus.analytics.market.title') }}
+                    </a>
+                    <a href="{{ route('nexus.analytics.export') }}" class="rounded-md border border-nexus-cyan/40 px-3 py-1.5 text-sm text-nexus-cyan hover:bg-nexus-cyan/10">
+                        {{ t('messages.nexus.analytics.export') }}
+                    </a>
+                </div>
             </div>
         </x-nexus-panel>
 

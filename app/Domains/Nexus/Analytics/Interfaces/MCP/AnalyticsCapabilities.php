@@ -40,6 +40,22 @@ final class AnalyticsCapabilities
                 ],
                 'requiredPermissions' => ['nexus.analytics.read'],
             ],
+            [
+                'name' => 'nexus.analytics.market',
+                'description' => 'Get anonymized market intelligence for an industry (default: the calling Business\'s own) — price trend, demand signal, aggregate competitor stats',
+                // industry is optional (defaults to the caller's own) —
+                // same "declared fields are always required, so leave
+                // optional ones out" rule nexus.marketplace.search's own
+                // manifest already follows for its query/industry filters.
+                'inputSchema' => [],
+                'outputSchema' => [
+                    'industry' => 'string',
+                    'priceTrend' => 'array',
+                    'demandSignal' => 'array',
+                    'competitorStats' => 'array',
+                ],
+                'requiredPermissions' => ['nexus.analytics.read'],
+            ],
         ];
     }
 }

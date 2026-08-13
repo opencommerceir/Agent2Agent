@@ -864,7 +864,16 @@
         "industry_average": "Industry average",
         "insufficient_data": "Not enough competing businesses yet"
       },
-      "export": "Export CSV"
+      "export": "Export CSV",
+      "market": {
+        "title": "Market Intelligence",
+        "competitor_stats": "Competitor snapshot (anonymized)",
+        "competitors": "Competing businesses",
+        "demand_signal": "Demand signal (proposals per week)",
+        "price_trend": "Price trend (avg. accepted deal price per week)",
+        "empty": "Not enough data yet for this industry.",
+        "insufficient_data": "Not enough competing businesses yet (:count found)."
+      }
     }
   }
 }

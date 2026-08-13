@@ -6,6 +6,7 @@ use App\Core\Application\DTOs\AuthContext;
 use App\Core\Application\Services\CapabilityHandlerRegistry;
 use App\Domains\Nexus\Admin\Domain\Repositories\PlatformSettingRepositoryInterface;
 use App\Domains\Nexus\Analytics\Application\Actions\GetBusinessAnalyticsAction;
+use App\Domains\Nexus\Analytics\Application\Actions\GetMarketIntelligenceAction;
 use App\Domains\Nexus\Admin\Infrastructure\Repositories\EloquentPlatformSettingRepository;
 use App\Domains\Nexus\Agent\Application\Actions\ResolveActingBusinessAction;
 use App\Domains\Nexus\Approval\Domain\Repositories\ApprovalDecisionRepositoryInterface;
@@ -346,6 +347,12 @@ class NexusServiceProvider extends ServiceProvider
             $callingBusinessId = $this->resolveActingBusiness($context);
 
             return $this->app->make(GetBusinessAnalyticsAction::class)->execute($callingBusinessId);
+        });
+
+        $handlers->register('nexus.analytics.market', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            return $this->app->make(GetMarketIntelligenceAction::class)->execute($callingBusinessId, $input['industry'] ?? null);
         });
 
         $this->registerCoalitionCapabilityHandlers($handlers);
