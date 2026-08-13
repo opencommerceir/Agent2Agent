@@ -44,6 +44,10 @@ class BusinessOauthController extends Controller
         $owner = $this->findByIdentity->execute($identity->providerKey, $identity->providerUserId);
 
         if ($owner) {
+            if ($this->requiresMfaChallenge($owner)) {
+                return $this->startMfaChallenge($owner, $request);
+            }
+
             $this->finishBusinessLogin($owner, $request);
 
             return redirect()->intended(route('nexus.business.dashboard'));
@@ -94,6 +98,10 @@ class BusinessOauthController extends Controller
 
         $this->linkIdentity->execute($owner->id, $pending['provider'], $pending['provider_user_id']);
         $request->session()->forget('nexus.sso.pending_link');
+
+        if ($this->requiresMfaChallenge($owner)) {
+            return $this->startMfaChallenge($owner, $request);
+        }
 
         $this->finishBusinessLogin($owner, $request);
 

@@ -3,6 +3,8 @@
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessDashboardController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessLoginController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessLogoutController;
+use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessMfaChallengeController;
+use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessMfaController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessOauthController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessPasswordController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessSessionController;
@@ -57,6 +59,15 @@ Route::middleware('web')->group(function () {
                 Route::get('/link', [BusinessOauthController::class, 'showLinkConfirmation'])->name('link.show');
                 Route::post('/link', [BusinessOauthController::class, 'confirmLink'])->name('link.store');
             });
+
+            // MFA login-time challenge (Phase 7/M7) — reachable only after
+            // FinishesBusinessLogin::startMfaChallenge() stashes a pending
+            // owner id in session; guest-guarded like the rest of this
+            // group since the caller isn't authenticated yet.
+            Route::prefix('mfa-challenge')->name('mfa-challenge.')->group(function () {
+                Route::get('/', [BusinessMfaChallengeController::class, 'show'])->name('show');
+                Route::post('/', [BusinessMfaChallengeController::class, 'verify'])->name('verify');
+            });
         });
 
         Route::middleware('business.auth:business')->group(function () {
@@ -75,6 +86,15 @@ Route::middleware('web')->group(function () {
             Route::prefix('sessions')->name('sessions.')->group(function () {
                 Route::get('/', [BusinessSessionController::class, 'index'])->name('index');
                 Route::delete('/{session}', [BusinessSessionController::class, 'destroy'])->name('destroy');
+            });
+
+            // MFA settings (Phase 7/M7) — one page, state driven by the
+            // owner row itself (see BusinessMfaController's own docblock).
+            Route::prefix('security/mfa')->name('mfa.')->group(function () {
+                Route::get('/', [BusinessMfaController::class, 'edit'])->name('edit');
+                Route::post('/start', [BusinessMfaController::class, 'start'])->name('start');
+                Route::post('/confirm', [BusinessMfaController::class, 'confirm'])->name('confirm');
+                Route::post('/disable', [BusinessMfaController::class, 'destroy'])->name('disable');
             });
 
             // Business Team Members & Roles (Phase 7/M3) — Owner-only

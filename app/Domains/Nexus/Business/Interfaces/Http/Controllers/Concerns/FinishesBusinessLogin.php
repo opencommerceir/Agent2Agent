@@ -4,6 +4,7 @@ namespace App\Domains\Nexus\Business\Interfaces\Http\Controllers\Concerns;
 
 use App\Domains\Nexus\Business\Infrastructure\Models\BusinessOwner;
 use Illuminate\Contracts\Auth\Guard;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Auth;
@@ -36,5 +37,40 @@ trait FinishesBusinessLogin
         $request->session()->regenerate();
 
         App::instance(Guard::class, Auth::guard('business'));
+    }
+
+    protected function requiresMfaChallenge(BusinessOwner $owner): bool
+    {
+        return $owner->mfa_enabled_at !== null;
+    }
+
+    /**
+     * Password/OAuth credentials verified but MFA still owes a code —
+     * stashes just enough to finish later (owner id + the "remember me"
+     * the credential step already decided) and defers finishBusinessLogin()
+     * until BusinessMfaChallengeController::verify() confirms a real code.
+     */
+    protected function startMfaChallenge(BusinessOwner $owner, Request $request, bool $remember = false): RedirectResponse
+    {
+        $request->session()->put('nexus.mfa.pending', [
+            'owner_id' => $owner->id,
+            'remember' => $remember,
+        ]);
+
+        return redirect()->route('nexus.business.mfa-challenge.show');
+    }
+
+    /**
+     * The one post-login destination decision every entry point (password,
+     * OAuth, MFA challenge) shares — kept here so `must_change_password`
+     * only has one place to check.
+     */
+    protected function redirectAfterLogin(BusinessOwner $owner): RedirectResponse
+    {
+        if ($owner->must_change_password) {
+            return redirect()->route('nexus.business.password.force-change');
+        }
+
+        return redirect()->intended(route('nexus.business.dashboard'));
     }
 }

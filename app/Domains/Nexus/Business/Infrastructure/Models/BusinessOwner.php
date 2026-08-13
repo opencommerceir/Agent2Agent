@@ -26,6 +26,8 @@ class BusinessOwner extends Authenticatable
         'password',
         'role',
         'must_change_password',
+        'mfa_secret',
+        'mfa_enabled_at',
     ];
 
     protected $hidden = [
@@ -40,6 +42,11 @@ class BusinessOwner extends Authenticatable
             'password' => 'hashed',
             'role' => TeamMemberRole::class,
             'must_change_password' => 'boolean',
+            // Phase 7/M7 — Laravel's built-in `encrypted` cast, first use
+            // in this codebase; the secret is only ever read back by
+            // TotpService to compute a code, never re-displayed after setup.
+            'mfa_secret' => 'encrypted',
+            'mfa_enabled_at' => 'datetime',
         ];
     }
 

@@ -41,16 +41,17 @@ class BusinessLoginController extends Controller
         }
 
         $owner = BusinessOwner::query()->where('email', $credentials['email'])->firstOrFail();
-        $this->finishBusinessLogin($owner, $request, $request->boolean('remember'));
 
-        // Phase 7/M3 — a team member invited with a temporary password
-        // (InviteTeamMemberAction) is routed here before anywhere else,
-        // regardless of `intended()`; a fresh registrant's Owner row never
-        // has this flag set, so this is a no-op for the pre-Phase-7 flow.
-        if ($owner->must_change_password) {
-            return redirect()->route('nexus.business.password.force-change');
+        // Phase 7/M7 — a real code is still owed before this counts as
+        // logged in; finishBusinessLogin() (and the must_change_password
+        // check below) only run after BusinessMfaChallengeController
+        // verifies it.
+        if ($this->requiresMfaChallenge($owner)) {
+            return $this->startMfaChallenge($owner, $request, $request->boolean('remember'));
         }
 
-        return redirect()->intended(route('nexus.business.dashboard'));
+        $this->finishBusinessLogin($owner, $request, $request->boolean('remember'));
+
+        return $this->redirectAfterLogin($owner);
     }
 }

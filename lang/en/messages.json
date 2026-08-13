@@ -268,6 +268,37 @@
         "last_activity": "Last activity",
         "revoke": "Revoke"
       },
+      "mfa": {
+        "challenge": {
+          "title": "Two-Factor Verification",
+          "description": "Enter the 6-digit code from your authenticator app.",
+          "code": "Code",
+          "submit": "Verify",
+          "recovery_hint": "You can use one of your recovery codes instead of a code.",
+          "invalid_code": "That code is invalid or has expired."
+        },
+        "settings": {
+          "title": "Two-Factor Authentication",
+          "enable": "Enable Two-Factor Authentication",
+          "enabled": "Enabled",
+          "enabled_banner": "Two-factor authentication is enabled.",
+          "disabled_description": "Enabling two-factor authentication requires a code from your authenticator app in addition to your password to log in.",
+          "recovery_codes_hint": "Save these recovery codes somewhere safe — they're shown only once, and each can only be used once."
+        },
+        "setup": {
+          "description": "Scan or enter this into your authenticator app (e.g. Google Authenticator), then enter the generated code below.",
+          "secret": "Secret",
+          "code": "Verification Code",
+          "submit": "Verify and Enable",
+          "invalid_code": "That code is invalid or has expired."
+        },
+        "disable": {
+          "password": "Password",
+          "submit": "Disable Two-Factor Authentication",
+          "wrong_password": "That password is incorrect.",
+          "done": "Two-factor authentication has been disabled."
+        }
+      },
       "team": {
         "title": "Team Members",
         "invite": "Invite New Member",
