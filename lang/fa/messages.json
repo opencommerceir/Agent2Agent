@@ -584,6 +584,35 @@
         "deliveries_title": "تاریخچه ارسال",
         "deliveries_empty": "هنوز هیچ رویدادی ارسال نشده است.",
         "delivery_failed": "ناموفق"
+      },
+      "docs": {
+        "title": "مستندات API",
+        "intro": "مرجع REST API عمومی Nexus و وب‌هوک‌های خروجی — برای توسعه‌دهندگان شخص ثالثی که روی حساب یک کسب‌وکار می‌سازند.",
+        "auth": {
+          "title": "احراز هویت",
+          "description": "هر درخواست به هدر Authorization: Bearer با یک کلید API صادرشده از پرتال کسب‌وکار شما نیاز دارد.",
+          "rate_limit": "محدودیت نرخ: :limit درخواست در دقیقه به‌ازای هر کلید API."
+        },
+        "scopes": {
+          "title": "دسترسی‌ها"
+        },
+        "endpoints": {
+          "title": "مسیرها",
+          "method": "متد",
+          "path": "مسیر",
+          "scope": "دسترسی لازم",
+          "description": "توضیح"
+        },
+        "errors": {
+          "title": "خطاها",
+          "description": "هر خطا، صرف‌نظر از مسیر، همین قالب یکسان را برمی‌گرداند."
+        },
+        "webhooks": {
+          "title": "وب‌هوک‌ها",
+          "description": "از پرتال کسب‌وکار خود ثبت‌نام کنید تا با وقوع هرکدام از این رویدادها، یک payload امضاشده به شما POST شود:",
+          "payload_shape": "قالب payload:",
+          "signature": "هدر X-Nexus-Signature را با کلید امضای وب‌هوک خودتان بررسی کنید:"
+        }
       }
     },
     "holding": {

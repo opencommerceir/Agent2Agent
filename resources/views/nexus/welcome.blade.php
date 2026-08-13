@@ -44,5 +44,12 @@
                 <code class="rounded bg-nexus-surface-1 px-1.5 py-0.5 text-nexus-cyan">docs/claude/ui-system-design.md</code>.
             </p>
         </x-nexus-panel>
+
+        <x-nexus-panel title="Build on Nexus" class="sm:col-span-2">
+            <p class="text-sm text-nexus-text-muted">
+                Public REST API, Webhooks, and API key management for third-party developers —
+                <a href="{{ route('nexus.developer.docs.index') }}" class="text-nexus-cyan hover:underline">read the API docs</a>.
+            </p>
+        </x-nexus-panel>
     </div>
 @endsection

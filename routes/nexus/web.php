@@ -17,6 +17,7 @@ use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessTeamControlle
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\RegisterBusinessController;
 use App\Domains\Nexus\Credit\Interfaces\Http\Controllers\CreditPurchaseCallbackController;
 use App\Domains\Nexus\Credit\Interfaces\Http\Controllers\CreditPurchaseController;
+use App\Domains\Nexus\Developer\Interfaces\Http\Controllers\ApiDocsController;
 use App\Domains\Nexus\Developer\Interfaces\Http\Controllers\ApiKeyController;
 use App\Domains\Nexus\Developer\Interfaces\Http\Controllers\WebhookSubscriptionController;
 use App\Domains\Nexus\Growth\Interfaces\Http\Controllers\CoalitionController;
@@ -47,6 +48,12 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware('web')->group(function () {
     Route::get('/nexus', fn () => view('nexus::welcome'))->name('nexus.welcome');
+
+    // Public API Documentation (Phase 9, M4) — deliberately unauthenticated
+    // (no 'business.auth' guard), unlike the rest of the Developer domain's
+    // portal pages: a prospective third-party developer needs to be able
+    // to read this before they have an account.
+    Route::get('/nexus/docs', [ApiDocsController::class, 'index'])->name('nexus.developer.docs.index');
 
     // Business portal (Phase 1, M2) — its own 'business' guard, fully
     // independent of the admin Dashboard's 'auth'/'guest'/'admin'.

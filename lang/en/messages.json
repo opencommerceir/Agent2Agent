@@ -584,6 +584,35 @@
         "deliveries_title": "Delivery history",
         "deliveries_empty": "No events delivered yet.",
         "delivery_failed": "Failed"
+      },
+      "docs": {
+        "title": "API Documentation",
+        "intro": "Reference for the Nexus Public REST API and outbound Webhooks — for third-party developers building against a Business's own account.",
+        "auth": {
+          "title": "Authentication",
+          "description": "Every request needs an Authorization: Bearer header carrying an API key issued from your business portal.",
+          "rate_limit": "Rate limit: :limit requests per minute per API key."
+        },
+        "scopes": {
+          "title": "Scopes"
+        },
+        "endpoints": {
+          "title": "Endpoints",
+          "method": "Method",
+          "path": "Path",
+          "scope": "Required scope",
+          "description": "Description"
+        },
+        "errors": {
+          "title": "Errors",
+          "description": "Every error responds with the same envelope, regardless of endpoint."
+        },
+        "webhooks": {
+          "title": "Webhooks",
+          "description": "Subscribe from your business portal to have Nexus POST a signed payload whenever one of these events happens:",
+          "payload_shape": "Payload shape:",
+          "signature": "Verify the X-Nexus-Signature header using your subscription's signing secret:"
+        }
       }
     },
     "holding": {
