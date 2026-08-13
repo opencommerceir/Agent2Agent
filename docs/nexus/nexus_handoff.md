@@ -760,3 +760,132 @@
 **محدودیت شناخته‌شدهٔ باقی‌مانده که عمداً دست‌نخورده ماند:** حل واقعی Dispute (evidence/mediation/arbitration) هنوز فقط `RefundEscrowAction` دستی ادمین است — این صراحتاً قلمرو Phase 6 (Trust & Reputation) است، نه یک دغدغهٔ جامانده از فازهای قبل.
 
 ---
+
+# Phase 6 — Trust & Reputation
+
+**دستور:** «برو سراغ فاز 6» (بعد از تأیید رفع دغدغه‌های Phase 5). قبل از کدنویسی، دو Explore agent موازی روی الگوهای موجود (Notification/MCP/NexusServiceProvider یکی، Dispute/Fraud/Verification دیگری) اجرا شد. یافتهٔ کلیدی مشترک هر دو: **هیچ کد review/rating/reputation/moderation از قبل در کدبیس وجود نداشت** — این فاز کاملاً از صفر ساخته شد. یافتهٔ دوم: `ReleaseEscrowAction` (Phase 3) هیچ‌وقت event دیسپچ نمی‌کرد — نبود یک نقطهٔ اتصال دقیق برای «معامله واقعاً کامل شد» که این فاز به آن نیاز داشت.
+
+## Phase 6 / M1 — Reviews & Ratings (Reputation domain core)
+
+**تصمیم کلیدی (نقطهٔ محرک):** بازتریگر Review نه `NegotiationWasAccepted` (که فقط یعنی توافق شد، نه لزوماً تحویل شد) بلکه یک event جدید `EscrowWasReleased` است — دیسپچ‌شده از `ReleaseEscrowAction` درست بعد از `$escrow->release()`. این صادقانه‌ترین نقطهٔ «معامله واقعاً تمام شد» است، دقیقاً همان استانداردی که Phase 3/M6's Revenue Dashboard قبلاً برای «released نه held» تثبیت کرده بود.
+
+`Review` یک state machine کوچک است (`published` → `flagged` → `published|removed`، `removed` نهایی) — نه یک رکورد ساده مثل `CreditTransaction`، چون محتوا (rating/comment) بعد از ثبت هرگز تغییر نمی‌کند ولی وضعیت (برای Moderation) باید بتواند تغییر کند. یک محدودیت یکتای دیتابیس (`negotiation_id`+`reviewer_business_id`) + یک چک صریح در `SubmitReviewAction` مانع دو-بار-نظردادن یک طرف روی یک معامله می‌شود. `FlagReviewAction` فقط به‌دست کسی که review دربارهٔ اوست قابل فراخوانی است (نه reviewer)، `RestoreReviewAction`/`RemoveReviewAction` ادمین‌محورند.
+
+**فایل‌های اصلی:** `app/Domains/Nexus/Reputation/{Domain,Application,Infrastructure,Interfaces}/**` (`Review`, `ReviewRepositoryInterface`, `SubmitReviewAction`, `FlagReviewAction`, `RestoreReviewAction`, `RemoveReviewAction`, `ListReviewsForBusinessAction`)، `app/Domains/Nexus/Contract/Domain/Events/EscrowWasReleased.php`، migration `nexus_reviews`، capability‌های `nexus.review.{submit,list}`، فرم review روی `negotiations/show.blade.php`.
+
+**تست:** ۲۱ تست جدید (Unit روی state machine، Feature روی Submit/Moderation/MCP/Viewer) — همه پاس.
+
+**کامیت:** `feat(nexus): add Reviews & Ratings (Reputation domain core)`.
+
+---
+
+## Phase 6 / M2 — Reputation Score (0-1000، badges) به‌عنوان یک read-model محاسبه‌شده
+
+**تصمیم کلیدی:** هیچ جدول `reputation_scores` ساخته نشد — امتیاز کاملاً زنده از داده‌های موجود محاسبه می‌شود (`ReputationQuery` هم‌الگوی `RevenueQuery`/`GrowthAnalyticsQuery`)، دقیقاً همان فلسفهٔ «Query class روی داده‌های موجود، نه تکرارش در یک ردیف mutable جدید». فرمول: `successRate × ۵۰۰ + (میانگین امتیاز/۵) × ۴۰۰ + (طول عمر/۱۲ماه، سقف‌دار) × ۱۰۰`، وزن‌ها در `config('nexus.platform.reputation.weights')` قابل تنظیم. کامپوننت امتیاز وقتی هیچ review ای وجود ندارد **صفر** است، نه یک میانگین خنثی ۲.۵ — امتیاز باید کسب شود، رایگان شروع نمی‌شود.
+
+**Badges مشتق‌شده‌اند، ذخیره نمی‌شوند:** `verified` مستقیماً `Business::isVerified()` (Phase 1) را دوباره‌استفاده می‌کند (نه یک مفهوم دوم verified)، `top_rated`/`gold_partner` صرفاً چک آستانه روی همان اعدادِ همین‌جا محاسبه‌شده‌اند.
+
+**عمداً حذف‌شده و مستند:** سیگنال «زمان پاسخ‌گویی» که roadmap نام می‌برد ساخته نشد — هیچ‌چیزی در کدبیس تأخیر پاسخ واقعی یک طرف را صادقانه ثبت نمی‌کند (یک پیام جدید فقط ثابت می‌کند «کسی» جواب داد، نه اینکه طرف درست پاسخگو بود)؛ همان صداقت «نبود ستون/رویداد دلیلی برای ساختن یکی ساختگی نیست» که Phase 5/M5 قبلاً برای `verified_at` رعایت کرده بود.
+
+**فایل‌های اصلی:** `ReputationQuery`، `CalculateReputationScoreAction`، `ReputationScoreData` DTO، بخش جدید `reputation` در `config/nexus/platform.php`، capability رایگان `nexus.reputation.score`، نمایش امتیاز/badge روی داشبورد کسب‌وکار و کنار نام طرف مقابل در Negotiation Viewer.
+
+**تست:** ۸ تست جدید — همه پاس.
+
+**کامیت:** `feat(nexus): add Reputation Score (0-1000, badges) as a computed read-model`.
+
+---
+
+## Phase 6 / M3 — Dispute Resolution (evidence، mediation، arbitration)
+
+**تصمیم کلیدی:** `DisputeEscrowAction` خودِ کدش (از Phase 2) صراحتاً نوشته بود «این نقطهٔ اتصال Phase 6 است» — این مرحله دقیقاً همان‌جا وصل شد: یک event جدید `EscrowWasDisputed` دیسپچ می‌شود، و `OpenDisputeCaseOnEscrowDisputedListener` یک `DisputeCase` واقعی باز می‌کند (evidence log، وضعیت `open → mediation → resolved`). `Escrow::ALLOWED_TRANSITIONS` توسعه یافت تا `disputed → released` هم مجاز باشد (قبلاً فقط `disputed → refunded`) — یعنی داور می‌تواند به نفع فروشنده هم رأی دهد.
+
+**`ArbitrateDisputeAction` عمداً `RefundEscrowAction`/`ReleaseEscrowAction` موجود را دوباره‌استفاده نمی‌کند** — چون authorization آن دو (ادمین بدون acting-business / فقط initiator) اینجا صدق نمی‌کند؛ این یک override اداری روی جریان عادی است. وقتی رأی به نفع فروشنده باشد (`release_seller`)، همان `EscrowWasReleased` که M1 برایش گوش می‌دهد دوباره دیسپچ می‌شود — یعنی حتی یک معاملهٔ مورد اختلاف، بعد از حل‌شدن، همان مسیر عادی Review را باز می‌کند.
+
+**اثر روی Reputation:** `ReputationQuery::disputesLostCount()` شمار DisputeCaseهایی که واقعاً علیه یک Business حل شده‌اند را می‌شمارد (نه صرفاً درگیربودن در دعوا) و `CalculateReputationScoreAction` یک جریمهٔ سقف‌دار (`config('...dispute_penalty_per_loss/max')`) بعد از جمع سه مؤلفهٔ اصلی کم می‌کند.
+
+**فایل‌های اصلی:** `app/Domains/Nexus/Contract/{Domain,Application}/**` (`DisputeCase`, `OpenDisputeCaseAction`, `SubmitDisputeEvidenceAction`, `MoveDisputeToMediationAction`, `ArbitrateDisputeAction`)، migration `nexus_dispute_cases`، `NexusDisputeController` ادمین (`/dashboard/nexus/disputes`)، فرم evidence روی Negotiation Viewer.
+
+**تست:** ۲۱ تست جدید (Unit روی state machine، Feature روی زنجیرهٔ رویداد واقعی + هر دو مسیر arbitration + تأثیر روی reputation + کنترلر ادمین) — همه پاس.
+
+**کامیت:** `feat(nexus): add Dispute Resolution (evidence, mediation, arbitration)`.
+
+---
+
+## Phase 6 / M4 — Fraud Detection، تعلیق Business، و Appeal
+
+**تصمیم کلیدی (جداسازی از Verification):** `Business` یک فیلد `status` (`active`/`suspended`) جدید و **کاملاً مستقل** از `verificationStatus` (Phase 1) گرفت — یک Business می‌تواند هم‌زمان Verified و Suspended باشد؛ تقلب هویت تأییدشده را باطل نمی‌کند، فقط اجازهٔ معامله را می‌گیرد. الگوی این جداسازی از پیش در کدبیس وجود داشت: `Agent` هستهٔ Core همین شکل (`active`/`inactive`/`suspended`) را دارد.
+
+**`SuspensionRecord` یک ledger غیرقابل‌تغییر واحد برای هر دو مسیر تعلیق (دستی ادمین و خودکار fraud) است** — نه دو جدول جدا؛ فیلد `triggeredBy` تمایز می‌گذارد. همان فلسفهٔ «بدون AuditLog عمومی، یک ledger مخصوص دامنه» که `CreditTransaction`/`LLMUsageLog` قبلاً تثبیت کرده بودند.
+
+**نقطهٔ بستن دسترسی، یکی و مرکزی است:** `ResolveActingBusinessAction` — همان جایی که هر Capability MCP نکسوس از قبل برای فهمیدن «کدام Business تماس می‌گیرد» از آن عبور می‌کند — حالا اگر Business غیرفعال باشد `PermissionDeniedException` هستهٔ Core را پرتاب می‌کند (که `MCPExceptionHandler` از قبل به ۴۰۳ نگاشت می‌کند) — یعنی با یک تغییر در یک فایل، **هر** Capability نکسوس برای یک Agent تعلیق‌شده مسدود شد، نه یک‌به‌یک.
+
+**Fraud Detection صرفاً Rule-based است** (مطابق پیش‌فرض «Rule Engine ۸۰٪، بدون هزینه» — هیچ زیرساخت ML/anomaly-detection در این کدبیس وجود ندارد): تنها قانون، ۳+ دعوای واقعاً حل‌شده علیه یک Business در ۳۰ روز اخیر است (`FraudSignalQuery`) — نه صرف تعداد دعوا (چون بردن یک دعوا چیزی ثابت نمی‌کند)، نه نرخ رد پیشنهاد (چون رد پیشنهاد بد، مذاکرهٔ سالم است نه تقلب). `DetectFraudSignalsAction` هر ساعت از طریق `Schedule::command()` واقعی در `routes/console.php` اجرا می‌شود (همان زیرساخت واقعی که `ExpireLoyaltyPointsCommand`/`ProcessDueSubscriptionsCommand` از قبل استفاده می‌کنند)، به‌علاوه یک دکمهٔ «اجرای فوری» در پنل ادمین.
+
+**Appeal:** یک state machine کوچک (`pending → approved|denied`)، فقط وقتی Business واقعاً تعلیق است قابل ثبت است. تأیید Appeal مستقیماً `ReactivateBusinessAction` (همان نقطهٔ واحد فعال‌سازی) را صدا می‌زند.
+
+**فایل‌های اصلی:** `Business` entity (+`BusinessStatus`)، `SuspensionRecord`/`SuspensionAppeal` (+repositories)، `SuspendBusinessAction`/`ReactivateBusinessAction`/`SubmitSuspensionAppealAction`/`ResolveSuspensionAppealAction`، `FraudSignalQuery`/`DetectFraudSignalsAction` (دامنهٔ Reputation)، `DetectFraudSignalsCommand` + entry در `routes/console.php`، `NexusFraudController` ادمین (`/dashboard/nexus/fraud`)، بنر تعلیق + فرم appeal روی داشبورد کسب‌وکار.
+
+**تست:** ۲۲ تست جدید (Unit روی `SuspensionAppeal`، Feature روی suspend/reactivate/appeal/۴۰۳-block-روی-MCP/fraud-detection-idempotent/کنترلر ادمین) — همه پاس.
+
+**کامیت:** `feat(nexus): add Fraud Detection, Business suspension, and appeals`.
+
+---
+
+## Phase 6 / M5 — Verification System (Products/Services + اولین صف Business)
+
+**تصمیم کلیدی:** `ListingVerificationStatus` یک enum مستقل در دامنهٔ Catalog است (`pending`/`verified`/`rejected`) — نه دوباره‌استفاده از `VerificationStatus` خودِ Business، طبق قاعدهٔ همیشگی «هر دامنه VO خودش را می‌سازد» (سابقهٔ Money، Phase 1 خلاصه). سومین حالت (`Rejected`) که Business ندارد چون یک محصول می‌تواند صریحاً رد شود بدون اینکه کل Business غیرمعتبر شود.
+
+**یافتهٔ صادقانهٔ غیرمنتظره:** هیچ‌جای کدبیس (کنترلر، روت) `VerifyBusinessAction` را از یک UI ادمین صدا نمی‌زد — تأیید Business از Phase 1 تا امروز فقط از طریق `tinker` دستی در تست‌های E2E انجام می‌شد! این مرحله **اولین UI ادمین واقعی** برای آن ساخت (`NexusVerificationController::verifyBusiness`)، کنار صف محصولات/خدمات — یک شکاف واقعی جامانده از Phase 1 که Phase 6 طبیعتاً بست، نه یک اسکوپ‌کریپ.
+
+**`verified` روی نتایج Marketplace سوار شد:** `BusinessSearchQuery` حالا `verification_status` هر Product/Service را می‌خواند و یک پرچم `verified` boolean به خروجی هر آیتم اضافه می‌کند — یعنی یک Agent قبل از پیشنهاددادن می‌تواند اعتبار خودِ آیتم (نه فقط اعتبار کل Business) را بسنجد.
+
+**فایل‌های اصلی:** `ListingVerificationStatus`، `Product`/`Service` entities (+`verify()`/`reject()`/`isVerified()`)، `VerifyProductAction`/`RejectProductAction`/`VerifyServiceAction`/`RejectServiceAction`، `findByVerificationStatus()` روی هر سه repository (`Product`, `Service`, `Business`)، `NexusVerificationController` (`/dashboard/nexus/verification`)، به‌روزرسانی `BusinessSearchQuery`.
+
+**تست:** ۱۷ تست جدید — همه پاس.
+
+**کامیت:** `feat(nexus): add Verification System (Products/Services + first Business queue)`.
+
+---
+
+## Phase 6 / M6 — تأیید نهایی
+
+- `php artisan migrate --force` روی دیتابیس dev: همهٔ ۷ migration جدید Phase 6 (`nexus_reviews`, `nexus_dispute_cases`, `businesses.status`, `nexus_suspension_records`, `nexus_suspension_appeals`, `nexus_products/services.verification_status`) تمیز اجرا شدند.
+- `php artisan test` کامل: **۱۳۱۸ pass / ۲۸۳ fail** — بدون رگرشن (baseline قبل از Phase 6: ۱۲۲۹ pass از رفع دغدغه‌های بین‌فازی؛ +۸۹ تست پاس دقیقاً برابر ۲۱+۸+۲۱+۲۲+۱۷ تست *واقعاً جدید* M1 تا M5 — برخلاف فازهای قبل، این‌بار هیچ تست موجودی جایگزین نشد، همه‌چیز خالص افزوده است؛ همان ۲۸۳ شکست ثابت ماژول‌های غیرفعال، بدون تغییر).
+- تست End-to-End دستی کامل روی دیتابیس واقعی (`php artisan tinker` روی یک اسکریپت PHP، همان جایگزین مستندشدهٔ کلیک مرورگری از Phase 2 به‌خاطر مشکل شناخته‌شدهٔ رزرو پورت ویندوز)، زنجیرهٔ کامل و واقعی:
+  1. ثبت‌نام و تأیید دو کسب‌وکار واقعی (Buyer/Seller).
+  2. معاملهٔ اول: Propose → Accept → Release → هر دو طرف review دادند (۵/۵) → امتیاز اعتبار فروشنده: **۹۰۰/۱۰۰۰** (successRate=۱ × ۵۰۰ + rating=۵/۵ × ۴۰۰ + longevity=۰ × ۱۰۰)، badge=`verified`.
+  3. سه معاملهٔ بعدی: هرکدام Accept → Dispute → Arbitrate با `refund_buyer` (رأی علیه فروشنده) — واقعاً روی Escrow واقعی، نه mock.
+  4. امتیاز فروشنده بعد از ۳ دعوای باخته: **۷۵۰/۱۰۰۰** — دقیقاً `۹۰۰ - min(۳×۵۰, ۳۰۰) = ۹۰۰-۱۵۰=۷۵۰`، فرمول جریمه صحیح تأیید شد روی داده‌های واقعی.
+  5. `DetectFraudSignalsAction::execute()` فروشنده را با آستانهٔ پیش‌فرض (۳ دعوای باخته در ۳۰ روز) واقعاً auto-suspend کرد؛ Business status واقعاً `suspended` شد.
+  6. Appeal واقعی ثبت شد → ادمین تأیید کرد → `ReactivateBusinessAction` واقعاً صدا خورد → Business status واقعاً به `active` برگشت.
+  7. یک محصول جدید اضافه و تأیید شد → در نتیجهٔ واقعی `SearchMarketplaceAction` پرچم `verified: true` درست ظاهر شد.
+- `git log --oneline`: هر ۵ مرحلهٔ Phase 6 (M1 تا M5) + رفع دغدغه‌های بین‌فازی، کامیت شده‌اند.
+
+**کامیت:** `docs(nexus): Phase 6 complete — final handoff summary`.
+
+---
+
+## 🎯 خلاصه Phase 6 (Trust & Reputation) — تکمیل شد
+
+| دامنه | Entity/Service اصلی | Action‌های کلیدی | MCP Capability | تست |
+|---|---|---|---|---|
+| Reputation (Reviews) | `Review` | Submit, Flag, Restore, Remove, ListForBusiness | `nexus.review.{submit,list}` | ۲۱ |
+| Reputation (Score) | — (read model) | CalculateReputationScore | `nexus.reputation.score` | ۸ |
+| Contract (Dispute) | `DisputeCase` | Open, SubmitEvidence, MoveToMediation, Arbitrate | — | ۲۱ |
+| Business (Suspension) | `SuspensionRecord`, `SuspensionAppeal` | Suspend, Reactivate, SubmitAppeal, ResolveAppeal | — | ۲۲ |
+| Reputation (Fraud) | — (read model + rule) | DetectFraudSignals | — | (در ۲۲ بالا) |
+| Catalog (Verification) | `ListingVerificationStatus` | VerifyProduct, RejectProduct, VerifyService, RejectService | — | ۱۷ |
+| **مجموع** | | | | **۸۹ (پاس، خالص = دقیقاً کل تست‌های تازه)** |
+
+تصمیمات معماری ماندگار برای فازهای بعدی:
+1. **امتیاز/شهرت = read-model محاسبه‌شده زنده، نه یک ردیف mutable ذخیره‌شده** — همان الگوی `RevenueQuery`/`GrowthAnalyticsQuery`، این‌بار برای یک عدد ۰-۱۰۰۰ کامل با badges. هر سیگنال اعتماد آیندهٔ دیگر (مثلاً امتیاز تأمین‌کننده در Phase 8) باید همین الگو را دنبال کند، نه یک جدول snapshot جدید.
+2. **Badge/Trust signal همیشه مشتق است، هرگز ذخیره نمی‌شود** — از داده‌های واقعی همین‌لحظه محاسبه می‌شود تا هیچ‌وقت stale نشود.
+3. **نقاط اتصال Phase بعدی باید از قبل در کد فعلی مستند شوند** — دقیقاً همان‌طور که `DisputeEscrowAction` (Phase 2) خودش نوشته بود «اینجا نقطهٔ Phase 6 است»، و این فاز دقیقاً همان‌جا وصل شد؛ این الگو را برای هر گپ آگاهانهٔ آینده تکرار کنید.
+4. **یک نقطهٔ مرکزی auth بهتر از N نقطهٔ پراکنده است** — تعلیق Business با تغییر یک فایل (`ResolveActingBusinessAction`) کل سطح MCP را بست، نه با افزودن چک به هر Action.
+5. **Fraud Detection Rule-based، نه ML** — تا وقتی سیگنال دیگری غیر از «دعوای واقعاً حل‌شده» به‌طور صادقانه در دیتابیس ثبت شود، همین یک قانون کافی است؛ قانون‌های بیشتر باید از رویدادهای واقعی جدید بیایند، نه فرضیات.
+6. **زیرساخت scheduling واقعی از قبل وجود دارد** (`Schedule::command()` در `routes/console.php`، با OS cron واقعی) — فازهای بعدی که به job دوره‌ای نیاز دارند نباید فرض کنند باید از صفر اختراعش کنند (یک اشتباه که این فاز هم در ابتدا کرد و خودش اصلاح شد).
+7. **محدودیت شناخته‌شدهٔ تکرارشوندهٔ قدیمی (Phase 2/3/5) دیگر باقی نیست برای Negotiation/Escrow** (بین Phase 5 و 6 حل شد)؛ نمونهٔ مشابه جدید در همین فاز: Release/Dispute در سطح Escrow حل شد، ولی **Dispute در سطح DisputeCase هنوز به هر دو طرف اجازهٔ ثبت evidence می‌دهد** (منطقی و عمدی — evidence یک ادعا است نه یک اقدام یک‌طرفه، برخلاف Release).
+
+**آماده برای Phase 7 (Enterprise Features)** طبق `docs/nexus-roadmap.md`.
+
+---
