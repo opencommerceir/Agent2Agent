@@ -6,6 +6,8 @@ use App\Domains\Nexus\Business\Application\Actions\RegisterBusinessAction;
 use App\Domains\Nexus\Business\Application\Actions\VerifyBusinessAction;
 use App\Domains\Nexus\Business\Domain\ValueObjects\BusinessType;
 use App\Domains\Nexus\Business\Domain\ValueObjects\Industry;
+use App\Domains\Nexus\Credit\Application\Actions\GrantCreditsAction;
+use App\Domains\Nexus\Credit\Domain\ValueObjects\CreditTransactionType;
 use App\Domains\Nexus\Marketplace\Application\Actions\GetRecommendationsAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use InvalidArgumentException;
@@ -19,6 +21,11 @@ class GetRecommendationsActionTest extends TestCase
     {
         $caller = app(RegisterBusinessAction::class)->execute('من', 'Caller Co', BusinessType::Company, Industry::Technology);
         app(VerifyBusinessAction::class)->execute($caller->id);
+        // Phase 8/M3's CostGate now gates nexus.marketplace.recommendations
+        // — a generous flat top-up so this domain's own test keeps
+        // exercising recommendation mechanics, not credit exhaustion (same
+        // reasoning SearchMarketplaceActionTest already applies).
+        app(GrantCreditsAction::class)->execute($caller->id, 100000, CreditTransactionType::AdminGrant, 'test.seed');
 
         $sameIndustry = app(RegisterBusinessAction::class)->execute('همان صنعت', 'Same Industry Co', BusinessType::Company, Industry::Technology);
         app(VerifyBusinessAction::class)->execute($sameIndustry->id);

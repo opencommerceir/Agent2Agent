@@ -11,6 +11,9 @@
                     <a href="{{ route('nexus.network.index') }}" class="rounded-md border border-nexus-cyan/40 px-3 py-1.5 text-sm text-nexus-cyan hover:bg-nexus-cyan/10">
                         {{ t('messages.nexus.network.title') }}
                     </a>
+                    <a href="{{ route('nexus.recommendations.index') }}" class="rounded-md border border-nexus-cyan/40 px-3 py-1.5 text-sm text-nexus-cyan hover:bg-nexus-cyan/10">
+                        {{ t('messages.nexus.marketplace.recommendations.title') }}
+                    </a>
                     <a href="{{ route('nexus.growth.coalitions.create') }}" class="rounded-md bg-nexus-cyan/20 px-3 py-1.5 text-sm font-semibold text-nexus-cyan hover:bg-nexus-cyan/30">
                         {{ t('messages.nexus.growth.coalitions.create_new') }}
                     </a>

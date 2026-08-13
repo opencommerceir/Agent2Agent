@@ -478,6 +478,26 @@
         "recommended": "Recommended (2 hops away)"
       }
     },
+    "marketplace": {
+      "recommendations": {
+        "title": "AI Recommendations",
+        "empty": "No recommendations yet.",
+        "find_alternatives": "Find alternatives",
+        "best_timing": "Best day to propose",
+        "alternatives_to": "Alternatives to Business #:id",
+        "timing_for": "Best day to negotiate with Business #:id",
+        "no_history": "No accepted/rejected deal history with this Business yet.",
+        "day": {
+          "1": "Monday",
+          "2": "Tuesday",
+          "3": "Wednesday",
+          "4": "Thursday",
+          "5": "Friday",
+          "6": "Saturday",
+          "7": "Sunday"
+        }
+      }
+    },
     "holding": {
       "title": "Holding",
       "no_holding": "You are not part of any Holding yet.",

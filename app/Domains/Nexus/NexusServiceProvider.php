@@ -90,6 +90,10 @@ use App\Domains\Nexus\Llm\Infrastructure\Providers\OpenRouterLLMProvider;
 use App\Domains\Nexus\Llm\Infrastructure\Providers\SelfHostedQwenLLMProvider;
 use App\Domains\Nexus\Llm\Infrastructure\Repositories\EloquentLLMUsageLogRepository;
 use App\Domains\Nexus\Marketplace\Application\Actions\GetBusinessNetworkAction;
+use App\Domains\Nexus\Marketplace\Application\Actions\GetRecommendationsAction;
+use App\Domains\Nexus\Marketplace\Application\Actions\RankSuppliersAction;
+use App\Domains\Nexus\Marketplace\Application\Actions\RecommendAlternativeSuppliersAction;
+use App\Domains\Nexus\Marketplace\Application\Actions\RecommendNegotiationTimingAction;
 use App\Domains\Nexus\Marketplace\Application\Actions\SearchMarketplaceAction;
 use App\Domains\Nexus\Negotiation\Application\Actions\AcceptDealAction;
 use App\Domains\Nexus\Negotiation\Application\Actions\GetNegotiationAction;
@@ -314,6 +318,30 @@ class NexusServiceProvider extends ServiceProvider
             $callingBusinessId = $this->resolveActingBusiness($context);
 
             return $this->app->make(GetBusinessNetworkAction::class)->execute($callingBusinessId)->toArray();
+        });
+
+        $handlers->register('nexus.marketplace.recommendations', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            return $this->app->make(GetRecommendationsAction::class)->execute($callingBusinessId);
+        });
+
+        $handlers->register('nexus.marketplace.rank_suppliers', function (array $input, AuthContext $context) {
+            $this->resolveActingBusiness($context);
+
+            return $this->app->make(RankSuppliersAction::class)->execute(array_map('intval', $input['business_ids']));
+        });
+
+        $handlers->register('nexus.marketplace.alternatives', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            return $this->app->make(RecommendAlternativeSuppliersAction::class)->execute($callingBusinessId, (int) $input['target_business_id']);
+        });
+
+        $handlers->register('nexus.marketplace.negotiation_timing', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            return $this->app->make(RecommendNegotiationTimingAction::class)->execute($callingBusinessId, (int) $input['counterparty_business_id']);
         });
 
         $handlers->register('nexus.credit.balance', function (array $input, AuthContext $context) {

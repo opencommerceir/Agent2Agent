@@ -20,6 +20,7 @@ use App\Domains\Nexus\Growth\Interfaces\Http\Controllers\InviteController;
 use App\Domains\Nexus\Growth\Interfaces\Http\Controllers\ReferralController;
 use App\Domains\Nexus\Holding\Interfaces\Http\Controllers\HoldingController;
 use App\Domains\Nexus\Marketplace\Interfaces\Http\Controllers\NetworkController;
+use App\Domains\Nexus\Marketplace\Interfaces\Http\Controllers\RecommendationsController;
 use App\Domains\Nexus\Negotiation\Interfaces\Http\Controllers\NegotiationViewerController;
 use App\Domains\Nexus\PrivateMarketplace\Interfaces\Http\Controllers\PrivateMarketplaceController;
 use Illuminate\Support\Facades\Route;
@@ -182,6 +183,10 @@ Route::middleware('web')->group(function () {
     // Network Visualization (Phase 5, M4) — Marketplace domain, same
     // 'business.auth' guard as the rest of the business-facing portal.
     Route::middleware('business.auth:business')->get('/nexus/network', [NetworkController::class, 'index'])->name('nexus.network.index');
+
+    // AI Recommendations (Phase 8, M3) — Marketplace domain, same
+    // 'business.auth' guard as the rest of the business-facing portal.
+    Route::middleware('business.auth:business')->get('/nexus/recommendations', [RecommendationsController::class, 'index'])->name('nexus.recommendations.index');
 
     // Multi-Business Accounts (Phase 7, M1) — Holding domain, portal-only
     // (no MCP capability, same "human administrative structure" reasoning

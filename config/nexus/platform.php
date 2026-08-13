@@ -172,6 +172,14 @@ return [
             // (nexus.analytics.business, Phase 8/M1, IS free — it only
             // ever returns the caller's own data).
             'nexus.analytics.market' => (int) env('NEXUS_COST_ANALYTICS_MARKET', 5),
+            // Phase 8/M3 — AI Recommendations. Priced like
+            // nexus.marketplace.search (both surface OTHER Businesses'
+            // identities); nexus.marketplace.rank_suppliers is deliberately
+            // absent here (free) — it only re-orders businessIds the caller
+            // already has, no new discovery happens.
+            'nexus.marketplace.recommendations' => (int) env('NEXUS_COST_MARKETPLACE_RECOMMENDATIONS', 5),
+            'nexus.marketplace.alternatives' => (int) env('NEXUS_COST_MARKETPLACE_ALTERNATIVES', 5),
+            'nexus.marketplace.negotiation_timing' => (int) env('NEXUS_COST_MARKETPLACE_NEGOTIATION_TIMING', 3),
         ],
     ],
 
