@@ -1214,3 +1214,156 @@
 **آماده برای Phase 9 (Ecosystem & API)** طبق `docs/nexus-roadmap.md`.
 
 ---
+
+# Phase 9 — Ecosystem & API
+
+**دستور:** «فاز 9 رو شروع کن» (بعد از تأیید Phase 8). قبل از کدنویسی، دو Explore agent موازی روی زیرساخت موجود (پایپ‌لاین MCP/الگوی Connector Registry/AgentToken یکی، الگوهای Agent/Notifications/تست‌های MCP دیگری) اجرا شد و پلن کامل ۹ مرحله‌ای (M1–M9) روی چهار بخش روادمپ منطبق شد: Public API (M1–M2)، Webhooks (M3)، مستندسازی + GraphQL (M4–M5)، Integration Marketplace (M6)، Agent Developer Platform (M7)، SDKها (M8)، تأیید نهایی (M9).
+
+**یافتهٔ کلیدی پیش از کدنویسی:** هیچ سطح REST عمومی مستقلی از MCP وجود نداشت (`routes/nexus/api.php` فقط یک stub خالی Phase 0 بود)، هیچ `ApiKey`/Sanctum ای در کدبیس نبود (ولی `AgentToken::hash()`/`matches()` — دقیقاً همان الگوی هش‌کردن یک‌طرفه — مستقیماً برای یک اعتبارنامهٔ جدید Business-scoped قابل کپی بود)، و هیچ سیستم اشتراک وب‌هوک خروجی‌ای وجود نداشت (فقط `WebhookSender` ماژول *فعال* Notifications، یک کانال ارسال ساده بدون هدر سفارشی یا اشتراک پایدار). الگوی Connector Registry (شش کاربرد قبلی: Payment/LLM/SSO/Shipping/Channel) کاملاً برای Integration Marketplace قابل استفادهٔ مجدد بود.
+
+## Phase 9 / M1 — Developer Platform: هستهٔ کلید API
+
+دامنهٔ کاملاً جدید `Developer` (همان استثنایی که Llm در Phase 4 و Growth در Phase 5 گرفتند — «Public API/Webhooks/Integration/Agent Marketplace» در هیچ‌کدام از دامنه‌های موجود جا نمی‌افت). `ApiKey` دقیقاً همان الگوی `AgentToken` را کپی می‌کند (SHA-256، `hash_equals`، پلین‌تکست فقط یک‌بار در لحظهٔ صدور نمایش داده می‌شود) ولی یک اعتبارنامهٔ Business-scoped جداست، نه یک Agent-scoped — یک کلید API لو رفته بدون دست‌زدن به توکن مذاکرهٔ واقعی Agent قابل لغو است. `ApiKeyScope` یک enum بسته (نه رشتهٔ آزاد) با ۵ مقدار اولیه (`business.read`, `catalog.read`, `marketplace.read`, `negotiation.read`, `credit.read`) — دقیقاً همان دامنهٔ endpointهای M2.
+
+**فایل‌های اصلی:** `app/Domains/Nexus/Developer/{Domain,Application,Infrastructure,Interfaces}/**` (`ApiKey`, `IssueApiKeyAction`, `AuthenticateApiKeyAction`, ...)، migration `nexus_api_keys`، صفحهٔ پرتال `/nexus/developer/api-keys`.
+
+**تست:** ۲۱ تست جدید — همه پاس.
+
+**کامیت:** `feat(nexus): add Developer Platform API key management (Phase 9/M1)`.
+
+---
+
+## Phase 9 / M2 — Public REST API v1
+
+پنج endpoint (`GET /nexus/api/v1/{business,catalog,marketplace/search,negotiations/{id},credit/balance}`)، هرکدام یک کنترلر نازک که دقیقاً همان Action ای را صدا می‌زند که MCP capability معادلش صدا می‌زند (`GetBusinessDashboardAction`, `SearchCatalogAction`, `SearchMarketplaceAction`, `GetNegotiationAction`, `GetCreditBalanceAction`) — بدون هیچ منطق تجاری دوباره‌نویسی‌شده برای این کانال. چون `SearchMarketplaceAction` از قبل خودش `SpendCreditsForActionAction` را صدا می‌زند، جست‌وجو از طریق REST دقیقاً همان هزینهٔ کردیت جست‌وجو از طریق MCP را می‌گیرد — صورت‌حساب مستقل از کانال است.
+
+**تصمیم کلیدی:** `EnsureValidApiKey` per-route با پارامتر scope وصل شد (نه یک‌بار در سطح گروه) — یک نمونهٔ بدون scope در سطح گروه احراز هویت را درست انجام می‌داد ولی هرگز واقعاً چک نمی‌کرد کدام scope برای کدام endpoint لازم است. Rate limiting (`RateLimiter::for('nexus-api', ...)`) بر اساس id کلید API کلید می‌خورد (نه IP)، چون `EnsureValidApiKey` همیشه قبل از `throttle:nexus-api` در آرایهٔ میان‌افزار هر route اجرا می‌شود.
+
+**لمسِ Core:** `MCPExceptionHandler::handles()` برای پوشش‌دادن `nexus/api/*` هم گسترش یافت (دقیقاً همان توجیه افزودن `api/agents/*` در فاز قبل) — `EnsureValidApiKey`/کنترلرهای جدید همان انواع Exception موجود (`PermissionDeniedException`, `InvalidArgumentException`, `ConflictExceptionInterface`) را پرتاب می‌کنند، فقط پیشوند URL فرق دارد.
+
+**فایل‌های اصلی:** `EnsureValidApiKey` middleware، ۵ کنترلر `Api\*ApiController` (هرکدام در دامنهٔ صاحبِ Action خودش، نه در Developer)، `routes/nexus/api.php`، بخش جدید `api` در `config/nexus/platform.php`.
+
+**تست:** ۱۰ تست جدید (احراز هویت، scope، تعلیق، هر ۵ endpoint، rate limit واقعی با override موقت config) — همه پاس.
+
+**کامیت:** `feat(nexus): wire the Public REST API v1 (Phase 9/M2)`.
+
+---
+
+## Phase 9 / M3 — Webhooks
+
+`WebhookSubscription` (Business-scoped، تا ۳ رویداد قابل‌اشتراک: `negotiation.accepted`, `escrow.released`, `contract.generated` — دقیقاً همان رویدادهای واقعی از پیش دیسپچ‌شده در Negotiation/Contract، هرگز یک سیگنال ساختگی) + `WebhookDeliveryLog` (ledger غیرقابل‌تغییر هر تلاش ارسال، همان الگوی `CreditTransaction`/`LLMUsageLog`).
+
+**تصمیم معماری کلیدی (عمداً از WebhookSender ماژول Notifications عبور نکرد):** امضای `WebhookSender::send(string $recipient, string $subject, string $body)` هیچ راهی برای پیوست هدر سفارشی ندارد، و یک وب‌هوک بدون هدر امضا برای گیرنده غیرقابل‌اعتماد است. `DispatchWebhookEventAction` یک دیسپچر Guzzle مستقل و کوچک خودش است (شکل واقعاً متفاوت → آداپتور جدید، همان قضاوتی که Phase 4/M2 برای `LLMProviderInterface` در برابر `LLMClientInterface` گرفت) — هر payload با HMAC-SHA256 امضا می‌شود (`X-Nexus-Signature: sha256=...`) با راز مخصوص هر subscription (رمزنگاری‌شده در دیتابیس، نه هش یک‌طرفه، چون باید در لحظهٔ ارسال دوباره خوانده شود). یک ارسال ناموفق هرگز throw نمی‌کند — هر دو حالت موفق/ناموفق دقیقاً یک ردیف `WebhookDeliveryLog` می‌سازند.
+
+**فایل‌های اصلی:** `WebhookSubscription`/`WebhookDeliveryLog` (Entity/Repo/Model)، `DispatchWebhookEventAction`، سه Listener جدید (`DispatchWebhookOn{NegotiationAccepted,EscrowReleased,ContractGenerated}Listener`) کنار Listenerهای موجود همان رویدادها، دو migration، صفحهٔ پرتال `/nexus/developer/webhooks`.
+
+**تست:** ۱۶ تست جدید — شامل یک زنجیرهٔ کامل واقعی (propose→accept→release، بدون `Event::fake()`، فقط لایهٔ HTTP خروجی mock شده) که هر سه رویداد را واقعاً fire و تحویل می‌دهد.
+
+**کامیت:** `feat(nexus): add Webhooks (Phase 9/M3)`.
+
+---
+
+## Phase 9 / M4 — مستندات عمومی API
+
+صفحهٔ `/nexus/docs` (بدون احراز هویت — عمداً، چون یک توسعه‌دهندهٔ بالقوه باید قبل از داشتن حساب آن را بخواند)، دست‌ساز به‌جای افزودن ابزار OpenAPI/Scribe (هیچ‌کدام از قبل در کدبیس نبود و برای یک سطح ۵-endpoint نامتناسب بود — همان پرهیز «بدون وابستگی جدید وقتی صفحهٔ دست‌ساز کافی است» Network Visualization در Phase 5/M4). فهرست scopeها/رویدادهای وب‌هوک/محدودیت نرخ مستقیماً از همان enumها/config واقعی خوانده می‌شوند، نه کپی دستی — صفحه هرگز نمی‌تواند از واقعیت کدبیس عقب بیفتد.
+
+**کامیت:** `feat(nexus): add public API documentation page (Phase 9/M4)`.
+
+---
+
+## Phase 9 / M5 — GraphQL API (فقط‌خواندنی)
+
+`POST /nexus/api/v1/graphql` با `webonyx/graphql-php` (موتور سبکی که خودِ Lighthouse هم آن را می‌پیچد — نه خودِ فریم‌ورک سنگین Lighthouse، چون سطح این فاز فقط ۵ فیلد Query است). هر فیلد Query دقیقاً همان Action ای را صدا می‌زند که REST endpoint معادلش (M2) صدا می‌زند.
+
+**تصمیم اسکوپ مستند:** ساختارهای تودرتو/ناهمگن (`currentTerms`، `agent`، `reputationScore`، `listings`) یک اسکالر سفارشی `JSON` هستند، نه ObjectType کامل مدل‌شده — ارزش واقعی GraphQL اینجا انتخاب «کدام منبع سطح‌بالا» است، نه sub-selection عمیق در هر شیء تودرتو؛ مدل‌سازی کامل هر DTO کاندید طبیعی فاز بعدی است.
+
+**باگ واقعی پیدا و رفع شد حین نوشتن تست:** فیلدهای Query سطح ریشه ابتدا `Type::nonNull(...)` تعریف شده بودند؛ طبق قاعدهٔ null-propagation خودِ GraphQL، خطای یک فیلد (مثلاً کمبود scope) کل `data` را null می‌کرد، نه فقط همان فیلد را. راه‌حل: فیلدهای ریشه nullable شدند تا خطای هر فیلد مستقل بماند — همان تضمین partial-result که کل طراحی این مرحله ادعا می‌کرد.
+
+**تست:** ۴ تست جدید (تک‌فیلد، چندفیلد در یک درخواست، خطای جزئی-نه-کامل، بدون احراز هویت) — همه پاس.
+
+**کامیت:** `feat(nexus): add read-only GraphQL API (Phase 9/M5)`.
+
+---
+
+## Phase 9 / M6 — Integration Marketplace
+
+`IntegrationConnection` (Business-scoped): یک اتصال عمومی و category-tagged (ERP/CRM/Accounting/Logistics — دقیقاً چهار دستهٔ نام‌برده‌شدهٔ روادمپ) به‌جای چهار یکپارچه‌سازی نام‌دار مخصوص فروشنده — این کدبیس هیچ credential/SDK واقعی SAP/QuickBooks/HubSpot ندارد (همان صداقت SAML/LDAP، Phase 7/M8). `SyncCatalogToIntegrationAction` نیمهٔ واقعی و کارکردیِ این مرحله است: کاتالوگ واقعی کسب‌وکار (همان `SearchCatalogAction`) را با یک نگاشت فیلد پیکربندی‌شده (source→target، همان escape-hatch الگوی `config` JSON خودِ Automation) به یک URL دلخواه POST می‌کند. «No-code builder» روادمپ صادقانه یک فرم key/value محدود است، نه بومِ drag-and-drop. اتصال به Zapier/Make.com عمداً یک مکانیزم دوم نگرفت — سیستم Webhook همین فاز (M3) دقیقاً همان چیزی است که تریگر «Webhook سفارشی» هر دو پلتفرم نیاز دارد.
+
+**فایل‌های اصلی:** `IntegrationConnection` (Entity/Repo/Model)، `SyncCatalogToIntegrationAction` + ۳ Action مدیریتی، دو migration، صفحهٔ پرتال `/nexus/developer/integrations`.
+
+**تست:** ۱۲ تست جدید (شامل mapItem با/بدون نگاشت، sync واقعی با MockHandler که هدر Authorization و بدنهٔ نگاشت‌شده را تأیید می‌کند) — همه پاس.
+
+**کامیت:** `feat(nexus): add Integration Marketplace (Phase 9/M6)`.
+
+---
+
+## Phase 9 / M7 — Agent Developer Platform
+
+**تصمیم اسکوپ کلیدی:** «مارکت‌پلیس ایجنت‌های Third-party» به‌صورت صادقانه یعنی مارکت‌پلیس پیش‌تنظیم‌های قابل‌نصب شخصیت/لحن/استراتژی (`AgentStrategyTemplate`) روی Agent واقعی و از‌پیش‌معتبرِ خودِ هر Business — همان سه فیلدی که `Agent` (Phase 1/M3) از روز اول داشت. یک مارکت‌پلیس از پردازه‌های واقعی Agent شخص‌ثالث به یک sandbox اجرای کد نیاز داشت که این کدبیس هیچ زیرساختی برایش ندارد (بدون container orchestration، بدون اجرای کد نامعتمد در هیچ‌جای دیگر کدبیس). «حساب توسعه‌دهنده» هم چیز دومی نساخت — خودِ `Business` (که از قبل موجودیت واقعی و صاحب‌درآمد است) نقش ناشر را بازی می‌کند.
+
+نصب بین دو کسب‌وکار واقعاً کردیت جابه‌جا می‌کند: نصب‌کننده `priceCredits` می‌پردازد (`DeductCreditsAction`)، ناشر `priceCredits - platformFee` می‌گیرد (`GrantCreditsAction` با نوع تراکنش تازهٔ `AgentTemplateEarning`) — درصد کارمزد یک getter تازه روی همان `MarginSettingsService` موجود (`agentTemplateFeePercent()`, پیش‌فرض ۲۰٪) است، نه یک مکانیزم تنظیمات دوم. نصب قالب خودِ ناشر همیشه رایگان است (هیچ طرف سومی برای تقسیم درآمد وجود ندارد) ولی همچنان یک ردیف `AgentTemplateInstall` (با هر سه مبلغ صفر) می‌سازد تا تاریخچهٔ نصب ناشر کامل بماند.
+
+**«Sandbox اختصاصی» صادقانه یک پیش‌نمایش dry-run است، نه یک Tenant دوم:** `PreviewAgentStrategyTemplateAction` دقیقاً نشان می‌دهد یک قالب چه چیزی را تغییر می‌دهد — بدون هیچ نوشتن دیتابیس، بدون کسر کردیت. ساخت یک Tenant/Agent ایزولهٔ دوم برای همین منظور بررسی و رد شد: هزینهٔ چرخهٔ عمر (provisioning/مالکیت/پاک‌سازی) بدون فایدهٔ اضافه‌ای نسبت به همین پیش‌نمایش، در حالی که این پیش‌نمایش دقیقاً همان ریسکی را که «sandbox» قرار است حذف کند از بین می‌برد: جهش تصادفی Agent واقعی و در حال مذاکرهٔ خودِ ناشر حین آزمایش.
+
+**فایل‌های اصلی:** `AgentStrategyTemplate`/`AgentTemplateInstall` (Entity/Repo/Model)، ۶ Action (`Publish`/`ListMarketplace`/`ListMyPublished`/`Unpublish`/`Preview`/`Install`)، getter تازه در `MarginSettingsService`، case تازه در `CreditTransactionType`، دو migration، صفحهٔ پرتال `/nexus/developer/agent-marketplace`.
+
+**تست:** ۱۳ تست جدید — شامل تأیید دقیق ریاضی تقسیم درآمد (۱۰۰۰ کردیت × ۲۰٪ = ۲۰۰ کارمزد پلتفرم، ۸۰۰ سهم ناشر) روی داده‌های واقعی دیتابیس.
+
+**کامیت:** `feat(nexus): add Agent Developer Platform (Phase 9/M7)`.
+
+---
+
+## Phase 9 / M8 — SDKها (PHP، Node.js، Python، Go)
+
+چهار کلاینت بدون‌وابستگی در `packages/nexus-sdk-{php,node,python,go}` (هنوز در هیچ رجیستری بسته‌ای منتشر نشده — فقط درون همین مخزن)، هرکدام همان قرارداد یکسان را پیاده می‌کنند (۵ متد REST + `graphql()` + `verifyWebhookSignature`). PHP فقط `ext-curl`/`ext-json` می‌خواهد (نه Guzzle)، Node فقط `fetch` بومی (Node ≥18، بدون axios)، Python فقط `urllib` استاندارد (بدون requests) — همان انضباط «کتابخانهٔ HTTP را به مصرف‌کننده تحمیل نکن» که خودِ کنترلرهای REST پلتفرم با پنهان‌نکردن Guzzle در قرارداد عمومی‌شان از قبل رعایت می‌کردند.
+
+**صداقت محیط توسعه:** PHP/Node/Python هرسه در همین محیط تست واقعی اجرا و پاس شدند (`phpunit`: ۶، `node --test`: ۶، `python -m unittest`: ۶). Go نوشته شد ولی اجرا/کامپایل نشد — هیچ toolchain گویی در این محیط توسعه نصب نیست؛ همان صداقتی که SAML/LDAP (Phase 7/M8) و اندپوینت‌های LLM محلی (Phase 4/M2) از قبل رعایت کرده بودند: یک پیاده‌سازی واقعی و دقیق‌نوشته‌شده از چیزی که این محیط نمی‌تواند اجرا کند، نه یک جای‌نگه‌دار.
+
+**کامیت:** `feat(nexus): add official SDKs for PHP, Node.js, Python, and Go (Phase 9/M8)`.
+
+---
+
+## Phase 9 / M9 — تأیید نهایی
+
+- `php artisan migrate --force` روی دیتابیس dev: «Nothing to migrate» — هر ۹ migration فاز (M1، M3، M6، M7) قبلاً هرکدام در نوبت خودشان تمیز اجرا شده بودند.
+- `php artisan route:list --path=nexus`: هر ۱۸ مسیر جدید (۵ REST + ۱ GraphQL زیر `nexus/api/v1/*`، ۱۲ صفحهٔ پرتال/مستندات زیر `nexus/developer/*` و `nexus/docs`) درست ثبت شده‌اند، بدون تداخل با ۱۳۶ مسیر موجود.
+- `php artisan test --filter=Nexus`: **۷۶۶ پاس** (baseline قبل از فاز: ۶۸۹؛ خالص +۷۷ — دقیقاً برابر مجموع تست‌های Laravel-side این فاز: ۲۱+۱۰+۱۶+۱+۴+۱۲+۱۳=۷۷؛ SDKها تست‌های خودشان را در سوییت‌های جداگانهٔ زبان خودشان دارند، نه در PHPUnit).
+- سوییت کامل: **۱۶۳۹ pass / ۲۸۳ fail** — بدون رگرشن (همان ۲۸۳ شکست ثابت ماژول‌های غیرفعال، بدون تغییر در هیچ مرحله).
+- **تست End-to-End دستی کامل روی سرور واقعی** (`php artisan serve --port=9500`، همان مشکل رزرو پورت ویندوز فازهای قبل دوباره صادق بود)، این‌بار با یک گیرندهٔ وب‌هوک واقعی و مستقل هم (`php -S 127.0.0.1:9501`) برای اثبات واقعی تحویل HTTP، نه فقط MockHandler تست‌ها:
+  1. دو کسب‌وکار واقعی (Buyer/Seller) ثبت‌نام، تأیید، و کردیت گرفتند؛ یک محصول واقعی اضافه شد.
+  2. دو کلید API واقعی صادر شد (یکی با همهٔ ۵ scope، یکی فقط `credit.read`) — هر ۵ endpoint REST با curl واقعی زده شدند: پروفایل کسب‌وکار ۲۰۰، عبور از scope روی کلید محدود ۴۰۳ با پیام دقیق، بدون هدر Authorization ۴۰۱، هدرهای `X-RateLimit-*`/`X-API-Version` واقعاً روی پاسخ حاضر بودند.
+  3. `POST /nexus/api/v1/graphql` با کوئری چندفیلدی واقعی: با کلید کامل هر سه فیلد (کردیت/کاتالوگ/بازار) پر شدند؛ با کلید محدود، `creditBalance` پر شد ولی `catalog` دقیقاً همان خطای جزئی مورد انتظار را برگرداند — بدون خالی‌شدن کل `data` (اثبات مستقیم رفع باگ M5 روی شبکهٔ واقعی).
+  4. یک اشتراک وب‌هوک واقعی برای هر سه رویداد ثبت شد؛ یک مذاکرهٔ واقعی (propose→accept→release) روی زنجیرهٔ رویداد کامل (Negotiation→Contract→Escrow) اجرا شد → گیرندهٔ محلی واقعاً هر سه رویداد را با بدنهٔ صحیح و هدرهای `X-Nexus-Event`/`X-Nexus-Signature` دریافت کرد؛ امضای هر سه با `hash_hmac`/`hash_equals` روی رازِ واقعیِ ذخیره‌شده دوباره محاسبه و **هرسه معتبر تأیید شدند** — اثبات رمزنگاری‌شدهٔ کامل چرخهٔ امضا/تأیید، نه فقط بررسی وجود هدر.
+  5. هر ۴ صفحهٔ پرتال جدید (`api-keys`, `webhooks`, `integrations`, `agent-marketplace`) و `/nexus/docs` بدون session واقعاً ۳۰۲/۲۰۰ درست برگرداندند — بدون هیچ ۵۰۰.
+- `git log --oneline`: هر ۸ مرحلهٔ Phase 9 (M1 تا M8) کامیت شده‌اند.
+
+**کامیت:** `docs(nexus): Phase 9 complete — final handoff summary`.
+
+---
+
+## 🎯 خلاصه Phase 9 (Ecosystem & API) — تکمیل شد
+
+| میلستون | دامنه/ویژگی اصلی | تست |
+|---|---|---|
+| M1 | Developer Platform (API Key core) | ۲۱ |
+| M2 | Public REST API v1 | ۱۰ |
+| M3 | Webhooks (HMAC-signed, delivery log) | ۱۶ |
+| M4 | مستندات عمومی API | ۱ |
+| M5 | GraphQL API (فقط‌خواندنی) | ۴ |
+| M6 | Integration Marketplace | ۱۲ |
+| M7 | Agent Developer Platform | ۱۳ |
+| M8 | SDKها (PHP/Node/Python/Go) | ۰ (سوییت‌های جدا: ۱۸) |
+| **مجموع** | | **۷۷ در PHPUnit / ۱۸ در سوییت‌های SDK** |
+
+تصمیمات معماری ماندگار برای فازهای بعدی:
+1. **یک اعتبارنامهٔ جدید Business-scoped، الگوی هش `AgentToken` را کپی می‌کند، نه Sanctum/فریم‌ورک توکن سوم‌شخص** — `ApiKey` (M1) دومین کاربرد این الگوست؛ هر اعتبارنامهٔ جدید آینده باید همین‌جا نگاه کند، نه یک وابستگی احراز هویت تازه.
+2. **کنترلر نازک روی همان Action موجود، برای هر کانال تازه (REST، GraphQL)** — هیچ منطق تجاری هرگز دوباره برای یک کانال جدید نوشته نمی‌شود؛ صورت‌حساب/CostGate به‌طور خودکار مستقل از کانال یکسان می‌ماند چون خودِ Action آن را کنترل می‌کند، نه لایهٔ HTTP.
+3. **«شکل واقعاً متفاوت» توجیه یک آداپتور موازی است، نه استفادهٔ اجباری از زیرساخت موجود** — `DispatchWebhookEventAction` (M3) عمداً `WebhookSender` را دور زد چون نیاز به هدر سفارشی داشت؛ همان قضاوت `LLMProviderInterface` (Phase 4/M2) در برابر `LLMClientInterface`.
+4. **فیلدهای ریشهٔ GraphQL باید nullable باشند مگر دلیل قوی برای nonNull وجود داشته باشد** — قاعدهٔ null-propagation یک فیلد خطادار را به کل پاسخ تسری می‌دهد؛ این یک باگ واقعی این فاز بود (M5)، نه یک ریسک فرضی.
+5. **صداقت اسکوپ همچنان الگوی تکرارشوندهٔ این پروژه است، این‌بار در سه شکل جدید:** Integration Marketplace = یک کانکتور عمومی به‌جای یکپارچه‌سازی‌های نام‌دار جعلی (M6)، «مارکت‌پلیس Agent» = پیش‌تنظیم قابل‌نصب به‌جای sandbox اجرای کد (M7)، Go SDK = نوشته‌شده ولی صادقانه اجرا‌نشده (M8).
+6. **یک getter تازه روی `MarginSettingsService` موجود، نه یک مکانیزم تنظیمات دوم، برای هر کارمزد پلتفرم تازه** — `agentTemplateFeePercent()` (M7) پنجمین فیلد این سرویس است؛ هر کارمزد آیندهٔ دیگر باید همین الگو را دنبال کند.
+7. **محدودیت شناخته‌شدهٔ باقی‌مانده:** مدل‌سازی کامل GraphQL برای ساختارهای تودرتو (به‌جای اسکالر `JSON`) و اتصال واقعی نصب‌وراه‌اندازی SDKها به رجیستری‌های بسته (Packagist/npm/PyPI/pkg.go.dev) هر دو کاندید طبیعی فاز بعدی‌اند، نه سهل‌انگاری این فاز.
+
+**آماده برای Phase 10 (Global Expansion)** طبق `docs/nexus-roadmap.md`.
+
+---
