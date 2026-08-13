@@ -52,6 +52,7 @@ use App\Domains\Nexus\Contract\Application\Listeners\HoldEscrowOnContractGenerat
 use App\Domains\Nexus\Contract\Application\Listeners\OpenDisputeCaseOnEscrowDisputedListener;
 use App\Domains\Nexus\Contract\Domain\Events\ContractWasGenerated;
 use App\Domains\Nexus\Contract\Domain\Events\EscrowWasDisputed;
+use App\Domains\Nexus\Contract\Domain\Events\EscrowWasReleased;
 use App\Domains\Nexus\Contract\Domain\Repositories\ContractRepositoryInterface;
 use App\Domains\Nexus\Contract\Domain\Repositories\DisputeCaseRepositoryInterface;
 use App\Domains\Nexus\Contract\Domain\Repositories\EscrowRepositoryInterface;
@@ -59,8 +60,15 @@ use App\Domains\Nexus\Contract\Infrastructure\Repositories\EloquentContractRepos
 use App\Domains\Nexus\Contract\Infrastructure\Repositories\EloquentDisputeCaseRepository;
 use App\Domains\Nexus\Contract\Infrastructure\Repositories\EloquentEscrowRepository;
 use App\Domains\Nexus\Credit\Application\Actions\GetCreditBalanceAction;
+use App\Domains\Nexus\Developer\Application\Listeners\DispatchWebhookOnContractGeneratedListener;
+use App\Domains\Nexus\Developer\Application\Listeners\DispatchWebhookOnEscrowReleasedListener;
+use App\Domains\Nexus\Developer\Application\Listeners\DispatchWebhookOnNegotiationAcceptedListener;
 use App\Domains\Nexus\Developer\Domain\Repositories\ApiKeyRepositoryInterface;
+use App\Domains\Nexus\Developer\Domain\Repositories\WebhookDeliveryLogRepositoryInterface;
+use App\Domains\Nexus\Developer\Domain\Repositories\WebhookSubscriptionRepositoryInterface;
 use App\Domains\Nexus\Developer\Infrastructure\Repositories\EloquentApiKeyRepository;
+use App\Domains\Nexus\Developer\Infrastructure\Repositories\EloquentWebhookDeliveryLogRepository;
+use App\Domains\Nexus\Developer\Infrastructure\Repositories\EloquentWebhookSubscriptionRepository;
 use App\Domains\Nexus\Credit\Application\Listeners\GrantStartingCreditsOnBusinessVerifiedListener;
 use App\Domains\Nexus\Credit\Domain\Repositories\CreditBalanceRepositoryInterface;
 use App\Domains\Nexus\Credit\Domain\Repositories\CreditPurchaseSessionRepositoryInterface;
@@ -200,6 +208,8 @@ class NexusServiceProvider extends ServiceProvider
         $this->app->bind(AutomationRuleRepositoryInterface::class, EloquentAutomationRuleRepository::class);
         $this->app->bind(AutomationRunLogRepositoryInterface::class, EloquentAutomationRunLogRepository::class);
         $this->app->bind(ApiKeyRepositoryInterface::class, EloquentApiKeyRepository::class);
+        $this->app->bind(WebhookSubscriptionRepositoryInterface::class, EloquentWebhookSubscriptionRepository::class);
+        $this->app->bind(WebhookDeliveryLogRepositoryInterface::class, EloquentWebhookDeliveryLogRepository::class);
 
         // Nexus's own PaymentGatewayRegistry singleton — CommerceServiceProvider
         // (where these adapter classes originally live) is disabled since
@@ -250,6 +260,13 @@ class NexusServiceProvider extends ServiceProvider
         Event::listen(NegotiationWasAccepted::class, CompleteCoalitionOnNegotiationAcceptedListener::class);
         Event::listen(ContractWasGenerated::class, HoldEscrowOnContractGeneratedListener::class);
         Event::listen(EscrowWasDisputed::class, OpenDisputeCaseOnEscrowDisputedListener::class);
+
+        // Phase 9/M3 — Webhooks. Additional listeners on the same three
+        // events above (and NegotiationWasAccepted); each is a no-op for
+        // any Business with no matching active subscription.
+        Event::listen(NegotiationWasAccepted::class, DispatchWebhookOnNegotiationAcceptedListener::class);
+        Event::listen(EscrowWasReleased::class, DispatchWebhookOnEscrowReleasedListener::class);
+        Event::listen(ContractWasGenerated::class, DispatchWebhookOnContractGeneratedListener::class);
 
         // Real Payment Gateways (Phase 3/M3) — same Connector Pattern
         // CommerceServiceProvider's own (dead, since Commerce is disabled)

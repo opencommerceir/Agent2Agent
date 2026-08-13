@@ -561,6 +561,29 @@
           "active": "Active",
           "revoked": "Revoked"
         }
+      },
+      "webhooks": {
+        "title": "Webhooks",
+        "description": "Once subscribed, a signed (HMAC-SHA256) POST request is sent to your URL every time one of the events below happens.",
+        "url": "Destination URL",
+        "events": "Events",
+        "event": {
+          "negotiation.accepted": "Negotiation accepted",
+          "escrow.released": "Escrow released",
+          "contract.generated": "Contract generated"
+        },
+        "subscribe": "Subscribe",
+        "empty": "No webhooks subscribed yet.",
+        "reveal_title": "Your webhook signing secret",
+        "reveal_warning": "This secret is shown only once — use it to verify the X-Nexus-Signature header.",
+        "revoke": "Revoke webhook",
+        "status": {
+          "active": "Active",
+          "revoked": "Revoked"
+        },
+        "deliveries_title": "Delivery history",
+        "deliveries_empty": "No events delivered yet.",
+        "delivery_failed": "Failed"
       }
     },
     "holding": {

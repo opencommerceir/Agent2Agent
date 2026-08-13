@@ -561,6 +561,29 @@
           "active": "فعال",
           "revoked": "لغوشده"
         }
+      },
+      "webhooks": {
+        "title": "وب‌هوک‌ها",
+        "description": "با ثبت یک وب‌هوک، هر بار یکی از رویدادهای زیر رخ دهد، یک درخواست POST امضاشده (HMAC-SHA256) به آدرس شما ارسال می‌شود.",
+        "url": "آدرس مقصد",
+        "events": "رویدادها",
+        "event": {
+          "negotiation.accepted": "پذیرش مذاکره",
+          "escrow.released": "آزادسازی سپرده امانی",
+          "contract.generated": "صدور قرارداد"
+        },
+        "subscribe": "ثبت وب‌هوک",
+        "empty": "هنوز وب‌هوکی ثبت نشده است.",
+        "reveal_title": "کلید امضای وب‌هوک شما",
+        "reveal_warning": "این کلید فقط همین یک‌بار نمایش داده می‌شود — از آن برای بررسی هدر X-Nexus-Signature استفاده کنید.",
+        "revoke": "لغو وب‌هوک",
+        "status": {
+          "active": "فعال",
+          "revoked": "لغوشده"
+        },
+        "deliveries_title": "تاریخچه ارسال",
+        "deliveries_empty": "هنوز هیچ رویدادی ارسال نشده است.",
+        "delivery_failed": "ناموفق"
       }
     },
     "holding": {

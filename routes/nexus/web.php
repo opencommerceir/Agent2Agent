@@ -18,6 +18,7 @@ use App\Domains\Nexus\Business\Interfaces\Http\Controllers\RegisterBusinessContr
 use App\Domains\Nexus\Credit\Interfaces\Http\Controllers\CreditPurchaseCallbackController;
 use App\Domains\Nexus\Credit\Interfaces\Http\Controllers\CreditPurchaseController;
 use App\Domains\Nexus\Developer\Interfaces\Http\Controllers\ApiKeyController;
+use App\Domains\Nexus\Developer\Interfaces\Http\Controllers\WebhookSubscriptionController;
 use App\Domains\Nexus\Growth\Interfaces\Http\Controllers\CoalitionController;
 use App\Domains\Nexus\Growth\Interfaces\Http\Controllers\InviteController;
 use App\Domains\Nexus\Growth\Interfaces\Http\Controllers\ReferralController;
@@ -263,5 +264,13 @@ Route::middleware('web')->group(function () {
         Route::get('/', [ApiKeyController::class, 'index'])->name('index');
         Route::post('/', [ApiKeyController::class, 'store'])->name('store');
         Route::post('/{apiKey}/revoke', [ApiKeyController::class, 'revoke'])->name('revoke');
+    });
+
+    // Webhook subscriptions (Phase 9, M3) — portal-only, same 'business.auth'
+    // guard as the API key management above.
+    Route::middleware('business.auth:business')->prefix('nexus/developer/webhooks')->name('nexus.developer.webhooks.')->group(function () {
+        Route::get('/', [WebhookSubscriptionController::class, 'index'])->name('index');
+        Route::post('/', [WebhookSubscriptionController::class, 'store'])->name('store');
+        Route::post('/{subscription}/revoke', [WebhookSubscriptionController::class, 'revoke'])->name('revoke');
     });
 });
