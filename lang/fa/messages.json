@@ -777,6 +777,22 @@
         "listing_verified": "مورد تأیید شد.",
         "listing_rejected": "مورد رد شد.",
         "empty": "موردی در انتظار نیست."
+      },
+      "audit": {
+        "title": "مسیر ممیزی",
+        "total_entries": ":count رکورد در زنجیره.",
+        "verify_chain": "بررسی صحت زنجیره",
+        "verify_intact": "زنجیره سالم تأیید شد — :count رکورد بررسی شد.",
+        "verify_broken": "یکپارچگی زنجیره در توالی #:sequence نقض شده است.",
+        "sequence": "توالی",
+        "capability": "قابلیت",
+        "business": "کسب‌وکار",
+        "agent": "ایجنت",
+        "status": "وضعیت",
+        "duration": "مدت",
+        "hash": "هش",
+        "at": "زمان",
+        "empty": "هنوز رکوردی ثبت نشده است."
       }
     }
   }

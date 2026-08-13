@@ -777,6 +777,22 @@
         "listing_verified": "Listing verified.",
         "listing_rejected": "Listing rejected.",
         "empty": "Nothing pending."
+      },
+      "audit": {
+        "title": "Audit Trail",
+        "total_entries": ":count entries in the chain.",
+        "verify_chain": "Verify chain integrity",
+        "verify_intact": "Chain verified intact — :count entries checked.",
+        "verify_broken": "Chain integrity BROKEN at sequence #:sequence.",
+        "sequence": "Seq",
+        "capability": "Capability",
+        "business": "Business",
+        "agent": "Agent",
+        "status": "Status",
+        "duration": "Duration",
+        "hash": "Hash",
+        "at": "At",
+        "empty": "No audit entries yet."
       }
     }
   }

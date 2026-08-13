@@ -5,6 +5,7 @@ use App\Core\Interfaces\HTTP\Controllers\Auth\LogoutController;
 use App\Http\Controllers\Dashboard\AgentController;
 use App\Http\Controllers\Dashboard\AnalyticsController;
 use App\Http\Controllers\Dashboard\DashboardController;
+use App\Http\Controllers\Dashboard\NexusAuditController;
 use App\Http\Controllers\Dashboard\NexusDisputeController;
 use App\Http\Controllers\Dashboard\NexusEscrowController;
 use App\Http\Controllers\Dashboard\NexusFraudController;
@@ -148,6 +149,10 @@ Route::middleware('auth')->group(function () {
             Route::post('/verification/products/{product}/reject', [NexusVerificationController::class, 'rejectProduct'])->name('verification.products.reject');
             Route::post('/verification/services/{service}/verify', [NexusVerificationController::class, 'verifyService'])->name('verification.services.verify');
             Route::post('/verification/services/{service}/reject', [NexusVerificationController::class, 'rejectService'])->name('verification.services.reject');
+
+            // Compliance — hash-chained Audit Trail (Phase 7/M9).
+            Route::get('/audit', [NexusAuditController::class, 'index'])->name('audit.index');
+            Route::post('/audit/verify', [NexusAuditController::class, 'verify'])->name('audit.verify');
         });
     });
 });

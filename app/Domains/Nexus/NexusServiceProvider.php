@@ -14,6 +14,9 @@ use App\Domains\Nexus\Approval\Infrastructure\Repositories\EloquentApprovalDecis
 use App\Domains\Nexus\Approval\Infrastructure\Repositories\EloquentApprovalPolicyRepository;
 use App\Domains\Nexus\Approval\Infrastructure\Repositories\EloquentApprovalRequestRepository;
 use App\Domains\Nexus\Agent\Application\Listeners\CreateAgentOnBusinessVerifiedListener;
+use App\Domains\Nexus\Audit\Application\Services\AuditingCapabilityHandlerRegistry;
+use App\Domains\Nexus\Audit\Domain\Repositories\AuditLogEntryRepositoryInterface;
+use App\Domains\Nexus\Audit\Infrastructure\Repositories\EloquentAuditLogEntryRepository;
 use App\Domains\Nexus\Agent\Domain\Repositories\AgentRepositoryInterface;
 use App\Domains\Nexus\Agent\Infrastructure\Repositories\EloquentAgentRepository;
 use App\Domains\Nexus\Business\Domain\Events\BusinessWasVerified;
@@ -167,6 +170,7 @@ class NexusServiceProvider extends ServiceProvider
         $this->app->bind(PrivateMarketplaceRepositoryInterface::class, EloquentPrivateMarketplaceRepository::class);
         $this->app->bind(PrivateMarketplaceMemberRepositoryInterface::class, EloquentPrivateMarketplaceMemberRepository::class);
         $this->app->bind(PrivateMarketplaceListingRepositoryInterface::class, EloquentPrivateMarketplaceListingRepository::class);
+        $this->app->bind(AuditLogEntryRepositoryInterface::class, EloquentAuditLogEntryRepository::class);
 
         // Nexus's own PaymentGatewayRegistry singleton — CommerceServiceProvider
         // (where these adapter classes originally live) is disabled since
@@ -285,7 +289,14 @@ class NexusServiceProvider extends ServiceProvider
      */
     private function registerMcpCapabilityHandlers(): void
     {
-        $handlers = $this->app->make(CapabilityHandlerRegistry::class);
+        // Phase 7/M9 — every Nexus capability handler registered below
+        // (directly or via the sub-methods) is transparently wrapped with
+        // a hash-chained audit entry by this decorator; see its own
+        // docblock for why this is the one place that needed to change.
+        $handlers = new AuditingCapabilityHandlerRegistry(
+            $this->app->make(CapabilityHandlerRegistry::class),
+            $this->app,
+        );
 
         $handlers->register('nexus.marketplace.search', function (array $input, AuthContext $context) {
             $callingBusinessId = $this->resolveActingBusiness($context);
@@ -336,7 +347,7 @@ class NexusServiceProvider extends ServiceProvider
         $this->registerPrivateMarketplaceCapabilityHandlers($handlers);
     }
 
-    private function registerPrivateMarketplaceCapabilityHandlers(CapabilityHandlerRegistry $handlers): void
+    private function registerPrivateMarketplaceCapabilityHandlers(AuditingCapabilityHandlerRegistry $handlers): void
     {
         $handlers->register('nexus.private_marketplace.search', function (array $input, AuthContext $context) {
             $callingBusinessId = $this->resolveActingBusiness($context);
@@ -363,7 +374,7 @@ class NexusServiceProvider extends ServiceProvider
         });
     }
 
-    private function registerReputationCapabilityHandlers(CapabilityHandlerRegistry $handlers): void
+    private function registerReputationCapabilityHandlers(AuditingCapabilityHandlerRegistry $handlers): void
     {
         $handlers->register('nexus.review.submit', function (array $input, AuthContext $context) {
             $callingBusinessId = $this->resolveActingBusiness($context);
@@ -395,7 +406,7 @@ class NexusServiceProvider extends ServiceProvider
         });
     }
 
-    private function registerCoalitionCapabilityHandlers(CapabilityHandlerRegistry $handlers): void
+    private function registerCoalitionCapabilityHandlers(AuditingCapabilityHandlerRegistry $handlers): void
     {
         $handlers->register('nexus.coalition.create', function (array $input, AuthContext $context) {
             $callingBusinessId = $this->resolveActingBusiness($context);
@@ -460,7 +471,7 @@ class NexusServiceProvider extends ServiceProvider
         });
     }
 
-    private function registerNegotiationCapabilityHandlers(CapabilityHandlerRegistry $handlers): void
+    private function registerNegotiationCapabilityHandlers(AuditingCapabilityHandlerRegistry $handlers): void
     {
         $handlers->register('nexus.negotiation.propose', function (array $input, AuthContext $context) {
             $callingBusinessId = $this->resolveActingBusiness($context);
