@@ -3,6 +3,7 @@
 namespace App\Domains\Nexus\Negotiation\Application\Actions;
 
 use App\Domains\Nexus\Agent\Domain\Repositories\AgentRepositoryInterface;
+use App\Domains\Nexus\Approval\Application\Actions\OpenApprovalRequestForDealAction;
 use App\Domains\Nexus\Credit\Application\Actions\SpendCreditsForActionAction;
 use App\Domains\Nexus\Negotiation\Application\DTOs\NegotiationData;
 use App\Domains\Nexus\Negotiation\Application\Services\NegotiationReasoningService;
@@ -35,6 +36,7 @@ final class AcceptDealAction
         private readonly AgentRepositoryInterface $agents,
         private readonly NegotiationReasoningService $reasoning,
         private readonly SpendCreditsForActionAction $costGate,
+        private readonly OpenApprovalRequestForDealAction $openApprovalRequest,
     ) {
     }
 
@@ -57,6 +59,10 @@ final class AcceptDealAction
 
         if ($exceedsAuthorityLimit) {
             $negotiation->requestApproval($actingBusinessId);
+            // Phase 7/M4 — a no-op when $actingBusinessId has no
+            // ApprovalPolicy configured, which keeps this Action's
+            // pre-Phase-7 behavior byte-for-byte unchanged in that case.
+            $this->openApprovalRequest->execute($negotiation->id(), $actingBusinessId, $totalAmount);
         } else {
             $negotiation->accept();
         }

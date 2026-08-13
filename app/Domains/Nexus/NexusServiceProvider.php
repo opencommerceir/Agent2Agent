@@ -7,6 +7,12 @@ use App\Core\Application\Services\CapabilityHandlerRegistry;
 use App\Domains\Nexus\Admin\Domain\Repositories\PlatformSettingRepositoryInterface;
 use App\Domains\Nexus\Admin\Infrastructure\Repositories\EloquentPlatformSettingRepository;
 use App\Domains\Nexus\Agent\Application\Actions\ResolveActingBusinessAction;
+use App\Domains\Nexus\Approval\Domain\Repositories\ApprovalDecisionRepositoryInterface;
+use App\Domains\Nexus\Approval\Domain\Repositories\ApprovalPolicyRepositoryInterface;
+use App\Domains\Nexus\Approval\Domain\Repositories\ApprovalRequestRepositoryInterface;
+use App\Domains\Nexus\Approval\Infrastructure\Repositories\EloquentApprovalDecisionRepository;
+use App\Domains\Nexus\Approval\Infrastructure\Repositories\EloquentApprovalPolicyRepository;
+use App\Domains\Nexus\Approval\Infrastructure\Repositories\EloquentApprovalRequestRepository;
 use App\Domains\Nexus\Agent\Application\Listeners\CreateAgentOnBusinessVerifiedListener;
 use App\Domains\Nexus\Agent\Domain\Repositories\AgentRepositoryInterface;
 use App\Domains\Nexus\Agent\Infrastructure\Repositories\EloquentAgentRepository;
@@ -143,6 +149,9 @@ class NexusServiceProvider extends ServiceProvider
         $this->app->bind(HoldingSubsidiaryRepositoryInterface::class, EloquentHoldingSubsidiaryRepository::class);
         $this->app->bind(HoldingCreditPoolRepositoryInterface::class, EloquentHoldingCreditPoolRepository::class);
         $this->app->bind(HoldingCreditPoolTransactionRepositoryInterface::class, EloquentHoldingCreditPoolTransactionRepository::class);
+        $this->app->bind(ApprovalPolicyRepositoryInterface::class, EloquentApprovalPolicyRepository::class);
+        $this->app->bind(ApprovalRequestRepositoryInterface::class, EloquentApprovalRequestRepository::class);
+        $this->app->bind(ApprovalDecisionRepositoryInterface::class, EloquentApprovalDecisionRepository::class);
 
         // Nexus's own PaymentGatewayRegistry singleton — CommerceServiceProvider
         // (where these adapter classes originally live) is disabled since

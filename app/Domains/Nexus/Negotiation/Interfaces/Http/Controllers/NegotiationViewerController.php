@@ -2,6 +2,10 @@
 
 namespace App\Domains\Nexus\Negotiation\Interfaces\Http\Controllers;
 
+use App\Domains\Nexus\Approval\Application\Actions\ApproveApprovalLevelAction;
+use App\Domains\Nexus\Approval\Application\Actions\RejectApprovalLevelAction;
+use App\Domains\Nexus\Approval\Application\DTOs\ApprovalRequestData;
+use App\Domains\Nexus\Approval\Domain\Repositories\ApprovalRequestRepositoryInterface;
 use App\Domains\Nexus\Business\Domain\Repositories\BusinessRepositoryInterface;
 use App\Domains\Nexus\Business\Infrastructure\Models\BusinessOwner;
 use App\Domains\Nexus\Contract\Application\Actions\DisputeEscrowAction;
@@ -52,6 +56,9 @@ class NegotiationViewerController extends Controller
         private readonly CalculateReputationScoreAction $reputationScore,
         private readonly DisputeCaseRepositoryInterface $disputeCases,
         private readonly SubmitDisputeEvidenceAction $submitDisputeEvidence,
+        private readonly ApprovalRequestRepositoryInterface $approvalRequests,
+        private readonly ApproveApprovalLevelAction $approveApprovalLevel,
+        private readonly RejectApprovalLevelAction $rejectApprovalLevel,
     ) {
     }
 
@@ -75,6 +82,8 @@ class NegotiationViewerController extends Controller
         $escrow = $this->escrows->findByNegotiationId($negotiation);
         $myReview = $this->reviews->findByNegotiationAndReviewer($negotiation, $businessId);
         $disputeCase = $escrow ? $this->disputeCases->findByEscrowId($escrow->id()) : null;
+        $approvalRequest = $this->approvalRequests->findByNegotiationId($negotiation);
+        $callingOwnerRole = Auth::guard('business')->user()?->role?->value;
 
         return view('nexus::negotiations.show', [
             'negotiation' => $negotiationData,
@@ -86,6 +95,8 @@ class NegotiationViewerController extends Controller
             'escrow' => $escrow ? EscrowData::fromEntity($escrow) : null,
             'myReview' => $myReview,
             'disputeCase' => $disputeCase,
+            'approvalRequest' => $approvalRequest ? ApprovalRequestData::fromEntity($approvalRequest) : null,
+            'callingOwnerRole' => $callingOwnerRole,
         ]);
     }
 
@@ -98,16 +109,33 @@ class NegotiationViewerController extends Controller
         return response()->json(['messages' => array_map(fn ($m) => $m->toArray(), $messages)]);
     }
 
+    /**
+     * Phase 7/M4 — a Business with a configured ApprovalPolicy routes
+     * through the level-aware Actions instead (which check the deciding
+     * owner's OWN id, not just the Business's `pendingApprovalBusinessId`);
+     * a Business with none keeps calling the original, untouched
+     * ApprovePendingNegotiationAction exactly as before.
+     */
     public function approve(int $negotiation): RedirectResponse
     {
-        $this->approvePending->execute($negotiation, $this->actingBusinessId());
+        if ($this->approvalRequests->findByNegotiationId($negotiation)) {
+            $this->approveApprovalLevel->execute($negotiation, Auth::guard('business')->id());
+        } else {
+            $this->approvePending->execute($negotiation, $this->actingBusinessId());
+        }
 
         return redirect()->route('nexus.negotiations.show', $negotiation);
     }
 
     public function reject(int $negotiation, Request $request): RedirectResponse
     {
-        $this->rejectPending->execute($negotiation, $this->actingBusinessId(), $request->string('reason')->toString() ?: null);
+        $reason = $request->string('reason')->toString() ?: null;
+
+        if ($this->approvalRequests->findByNegotiationId($negotiation)) {
+            $this->rejectApprovalLevel->execute($negotiation, Auth::guard('business')->id(), $reason);
+        } else {
+            $this->rejectPending->execute($negotiation, $this->actingBusinessId(), $reason);
+        }
 
         return redirect()->route('nexus.negotiations.show', $negotiation);
     }

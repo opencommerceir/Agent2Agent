@@ -4,6 +4,7 @@ use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessDashboardCont
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessLoginController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessLogoutController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessPasswordController;
+use App\Domains\Nexus\Approval\Interfaces\Http\Controllers\ApprovalPolicyController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessTeamController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\RegisterBusinessController;
 use App\Domains\Nexus\Credit\Interfaces\Http\Controllers\CreditPurchaseCallbackController;
@@ -62,6 +63,14 @@ Route::middleware('web')->group(function () {
                 Route::post('/', [BusinessTeamController::class, 'store'])->name('store');
                 Route::post('/{member}/role', [BusinessTeamController::class, 'updateRole'])->name('role.update');
                 Route::post('/{member}/remove', [BusinessTeamController::class, 'destroy'])->name('destroy');
+            });
+
+            // Multi-Level Approval Workflows (Phase 7/M4) — Owner-only
+            // policy editor; the chain itself is enforced inside
+            // AcceptDealAction/ApproveApprovalLevelAction, not here.
+            Route::prefix('approval-policy')->name('approval-policy.')->group(function () {
+                Route::get('/', [ApprovalPolicyController::class, 'edit'])->name('edit');
+                Route::post('/', [ApprovalPolicyController::class, 'update'])->name('update');
             });
         });
     });

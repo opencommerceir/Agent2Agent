@@ -130,7 +130,34 @@
 
         @if ($negotiation->status === 'pending_approval')
             <x-nexus-panel style="border-color: var(--color-nexus-warning)">
-                @if ($negotiation->pendingApprovalBusinessId === $actingBusinessId)
+                @if ($approvalRequest)
+                    <p class="mb-1 text-xs text-nexus-text-muted">
+                        {{ t('messages.nexus.negotiation.show.approval_chain_level') }}
+                        {{ $approvalRequest->currentLevelIndex + 1 }}/{{ count($approvalRequest->requiredLevels) }}
+                        — {{ t('messages.nexus.business.team.role_option.'.($approvalRequest->currentRequiredRole ?: $approvalRequest->requiredLevels[$approvalRequest->currentLevelIndex]['role'])) }}
+                    </p>
+                    @if ($negotiation->pendingApprovalBusinessId === $actingBusinessId && $callingOwnerRole === $approvalRequest->currentRequiredRole)
+                        <p class="mb-3 text-sm text-nexus-text">{{ t('messages.nexus.negotiation.show.pending_approval_banner') }}</p>
+                        <div class="flex gap-2">
+                            <form method="POST" action="{{ route('nexus.negotiations.approve', $negotiation->id) }}">
+                                @csrf
+                                <button type="submit" class="rounded-md bg-nexus-success/20 px-4 py-1.5 text-sm font-semibold text-nexus-success hover:bg-nexus-success/30">
+                                    {{ t('messages.nexus.negotiation.show.approve') }}
+                                </button>
+                            </form>
+                            <form method="POST" action="{{ route('nexus.negotiations.reject', $negotiation->id) }}">
+                                @csrf
+                                <button type="submit" class="rounded-md bg-nexus-error/20 px-4 py-1.5 text-sm font-semibold text-nexus-error hover:bg-nexus-error/30">
+                                    {{ t('messages.nexus.negotiation.show.reject') }}
+                                </button>
+                            </form>
+                        </div>
+                    @elseif ($negotiation->pendingApprovalBusinessId === $actingBusinessId)
+                        <p class="text-sm text-nexus-text">{{ t('messages.nexus.negotiation.show.pending_approval_waiting_other_role') }}</p>
+                    @else
+                        <p class="text-sm text-nexus-text">{{ t('messages.nexus.negotiation.show.pending_approval_waiting') }}</p>
+                    @endif
+                @elseif ($negotiation->pendingApprovalBusinessId === $actingBusinessId)
                     <p class="mb-3 text-sm text-nexus-text">{{ t('messages.nexus.negotiation.show.pending_approval_banner') }}</p>
                     <div class="flex gap-2">
                         <form method="POST" action="{{ route('nexus.negotiations.approve', $negotiation->id) }}">

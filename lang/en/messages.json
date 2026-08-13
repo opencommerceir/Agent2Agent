@@ -268,6 +268,16 @@
           "staff": "Staff"
         }
       },
+      "approval_policy": {
+        "title": "Deal Approval Chain",
+        "description": "Configure which role must approve deals above a given amount. Levels must be ordered by non-decreasing minimum amount.",
+        "role": "Role",
+        "min_amount": "Minimum Amount (smallest unit)",
+        "unused": "— Unused —",
+        "hint": "Select \"Unused\" to disable a level.",
+        "submit": "Save Approval Chain",
+        "saved": "Approval chain saved."
+      },
       "password": {
         "force_change": {
           "title": "Change Temporary Password",
@@ -472,6 +482,8 @@
         "round": "Round",
         "pending_approval_banner": "This deal exceeds the Agent's authority limit and needs your approval.",
         "pending_approval_waiting": "This deal is awaiting the other party's approval.",
+        "pending_approval_waiting_other_role": "This deal is awaiting approval from another member of your team.",
+        "approval_chain_level": "Approval level",
         "approve": "Approve",
         "reject": "Reject",
         "reasoning": "Reasoning",
