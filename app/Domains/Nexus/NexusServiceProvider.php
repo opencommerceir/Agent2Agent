@@ -5,8 +5,11 @@ namespace App\Domains\Nexus;
 use App\Core\Application\DTOs\AuthContext;
 use App\Core\Application\Services\CapabilityHandlerRegistry;
 use App\Domains\Nexus\Admin\Domain\Repositories\PlatformSettingRepositoryInterface;
+use App\Domains\Nexus\Analytics\Application\Actions\AssessDealRiskAction;
+use App\Domains\Nexus\Analytics\Application\Actions\ForecastSupplierReliabilityAction;
 use App\Domains\Nexus\Analytics\Application\Actions\GetBusinessAnalyticsAction;
 use App\Domains\Nexus\Analytics\Application\Actions\GetMarketIntelligenceAction;
+use App\Domains\Nexus\Analytics\Application\Actions\SimulateNegotiationScenarioAction;
 use App\Domains\Nexus\Admin\Infrastructure\Repositories\EloquentPlatformSettingRepository;
 use App\Domains\Nexus\Agent\Application\Actions\ResolveActingBusinessAction;
 use App\Domains\Nexus\Automation\Application\Actions\CreateInventoryAlertRuleAction;
@@ -395,6 +398,34 @@ class NexusServiceProvider extends ServiceProvider
             $callingBusinessId = $this->resolveActingBusiness($context);
 
             return $this->app->make(GetMarketIntelligenceAction::class)->execute($callingBusinessId, $input['industry'] ?? null);
+        });
+
+        $handlers->register('nexus.analytics.forecast', function (array $input, AuthContext $context) {
+            $this->resolveActingBusiness($context);
+
+            return $this->app->make(ForecastSupplierReliabilityAction::class)->execute((int) $input['business_id']);
+        });
+
+        $handlers->register('nexus.analytics.risk', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            return $this->app->make(AssessDealRiskAction::class)->execute(
+                $callingBusinessId,
+                (int) $input['counterparty_business_id'],
+                (int) $input['deal_amount'],
+                $input['currency'],
+            );
+        });
+
+        $handlers->register('nexus.analytics.scenario', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            return $this->app->make(SimulateNegotiationScenarioAction::class)->execute(
+                $callingBusinessId,
+                (int) $input['counterparty_business_id'],
+                CatalogItemType::from($input['catalog_item_type']),
+                (int) $input['hypothetical_unit_amount'],
+            );
         });
 
         $this->registerCoalitionCapabilityHandlers($handlers);

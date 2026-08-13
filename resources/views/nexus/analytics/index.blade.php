@@ -11,6 +11,9 @@
                     <a href="{{ route('nexus.analytics.market') }}" class="rounded-md border border-nexus-purple/40 px-3 py-1.5 text-sm text-nexus-purple hover:bg-nexus-purple/10">
                         {{ t('messages.nexus.analytics.market.title') }}
                     </a>
+                    <a href="{{ route('nexus.analytics.predictive') }}" class="rounded-md border border-nexus-purple/40 px-3 py-1.5 text-sm text-nexus-purple hover:bg-nexus-purple/10">
+                        {{ t('messages.nexus.analytics.predictive.title') }}
+                    </a>
                     <a href="{{ route('nexus.analytics.export') }}" class="rounded-md border border-nexus-cyan/40 px-3 py-1.5 text-sm text-nexus-cyan hover:bg-nexus-cyan/10">
                         {{ t('messages.nexus.analytics.export') }}
                     </a>

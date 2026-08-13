@@ -56,6 +56,36 @@ final class AnalyticsCapabilities
                 ],
                 'requiredPermissions' => ['nexus.analytics.read'],
             ],
+            [
+                'name' => 'nexus.analytics.forecast',
+                'description' => "Forecast a Business's own reliability trend (improving/declining/stable) from real recent-vs-prior Negotiation outcomes, alongside its current Reputation score",
+                // Free, same category as nexus.reputation.score — checking
+                // any Business's public trust signal must never be gated
+                // by the CostGate (Phase 3/M2).
+                'inputSchema' => ['business_id' => 'integer'],
+                'outputSchema' => [
+                    'businessId' => 'integer',
+                    'currentScore' => 'integer',
+                    'trend' => 'string',
+                    'recentSuccessRate' => 'number',
+                    'priorSuccessRate' => 'number',
+                ],
+                'requiredPermissions' => ['nexus.analytics.read'],
+            ],
+            [
+                'name' => 'nexus.analytics.risk',
+                'description' => 'Rule-based 0-100 risk score for a deal of a given size with a specific counterparty (reputation, recent lost disputes, deal-size anomaly)',
+                'inputSchema' => ['counterparty_business_id' => 'integer', 'deal_amount' => 'integer', 'currency' => 'string'],
+                'outputSchema' => ['riskScore' => 'integer', 'riskLevel' => 'string', 'factors' => 'array'],
+                'requiredPermissions' => ['nexus.analytics.read'],
+            ],
+            [
+                'name' => 'nexus.analytics.scenario',
+                'description' => "Estimate the likelihood a counterparty accepts a hypothetical unit price, from their own real acceptance-rate and price history",
+                'inputSchema' => ['counterparty_business_id' => 'integer', 'catalog_item_type' => 'string', 'hypothetical_unit_amount' => 'integer'],
+                'outputSchema' => ['estimatedAcceptanceLikelihood' => 'number', 'baselineAverageUnitAmount' => 'integer'],
+                'requiredPermissions' => ['nexus.analytics.read'],
+            ],
         ];
     }
 }

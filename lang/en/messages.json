@@ -931,6 +931,37 @@
         "price_trend": "Price trend (avg. accepted deal price per week)",
         "empty": "Not enough data yet for this industry.",
         "insufficient_data": "Not enough competing businesses yet (:count found)."
+      },
+      "predictive": {
+        "title": "Predictive Intelligence",
+        "check": "Check",
+        "business_id": "Business ID",
+        "forecast_title": "Supplier reliability forecast",
+        "current_score": "Current reputation score",
+        "trend": "Trend",
+        "trend_value": {
+          "improving": "Improving",
+          "declining": "Declining",
+          "stable": "Stable",
+          "insufficient_data": "Not enough data yet"
+        },
+        "recent_success_rate": "Recent success rate",
+        "risk_title": "Deal risk assessment",
+        "deal_amount": "Deal amount",
+        "currency": "Currency",
+        "risk_score": "Risk score",
+        "risk_level": "Risk level",
+        "risk_level_value": {
+          "low": "Low",
+          "medium": "Medium",
+          "high": "High"
+        },
+        "disputes_recent": "Recent lost disputes",
+        "scenario_title": "Negotiation scenario planning",
+        "hypothetical_amount": "Hypothetical unit price",
+        "acceptance_likelihood": "Estimated acceptance likelihood",
+        "baseline_price": "Their average accepted price",
+        "no_history": "No accepted-deal history to estimate from yet."
       }
     }
   }

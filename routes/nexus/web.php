@@ -10,6 +10,7 @@ use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessPasswordContr
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessSessionController;
 use App\Domains\Nexus\Analytics\Interfaces\Http\Controllers\BusinessAnalyticsController;
 use App\Domains\Nexus\Analytics\Interfaces\Http\Controllers\MarketIntelligenceController;
+use App\Domains\Nexus\Analytics\Interfaces\Http\Controllers\PredictiveIntelligenceController;
 use App\Domains\Nexus\Approval\Interfaces\Http\Controllers\ApprovalPolicyController;
 use App\Domains\Nexus\Automation\Interfaces\Http\Controllers\AutomationRuleController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessTeamController;
@@ -229,6 +230,10 @@ Route::middleware('web')->group(function () {
         // anonymized competitor stats for an industry (default: the
         // caller's own).
         Route::get('/market', [MarketIntelligenceController::class, 'index'])->name('market');
+
+        // Predictive Intelligence (Phase 8, M5) — supplier reliability
+        // forecast, deal risk assessment, negotiation scenario planning.
+        Route::get('/predictive', [PredictiveIntelligenceController::class, 'index'])->name('predictive');
     });
 
     // Private Marketplaces (Phase 7, M5) — invite-only groups with

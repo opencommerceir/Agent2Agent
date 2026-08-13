@@ -187,6 +187,13 @@ return [
             // triggered recurring-order rule is its own existing
             // nexus.negotiation.propose charge each time it fires.
             'nexus.automation.rule.create' => (int) env('NEXUS_COST_AUTOMATION_RULE_CREATE', 10),
+            // Phase 8/M5 — Predictive Intelligence. nexus.analytics.forecast
+            // stays free (same category as nexus.reputation.score — a
+            // public trust signal about any Business); risk/scenario are
+            // heavier decision-support computations, priced like
+            // nexus.analytics.market.
+            'nexus.analytics.risk' => (int) env('NEXUS_COST_ANALYTICS_RISK', 5),
+            'nexus.analytics.scenario' => (int) env('NEXUS_COST_ANALYTICS_SCENARIO', 5),
         ],
     ],
 
@@ -357,6 +364,32 @@ return [
     */
     'automation' => [
         'alert_cooldown_hours' => (int) env('NEXUS_AUTOMATION_ALERT_COOLDOWN_HOURS', 24),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Predictive Intelligence (Phase 8/M5 — Intelligence & Automation)
+    |--------------------------------------------------------------------------
+    |
+    | Read once per call, same as analytics/automation above — no admin
+    | settings page exists for these either. `risk_weights` must sum to 100
+    | (the roadmap's own 0-100 risk scale, same "weights sum to the scale's
+    | max" convention reputation.weights already follows for its 0-1000
+    | scale).
+    |
+    */
+    'intelligence' => [
+        'trend_recent_window_days' => (int) env('NEXUS_INTELLIGENCE_TREND_RECENT_DAYS', 90),
+        'trend_prior_window_days' => (int) env('NEXUS_INTELLIGENCE_TREND_PRIOR_DAYS', 90),
+        'trend_min_sample_size' => (int) env('NEXUS_INTELLIGENCE_TREND_MIN_SAMPLE', 3),
+
+        'risk_dispute_window_days' => (int) env('NEXUS_INTELLIGENCE_RISK_DISPUTE_WINDOW_DAYS', 90),
+        'risk_weights' => [
+            'reputation_max_points' => (int) env('NEXUS_INTELLIGENCE_RISK_REPUTATION_MAX', 50),
+            'points_per_recent_dispute_loss' => (int) env('NEXUS_INTELLIGENCE_RISK_POINTS_PER_DISPUTE', 10),
+            'dispute_max_points' => (int) env('NEXUS_INTELLIGENCE_RISK_DISPUTE_MAX', 30),
+            'deal_size_max_points' => (int) env('NEXUS_INTELLIGENCE_RISK_DEAL_SIZE_MAX', 20),
+        ],
     ],
 
     'sso' => [

@@ -931,6 +931,37 @@
         "price_trend": "روند قیمت (میانگین قیمت معاملات پذیرفته‌شده در هفته)",
         "empty": "هنوز داده کافی برای این صنعت وجود ندارد.",
         "insufficient_data": "هنوز کسب‌وکار رقیب کافی وجود ندارد (:count یافت شد)."
+      },
+      "predictive": {
+        "title": "هوش پیش‌بینی",
+        "check": "بررسی",
+        "business_id": "شناسه کسب‌وکار",
+        "forecast_title": "پیش‌بینی اعتبار تأمین‌کننده",
+        "current_score": "امتیاز اعتبار فعلی",
+        "trend": "روند",
+        "trend_value": {
+          "improving": "رو به بهبود",
+          "declining": "رو به کاهش",
+          "stable": "پایدار",
+          "insufficient_data": "هنوز داده کافی نیست"
+        },
+        "recent_success_rate": "نرخ موفقیت اخیر",
+        "risk_title": "ریسک‌سنجی معامله",
+        "deal_amount": "مبلغ معامله",
+        "currency": "واحد پول",
+        "risk_score": "امتیاز ریسک",
+        "risk_level": "سطح ریسک",
+        "risk_level_value": {
+          "low": "کم",
+          "medium": "متوسط",
+          "high": "زیاد"
+        },
+        "disputes_recent": "اختلافات باخته اخیر",
+        "scenario_title": "برنامه‌ریزی سناریوی مذاکره",
+        "hypothetical_amount": "قیمت واحد فرضی",
+        "acceptance_likelihood": "احتمال تخمینی پذیرش",
+        "baseline_price": "میانگین قیمت پذیرفته‌شده آن‌ها",
+        "no_history": "هنوز سابقه معامله پذیرفته‌شده‌ای برای تخمین وجود ندارد."
       }
     }
   }
