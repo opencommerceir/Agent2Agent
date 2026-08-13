@@ -50,6 +50,14 @@
             </div>
         </x-nexus-panel>
 
+        <x-nexus-panel :title="t('messages.nexus.developer.docs.graphql.title')">
+            <p class="mb-2 text-sm text-nexus-text-muted">{{ t('messages.nexus.developer.docs.graphql.description') }}</p>
+            <pre class="overflow-x-auto rounded-md border border-nexus-border bg-nexus-surface-1 p-3 text-xs text-nexus-text">curl https://your-domain/nexus/api/v1/graphql \
+  -H "Authorization: Bearer nx_your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "{ creditBalance { balance } catalog { products } }"}'</pre>
+        </x-nexus-panel>
+
         <x-nexus-panel :title="t('messages.nexus.developer.docs.errors.title')">
             <p class="mb-2 text-sm text-nexus-text-muted">{{ t('messages.nexus.developer.docs.errors.description') }}</p>
             <pre class="overflow-x-auto rounded-md border border-nexus-border bg-nexus-surface-1 p-3 text-xs text-nexus-text">{
