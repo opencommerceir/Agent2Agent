@@ -1077,3 +1077,140 @@
 **آماده برای Phase 8 (Intelligence & Automation)** طبق `docs/nexus-roadmap.md`.
 
 ---
+
+# Phase 8 — Intelligence & Automation
+
+**دستور:** «فاز 8 شروع کن به پیاده‌سازی. از من هیچ سوالی نیاز نیست بپرسی و تاییدیه بگیری خودمختار به صورت حرفه‌ای کار خودتو انجام بده» — کاملاً خودمختار، بدون سوال میانی. قبل از کدنویسی، یک Explore agent روی الگوهای موجود مرتبط با Phase 8 (دامنه Analytics، اسکلت‌بندی Query class، الگوی MCP capability، زیرساخت scheduling، پایپ‌لاین Notification، وضعیت LLMRouter، دامنه Marketplace، CostGate، فهرست کامل دامنه‌های موجود، ساختار `config/nexus/platform.php`) اجرا شد و پلن کامل ۶ مرحله‌ای (M1–M6) روی پنج بخش roadmap منطبق شد: Business Analytics (M1)، Market Intelligence (M2)، AI Recommendations (M3)، Automation Workflows (M4)، Predictive Intelligence (M5)، به‌علاوه تأیید نهایی (M6).
+
+**یافتهٔ کلیدی پیش از کدنویسی:** `LLMRouter` (Phase 4) هنوز هیچ caller واقعی نداشت — تصمیم گرفته شد Phase 8 هم آن را متصل نکند؛ طبق فلسفهٔ ثابت «Rule Engine ۸۰٪، بدون هزینه»، هر پنج ویژگی این فاز (بنچمارک قیمت، هوش بازار، پیشنهاد، اتوماسیون، پیش‌بینی) کاملاً rule-based و قطعی پیاده‌سازی شدند — دقیقاً همان الگویی که `NegotiationReasoningService` (Phase 2/M5) و `CalculateReputationScoreAction` (Phase 6/M2) از قبل تثبیت کرده بودند، نه یک LLM caller اول قاچاقی.
+
+## Phase 8 / M1 — Business Analytics
+
+**تصمیم کلیدی:** بجای دوباره‌سازی نرخ موفقیت، `GetBusinessAnalyticsAction` مستقیماً `ReputationQuery::successRate()`/`completedDealsCount()` (Phase 6/M2) را دوباره‌استفاده می‌کند — یک `BusinessAnalyticsQuery` جدید فقط دو چیز واقعاً تازه اضافه می‌کند: **محاسبه‌گر صرفه‌جویی** (تفاوت قیمت لیست‌شدهٔ امروز کاتالوگ در برابر قیمت واقعاً مذاکره‌شده در معاملات پذیرفته‌شده به‌عنوان خریدار) و **بنچمارک قیمت صنعت** (میانگین قیمت خودِ کسب‌وکار در برابر میانگین صنعت، هرگز مقایسهٔ آیتم‌به‌آیتم چون هیچ SKU/taxonomy مشترکی بین کاتالوگ کسب‌وکارهای مختلف وجود ندارد).
+
+**k-anonymity در بنچمارک:** میانگین صنعت فقط وقتی نمایش داده می‌شود که حداقل `analytics.min_benchmark_sample_size` (پیش‌فرض ۳) کسب‌وکار رقیب متفاوت در آن سهیم باشند — وگرنه `null` برمی‌گردد، تا قیمت دقیق یک رقیب تنها هرگز از یک میانگین دونفره قابل‌استخراج نباشد.
+
+**«خروجی گزارش»** یک CSV ساده است (`ExportBusinessAnalyticsReportAction`)، نه یک پایپ‌لاین PDF دوم — تولید PDF قرارداد (Phase 2/M6) برای یک artifact حقوقی امضاشده از یک snapshot ثابت وجود دارد، کاری اساساً متفاوت از یک خروجی داده‌ی خودسرویس که صاحب کسب‌وکار هر زمان دلش خواست دوباره اجرا می‌کند.
+
+**فایل‌های اصلی:** `app/Domains/Nexus/Analytics/{Infrastructure/Queries/BusinessAnalyticsQuery, Application/Actions/{GetBusinessAnalyticsAction,ExportBusinessAnalyticsReportAction}, Interfaces/Http/Controllers/BusinessAnalyticsController, Interfaces/MCP/AnalyticsCapabilities}.php`، `resources/views/nexus/analytics/index.blade.php`، capability رایگان `nexus.analytics.business`.
+
+**تست:** ۱۱ تست جدید — همه پاس.
+
+**کامیت:** `feat(nexus): add Business Analytics (success rate, savings calculator, price benchmark, CSV export)`.
+
+---
+
+## Phase 8 / M2 — Market Intelligence
+
+**تصمیم کلیدی:** «صنعت» همیشه یعنی صنعتِ **فروشندهٔ** (counterparty) معامله، نه خریدار — یک ترند قیمت/تقاضا برای یک صنعت دربارهٔ چیزی است که کسب‌وکارهای آن صنعت می‌فروشند. `MarketIntelligenceQuery::priceTrend()`/`demandSignal()` هفتگی از روی داده‌های واقعی `negotiations` محاسبه می‌شوند (تنها سری قیمتِ زمان‌دار موجود در کدبیس؛ قیمت لیست‌شدهٔ امروز فقط یک snapshot است، نه تاریخچه).
+
+**`competitorStats` ناشناس‌سازی‌شده** با همان مکانیزم k-anonymity بنچمارک M1 (نه یک طرح جدا) — تا وقتی تعداد رقبای متفاوت به حد نصاب `analytics.min_market_intelligence_sample_size` نرسد، هر تجمیع (میانگین قیمت، نرخ موفقیت صنعت) به‌جای عدد، `null` برمی‌گردد.
+
+**تصمیم CostGate:** برخلاف `nexus.analytics.business` (رایگان، فقط دادهٔ خودِ caller)، `nexus.analytics.market` هزینه دارد — دقیقاً همان دلیل `nexus.marketplace.search` هزینه دارد: به بیرون از دادهٔ خودِ caller می‌رود.
+
+**فایل‌های اصلی:** `MarketIntelligenceQuery`، `GetMarketIntelligenceAction`، `MarketIntelligenceController`، `resources/views/nexus/analytics/market.blade.php`.
+
+**تست:** ۱۲ تست جدید — همه پاس.
+
+**کامیت:** `feat(nexus): add Market Intelligence (price trend, demand signal, anonymized competitor stats)`.
+
+---
+
+## Phase 8 / M3 — AI Recommendations
+
+**کشف صادقانهٔ غیرمنتظره:** `GetRecommendationsAction`/`RankSuppliersAction` (Phase 2/M1) هیچ‌وقت به MCP وصل نشده بودند — این مرحله اولین بار آن‌ها را واقعاً به‌عنوان capability سیم‌کشی کرد، دقیقاً همان الگوی «شکاف جامانده که فاز طبیعی خودش می‌بندد» که Phase 6/M5 برای اولین UI ادمین تأیید Business قبلاً ثابت کرده بود.
+
+**ارتقای رتبه‌بندی به Reputation واقعی:** هر دو Action از قبل در docblock خودشان نوشته بودند «قبل از وجود Reputation، ساده‌ترین سیگنال صادقانه» — این مرحله دقیقاً همان‌جا وصل شد: عضویت هم‌صنعتی/تعداد کاتالوگ به‌عنوان معیار اولیهٔ کاندیدها باقی ماند، ولی رتبه‌بندی نهایی حالا از `CalculateReputationScoreAction` (Phase 6/M2) عبور می‌کند.
+
+**دو Action کاملاً جدید:** `RecommendAlternativeSuppliersAction` («جایگزین‌ها» — هم‌صنعتی‌های تأمین‌کنندهٔ مشخص، به‌جز خودش) و `RecommendNegotiationTimingAction` («زمان‌بندی بهینه» — نرخ پذیرش تاریخی بر اساس روز هفته در برابر یک طرف مشخص، تنها سیگنال زمان‌بندی صادقانهٔ موجود؛ «زمان پاسخ‌گویی» که `ReputationQuery` در Phase 6/M2 به‌عمد رد کرده بود چون قابل جعل است، اینجا هم رد شد).
+
+**فایل‌های اصلی:** `RecommendAlternativeSuppliersAction`، `RecommendNegotiationTimingAction`، `NegotiationTimingQuery`، `RecommendationsController`، ۴ capability جدید MCP.
+
+**تست:** ۱۳ تست جدید، به‌علاوه به‌روزرسانی `GetRecommendationsActionTest` موجود (CostGate تازه اضافه‌شده نیاز به شارژ تست داشت، همان الگوی Phase 3/M2). کل: ۱۳ پاس.
+
+**کامیت:** `feat(nexus): add AI Recommendations (reputation-ranked suppliers, alternatives, negotiation timing)`.
+
+---
+
+## Phase 8 / M4 — Automation Workflows
+
+**دامنهٔ کاملاً جدید `Automation`** ساخته شد — دقیقاً همان استثنایی که Llm (Phase 4) و Growth (Phase 5) قبلاً گرفتند: «سفارش تکرارشونده/هشدار موجودی/هشدار قیمت» در هیچ‌کدام از ۱۰ دامنهٔ اولیه یا دامنه‌های بعدی جا نمی‌افتد.
+
+**سه شکل قانون بسته، نه یک موتور قانون باز:** roadmap دقیقاً سه نوع نام می‌برد؛ `AutomationRuleType` هم دقیقاً همان سه را مدل می‌کند (`recurring_order`/`inventory_alert`/`price_alert`) با یک بستهٔ JSON `config` مخصوص هر نوع (همان الگوی escape-hatch `attributes` کاتالوگ)، نه یک گرامر condition/action باز. «Visual workflow builder» roadmap صادقانه یک فرم راهنمای مخصوص هر نوع است، نه بوم drag-and-drop — هیچ وابستگی diagramming JS در این کدبیس وجود ندارد (همان محدودیت مستندشدهٔ Network Visualization، Phase 5/M4).
+
+**موتور `ProcessAutomationRulesAction`** با همان الگوی دو-نقطهٔ-ورود `DetectFraudSignalsCommand` (Phase 6/M4، که خودِ آن فاز صراحتاً برای استفادهٔ فازهای بعدی مستند کرده بود) — زمان‌بندی‌شده هر ساعت. شکست یک قانون (مثلاً کسب‌وکار بدون کردیت کافی) گرفته و به‌عنوان `Failed` لاگ می‌شود بدون متوقف‌کردن بقیهٔ قانون‌ها.
+
+**بازاستفادهٔ کامل از Actionهای موجود:** سفارش تکرارشونده از `InitiateNegotiationAction` موجود استفاده می‌کند (نه یک مکانیزم «ثبت سفارش» دوم)، هشدار موجودی از `SearchMarketplaceAction` موجود برای auto-search (نه یک موتور جستجوی دوم) — هزینهٔ اعتباری واقعی جستجو هم به همان اندازهٔ جستجوی دستی از کسب‌وکار کسر می‌شود، صادقانه.
+
+**فایل‌های اصلی:** `app/Domains/Nexus/Automation/**` (۴ لایه کامل)، دو migration، `ProcessAutomationRulesCommand` + entry در `routes/console.php`، ۷ capability MCP، صفحهٔ پرتال (`index`/`create`).
+
+**تست:** ۳۶ تست جدید (Unit روی state machine + cooldown، Feature روی هر سه نوع قانون، موتور کامل با سناریوهای شکست/cooldown/pause، MCP، کنترلر) — همه پاس.
+
+**کامیت:** `feat(nexus): add Automation Workflows domain (recurring orders, inventory/price alerts)`.
+
+---
+
+## Phase 8 / M5 — Predictive Intelligence
+
+**سه پیش‌بینی rule-based، صفر ML:** `PredictiveIntelligenceQuery` (دامنهٔ Analytics، مثل هر Query class دیگر این دامنه) سه سیگنال واقعی و زمان‌دار می‌خواند:
+
+1. **پیش‌بینی اعتبار تأمین‌کننده** (`ForecastSupplierReliabilityAction`): نرخ موفقیت دو پنجرهٔ مجاور (اخیر/قبلی) را مقایسه می‌کند تا روند (بهبود/کاهش/پایدار) را تشخیص دهد؛ وقتی هر پنجره‌ای نمونهٔ کافی نداشته باشد صادقانه `insufficient_data` برمی‌گرداند — نه یک روند حدسی.
+2. **ریسک‌سنجی معاملات** (`AssessDealRiskAction`): امتیاز ریسک ۰-۱۰۰ از سه عامل توضیح‌پذیر و وزن‌دار (Reputation، دعواهای باختهٔ اخیر، ناهنجاری اندازهٔ معامله نسبت به میانگین تاریخی طرف مقابل).
+3. **Scenario planning** (`SimulateNegotiationScenarioAction`): احتمال پذیرش یک قیمت فرضی از نرخ پذیرش واقعی طرف مقابل (به‌عنوان counterparty) و میانگین قیمت واقعاً پذیرفته‌شدهٔ او تخمین زده می‌شود؛ بدون سابقهٔ واقعی، `null` برمی‌گرداند، نه یک حدس ۵۰٪.
+
+**تصمیم CostGate:** `nexus.analytics.forecast` رایگان ماند (هم‌ردهٔ `nexus.reputation.score` — بررسی اعتبار عمومی هر کسب‌وکاری)؛ `risk`/`scenario` هزینه دارند (هم‌ردهٔ `nexus.analytics.market` — ابزار تصمیم‌گیری سنگین‌تر).
+
+**فایل‌های اصلی:** `PredictiveIntelligenceQuery`، `ForecastSupplierReliabilityAction`، `AssessDealRiskAction`، `SimulateNegotiationScenarioAction`، `PredictiveIntelligenceController`، ۳ capability MCP.
+
+**تست:** ۱۹ تست جدید — همه پاس.
+
+**کامیت:** `feat(nexus): add Predictive Intelligence (supplier reliability forecast, deal risk, scenario planning)`.
+
+---
+
+## Phase 8 / M6 — تأیید نهایی
+
+- `php artisan migrate --force` روی دیتابیس dev: هر دو migration جدید (`nexus_automation_rules`, `nexus_automation_run_logs`) تمیز اجرا شدند.
+- `php artisan test` کامل: **۱۵۶۲ pass / ۲۸۳ fail** — بدون رگرشن (baseline قبل از Phase 8: ۱۴۷۱ pass؛ خالص +۹۱ تست پاس اضافه‌شده، دقیقاً برابر مجموع M1 تا M5: ۱۱+۱۲+۱۳+۳۶+۱۹=۹۱؛ همان ۲۸۳ شکست ثابت ماژول‌های غیرفعال، بدون تغییر).
+- تست End-to-End دستی کامل روی دیتابیس dev واقعی (`php artisan tinker` روی یک اسکریپت PHP، همان جایگزین مستندشدهٔ کلیک مرورگری از Phase 2 به‌خاطر مشکل شناخته‌شدهٔ رزرو پورت ویندوز)، زنجیرهٔ واقعی سرتاسر هر پنج میلستون روی هم:
+  1. دو کسب‌وکار واقعی ثبت‌نام و تأیید شدند (Buyer/Seller)، هرکدام کردیت واقعی گرفتند.
+  2. Seller یک محصول واقعی با قیمت لیست ۱۲٬۰۰۰ IRT و موجودی ۲ اضافه کرد.
+  3. Negotiation واقعی روی ۱۰٬۰۰۰ IRT × ۲ باز و پذیرفته شد.
+  4. `GetBusinessAnalyticsAction` روی Buyer: صرفه‌جویی واقعی محاسبه‌شده = ۴٬۰۰۰ IRT — دقیقاً `(۱۲۰۰۰-۱۰۰۰۰)×۲`.
+  5. `GetMarketIntelligenceAction` روی صنعت technology: یک هفتهٔ واقعی priceTrend/demandSignal از همان Negotiation.
+  6. `GetRecommendationsAction`/`RecommendAlternativeSuppliersAction`: لیست‌های هم‌صنعتی واقعی برگشتند؛ Seller هرگز در لیست جایگزین‌های خودش ظاهر نشد (چک صریح شد).
+  7. `RecommendNegotiationTimingAction` روی Seller: sampleSize واقعی = ۱.
+  8. یک قانون Inventory Alert واقعی روی محصول Seller (آستانه ۵، موجودی فعلی ۲) ساخته شد → `ProcessAutomationRulesAction` واقعاً یک قانون را trigger کرد → یک `AutomationRunLog` واقعی با جزئیات موجودی/تعداد کاندیدا ثبت شد.
+  9. `ForecastSupplierReliabilityAction` روی Seller: امتیاز شهرت واقعی ۵۰۰، trend صادقانه `insufficient_data` (فقط یک معامله در تاریخچه).
+  10. `AssessDealRiskAction` روی Seller: امتیاز ریسک واقعی ۲۵ (سطح `low`).
+  11. `SimulateNegotiationScenarioAction` روی قیمت فرضی ۹٬۰۰۰ (زیر baseline ۱۰٬۰۰۰ واقعی): احتمال پذیرش تخمینی = ۱۰۰٪.
+  12. موجودی نهایی کردیت Buyer: ۹۹٬۸۰۰ — دقیقاً مطابق مجموع هزینه‌های CostGate طی سناریو.
+- `php artisan route:list` روی هر سه پیشوند جدید (`nexus/analytics*`, `nexus/automation*`, `nexus/recommendations`): همهٔ ۱۴ مسیر جدید درست ثبت شده‌اند، بدون تداخل.
+- `git log --oneline`: هر ۵ مرحلهٔ Phase 8 (M1 تا M5) کامیت شده‌اند.
+
+**کامیت:** `docs(nexus): Phase 8 complete — final handoff summary`.
+
+---
+
+## 🎯 خلاصه Phase 8 (Intelligence & Automation) — تکمیل شد
+
+| میلستون | دامنه/ویژگی اصلی | تست |
+|---|---|---|
+| M1 | Business Analytics (success rate, savings, price benchmark, CSV export) | ۱۱ |
+| M2 | Market Intelligence (price trend, demand signal, anonymized competitors) | ۱۲ |
+| M3 | AI Recommendations (reputation ranking, alternatives, negotiation timing) | ۱۳ |
+| M4 | Automation Workflows (recurring orders, inventory/price alerts) | ۳۶ |
+| M5 | Predictive Intelligence (reliability forecast, deal risk, scenario planning) | ۱۹ |
+| **مجموع** | | **۹۱ تست تازه** |
+
+تصمیمات معماری ماندگار برای فازهای بعدی:
+1. **هر پنج ویژگی این فاز عمداً rule-based ماندند، نه اولین caller واقعی `LLMRouter`** — زیرساخت LLM کامل از Phase 4 آماده و آزمایش‌شده است، ولی وصل‌کردن آن یک تصمیم جدا و مستند برای فاز/بعدفاز دیگری است، دقیقاً همان محدودیت مستندشدهٔ خودِ Phase 4.
+2. **k-anonymity یک مکانیزم واحد است، نه طرح جداگانه به‌ازای هر ویژگی** — بنچمارک قیمت (M1) و هوش بازار (M2) هر دو دقیقاً همان الگوی «تجمیع را زیر حد نصاب نمونه سرکوب کن، هرگز میانگین دونفره نشان نده» را به اشتراک می‌گذارند؛ هر aggregate آیندهٔ چندکسب‌وکاری باید همین را دنبال کند.
+3. **شکاف‌های جامانده از فازهای قبل (Action ساخته‌شده ولی هرگز به MCP وصل‌نشده) کاندیدهای طبیعی فاز بعدی‌اند** — `GetRecommendationsAction`/`RankSuppliersAction` (Phase 2) نمونهٔ دوم همین الگو بودند، بعد از اولین UI ادمین تأیید Business (Phase 6/M5).
+4. **دامنهٔ کاملاً جدید فقط وقتی که واقعاً هیچ دامنهٔ موجودی جا نمی‌افتد و state جدید واقعی نیاز است** — Automation (M4) این آستانه را رد کرد (سه نوع قانون + دو جدول جدید)؛ Predictive Intelligence (M5) رد نکرد (فقط Query روی داده‌های موجود) و در Analytics ماند — همان تمایز «read-model در دامنهٔ موجود در برابر state جدید در دامنهٔ جدید» که Phase 5 برای Growth در برابر Network/Viral Analytics تثبیت کرده بود.
+5. **موتور Automation از الگوی دو-نقطهٔ-ورود Phase 6/M4 مستقیماً کپی شد** — `Schedule::command()` واقعی + یک Action مستقل و تست‌پذیر؛ فازهای بعدی که به job دوره‌ای نیاز دارند دیگر نباید این را از صفر اختراع کنند.
+6. **محدودیت شناخته‌شدهٔ مستند:** «زمان‌بندی بهینه» (M3) و «ریسک‌سنجی»/«Scenario planning» (M5) هرکدام روی سیگنال‌های واقعاً موجود محدودند (روز هفته، نه ساعت دقیق؛ سه عامل ریسک، نه تحلیل چندعاملی کامل) — گسترش این سیگنال‌ها به داده‌های تازه‌ای نیاز دارد که این کدبیس هنوز صادقانه ثبت نمی‌کند، نه سهل‌انگاری این فاز.
+
+**آماده برای Phase 9 (Ecosystem & API)** طبق `docs/nexus-roadmap.md`.
+
+---
