@@ -70,7 +70,13 @@ final class MCPExceptionHandler
 
     public static function handles(Request $request): bool
     {
-        return $request->is('mcp/*') || $request->is('api/agents/*');
+        // 'nexus/api/*' (Phase 9/M2, Public REST API) added for the same
+        // reason 'api/agents/*' was: EnsureValidApiKey and every Nexus REST
+        // controller throw the exact same exception types this class
+        // already maps (PermissionDeniedException, InvalidArgumentException,
+        // ConflictExceptionInterface implementers like
+        // InsufficientCreditException) — only the URL prefix differs.
+        return $request->is('mcp/*') || $request->is('api/agents/*') || $request->is('nexus/api/*');
     }
 
     public function render(Throwable $e, Request $request): JsonResponse

@@ -403,4 +403,21 @@ return [
             'base_dn' => env('NEXUS_LDAP_BASE_DN'),
         ],
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Public API (Phase 9/M2 — Ecosystem & API)
+    |--------------------------------------------------------------------------
+    |
+    | Per-ApiKey rate limit for routes/nexus/api.php (RateLimiter::for
+    | 'nexus-api', registered in NexusServiceProvider::boot()). A single
+    | flat number rather than a hot-reloadable per-tier setting — no plan
+    | tiering exists anywhere in this codebase yet (Credit is a flat
+    | balance, not a subscription plan), so there is nothing to key a
+    | per-tier limit off of. Revisit if/when plan tiers land.
+    |
+    */
+    'api' => [
+        'rate_limit_per_minute' => (int) env('NEXUS_API_RATE_LIMIT_PER_MINUTE', 60),
+    ],
 ];

@@ -147,7 +147,10 @@ use App\Modules\Commerce\Application\Services\StripeConfig;
 use App\Modules\Commerce\Application\Services\StripePaymentGateway;
 use App\Modules\Commerce\Application\Services\ZibalConfig;
 use App\Modules\Commerce\Application\Services\ZibalPaymentGateway;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -223,6 +226,21 @@ class NexusServiceProvider extends ServiceProvider
 
         $this->loadViewsFrom(resource_path('views/nexus'), 'nexus');
         $this->loadMigrationsFrom(database_path('migrations/nexus'));
+
+        // Phase 9/M2 — Public REST API. Keyed by the authenticated ApiKey's
+        // id (set on $request->attributes by EnsureValidApiKey, which always
+        // runs before 'throttle:nexus-api' in routes/nexus/api.php), falling
+        // back to the caller's IP only for the pre-authentication case
+        // (a missing/invalid key never reaches here anyway, since
+        // EnsureValidApiKey returns 401 before $next() — this fallback only
+        // matters if 'throttle:nexus-api' is ever placed before it by
+        // mistake, not a path any current route actually takes).
+        RateLimiter::for('nexus-api', function (Request $request) {
+            $keyId = $request->attributes->get('nexus_api_key')?->id();
+
+            return Limit::perMinute(config('nexus.platform.api.rate_limit_per_minute'))
+                ->by($keyId !== null ? "api-key:{$keyId}" : $request->ip());
+        });
 
         Event::listen(BusinessWasVerified::class, CreateAgentOnBusinessVerifiedListener::class);
         Event::listen(BusinessWasVerified::class, GrantStartingCreditsOnBusinessVerifiedListener::class);
