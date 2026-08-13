@@ -25,6 +25,7 @@ class Business extends Model
         'status',
         'logo_path',
         'documents',
+        'data_residency_region',
     ];
 
     protected $casts = [

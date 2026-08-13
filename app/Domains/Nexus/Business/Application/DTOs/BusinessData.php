@@ -22,6 +22,7 @@ final class BusinessData
         public readonly ?string $logoPath,
         public readonly ?array $documents,
         public readonly string $status,
+        public readonly ?string $dataResidencyRegion = null,
     ) {
     }
 
@@ -39,11 +40,12 @@ final class BusinessData
             logoPath: $business->logoPath(),
             documents: $business->documents(),
             status: $business->status()->value,
+            dataResidencyRegion: $business->dataResidencyRegion()?->value,
         );
     }
 
     /**
-     * @return array{id: ?int, tenantId: int, organizationId: int, nameFa: string, nameEn: string, type: string, industry: string, verificationStatus: string, logoPath: ?string, documents: ?array, status: string}
+     * @return array{id: ?int, tenantId: int, organizationId: int, nameFa: string, nameEn: string, type: string, industry: string, verificationStatus: string, logoPath: ?string, documents: ?array, status: string, dataResidencyRegion: ?string}
      */
     public function toArray(): array
     {
@@ -59,6 +61,7 @@ final class BusinessData
             'logoPath' => $this->logoPath,
             'documents' => $this->documents,
             'status' => $this->status,
+            'dataResidencyRegion' => $this->dataResidencyRegion,
         ];
     }
 }

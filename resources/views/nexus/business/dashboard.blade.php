@@ -107,6 +107,29 @@
                     </div>
                 @endif
             </x-nexus-panel>
+
+            <x-nexus-panel :title="t('messages.nexus.business.dashboard.data_residency.title')">
+                <p class="mb-2 text-xs text-nexus-text-muted">{{ t('messages.nexus.business.dashboard.data_residency.description') }}</p>
+                <p class="mb-3 text-xs text-nexus-text-muted">
+                    {{ t('messages.nexus.business.dashboard.data_residency.current') }}:
+                    <span class="font-medium text-nexus-text">
+                        {{ $business->dataResidencyRegion() ? t('messages.nexus.business.dashboard.data_residency.region.'.$business->dataResidencyRegion()->value) : t('messages.nexus.business.dashboard.data_residency.not_declared') }}
+                    </span>
+                </p>
+                <form method="POST" action="{{ route('nexus.business.dashboard.data-residency') }}" class="flex items-center gap-2">
+                    @csrf
+                    <select name="data_residency_region" class="rounded-md border border-nexus-border bg-nexus-surface-1 px-3 py-1.5 text-sm text-nexus-text">
+                        @foreach (['ir', 'eu', 'us', 'gcc', 'other'] as $region)
+                            <option value="{{ $region }}" @selected($business->dataResidencyRegion()?->value === $region)>
+                                {{ t('messages.nexus.business.dashboard.data_residency.region.'.$region) }}
+                            </option>
+                        @endforeach
+                    </select>
+                    <button type="submit" class="rounded-md bg-nexus-cyan/20 px-4 py-1.5 text-sm font-semibold text-nexus-cyan hover:bg-nexus-cyan/30">
+                        {{ t('messages.nexus.business.dashboard.data_residency.save') }}
+                    </button>
+                </form>
+            </x-nexus-panel>
         </div>
     </div>
 @endsection

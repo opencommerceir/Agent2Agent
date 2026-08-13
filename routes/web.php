@@ -6,6 +6,7 @@ use App\Http\Controllers\Dashboard\AgentController;
 use App\Http\Controllers\Dashboard\AnalyticsController;
 use App\Http\Controllers\Dashboard\DashboardController;
 use App\Http\Controllers\Dashboard\NexusAuditController;
+use App\Http\Controllers\Dashboard\NexusComplianceController;
 use App\Http\Controllers\Dashboard\NexusDisputeController;
 use App\Http\Controllers\Dashboard\NexusEscrowController;
 use App\Http\Controllers\Dashboard\NexusFraudController;
@@ -153,6 +154,10 @@ Route::middleware('auth')->group(function () {
             // Compliance — hash-chained Audit Trail (Phase 7/M9).
             Route::get('/audit', [NexusAuditController::class, 'index'])->name('audit.index');
             Route::post('/audit/verify', [NexusAuditController::class, 'verify'])->name('audit.verify');
+
+            // Compliance — SOC 2/ISO 27001 readiness overview + Data
+            // Residency breakdown (Phase 7/M10).
+            Route::get('/compliance', [NexusComplianceController::class, 'index'])->name('compliance.index');
         });
     });
 });

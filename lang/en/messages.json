@@ -361,7 +361,22 @@
         "suspended_banner": "Your business has been suspended for a policy violation. You may submit an appeal.",
         "appeal_placeholder": "Explain why you believe this suspension should be lifted",
         "submit_appeal": "Submit appeal",
-        "appeal_submitted": "Your appeal has been submitted."
+        "appeal_submitted": "Your appeal has been submitted.",
+        "data_residency": {
+          "title": "Data Residency",
+          "description": "Declared for compliance reporting only — Nexus runs on a single-region database today, this does not move or partition your data.",
+          "current": "Currently declared",
+          "not_declared": "Not declared",
+          "save": "Save",
+          "updated": "Data residency preference updated.",
+          "region": {
+            "ir": "Iran",
+            "eu": "European Union",
+            "us": "United States",
+            "gcc": "GCC",
+            "other": "Other"
+          }
+        }
       },
       "industry": {
         "retail": "Retail",
@@ -793,6 +808,36 @@
         "hash": "Hash",
         "at": "At",
         "empty": "No audit entries yet."
+      },
+      "compliance": {
+        "title": "Compliance Overview",
+        "disclaimer": "A self-assessment of controls this platform actually implements — not a SOC 2 or ISO 27001 certification.",
+        "audit_chain": "Audit chain",
+        "intact": "Intact",
+        "broken": "BROKEN",
+        "entries_checked": ":count entries checked",
+        "mfa_adoption": "MFA adoption",
+        "suspended_businesses": "Suspended / total businesses",
+        "open_disputes": "Open disputes",
+        "sso_providers": "SSO providers",
+        "live": "live",
+        "stubbed": "stubbed",
+        "data_residency_breakdown": "Data residency breakdown (declared)",
+        "region": "Region",
+        "business_count": "Businesses",
+        "undeclared": "Not declared",
+        "checklist_title": "SOC 2 / ISO 27001 readiness checklist",
+        "satisfied": "Yes",
+        "not_satisfied": "No",
+        "checklist": {
+          "immutable_audit_trail": "Immutable, hash-chained audit trail of Agent actions",
+          "access_control_rbac": "Role-based access control (RBAC)",
+          "mfa_available": "Multi-factor authentication available to business owners",
+          "fraud_detection_suspension": "Automated fraud detection with suspension + appeal process",
+          "dispute_resolution_workflow": "Dispute resolution workflow (evidence, mediation, arbitration)",
+          "sso_identity_federation": "At least one live SSO identity provider",
+          "data_residency_declared": "Data residency preference collection in use"
+        }
       }
     }
   }

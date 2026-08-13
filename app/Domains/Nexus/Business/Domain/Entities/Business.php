@@ -4,6 +4,7 @@ namespace App\Domains\Nexus\Business\Domain\Entities;
 
 use App\Domains\Nexus\Business\Domain\ValueObjects\BusinessStatus;
 use App\Domains\Nexus\Business\Domain\ValueObjects\BusinessType;
+use App\Domains\Nexus\Business\Domain\ValueObjects\DataResidencyRegion;
 use App\Domains\Nexus\Business\Domain\ValueObjects\Industry;
 use App\Domains\Nexus\Business\Domain\ValueObjects\VerificationStatus;
 use DateTimeImmutable;
@@ -37,6 +38,7 @@ final class Business
         private ?array $documents,
         private readonly DateTimeImmutable $createdAt,
         private BusinessStatus $status = BusinessStatus::Active,
+        private ?DataResidencyRegion $dataResidencyRegion = null,
     ) {
     }
 
@@ -107,6 +109,16 @@ final class Business
     public function attachDocuments(array $documents): void
     {
         $this->documents = $documents;
+    }
+
+    public function declareDataResidencyRegion(DataResidencyRegion $region): void
+    {
+        $this->dataResidencyRegion = $region;
+    }
+
+    public function dataResidencyRegion(): ?DataResidencyRegion
+    {
+        return $this->dataResidencyRegion;
     }
 
     public function isVerified(): bool

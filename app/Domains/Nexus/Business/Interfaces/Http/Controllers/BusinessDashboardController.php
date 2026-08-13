@@ -3,7 +3,9 @@
 namespace App\Domains\Nexus\Business\Interfaces\Http\Controllers;
 
 use App\Domains\Nexus\Analytics\Application\Actions\GetBusinessDashboardAction;
+use App\Domains\Nexus\Business\Application\Actions\SetDataResidencyRegionAction;
 use App\Domains\Nexus\Business\Application\Actions\SubmitSuspensionAppealAction;
+use App\Domains\Nexus\Business\Domain\ValueObjects\DataResidencyRegion;
 use App\Domains\Nexus\Business\Infrastructure\Models\BusinessOwner;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
@@ -16,6 +18,7 @@ class BusinessDashboardController extends Controller
     public function __construct(
         private readonly GetBusinessDashboardAction $getBusinessDashboard,
         private readonly SubmitSuspensionAppealAction $submitSuspensionAppeal,
+        private readonly SetDataResidencyRegionAction $setDataResidencyRegion,
     ) {
     }
 
@@ -38,5 +41,16 @@ class BusinessDashboardController extends Controller
         $this->submitSuspensionAppeal->execute($owner->business_id, $request->string('message')->toString());
 
         return redirect()->route('nexus.business.dashboard')->with('status', t('messages.nexus.business.dashboard.appeal_submitted'));
+    }
+
+    public function updateDataResidency(Request $request): RedirectResponse
+    {
+        /** @var BusinessOwner $owner */
+        $owner = Auth::guard('business')->user();
+
+        $region = DataResidencyRegion::from($request->string('data_residency_region')->toString());
+        $this->setDataResidencyRegion->execute($owner->business_id, $region);
+
+        return redirect()->route('nexus.business.dashboard')->with('status', t('messages.nexus.business.dashboard.data_residency.updated'));
     }
 }

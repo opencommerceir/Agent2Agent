@@ -6,6 +6,7 @@ use App\Domains\Nexus\Business\Domain\Entities\Business as BusinessEntity;
 use App\Domains\Nexus\Business\Domain\Repositories\BusinessRepositoryInterface;
 use App\Domains\Nexus\Business\Domain\ValueObjects\BusinessStatus;
 use App\Domains\Nexus\Business\Domain\ValueObjects\BusinessType;
+use App\Domains\Nexus\Business\Domain\ValueObjects\DataResidencyRegion;
 use App\Domains\Nexus\Business\Domain\ValueObjects\Industry;
 use App\Domains\Nexus\Business\Domain\ValueObjects\VerificationStatus;
 use App\Domains\Nexus\Business\Infrastructure\Models\Business as BusinessModel;
@@ -63,6 +64,7 @@ class EloquentBusinessRepository implements BusinessRepositoryInterface
         $model->status = $business->status()->value;
         $model->logo_path = $business->logoPath();
         $model->documents = $business->documents();
+        $model->data_residency_region = $business->dataResidencyRegion()?->value;
         $model->save();
 
         return $this->toEntity($model);
@@ -83,6 +85,7 @@ class EloquentBusinessRepository implements BusinessRepositoryInterface
             documents: $model->documents,
             createdAt: DateTimeImmutable::createFromInterface($model->created_at),
             status: BusinessStatus::from($model->status),
+            dataResidencyRegion: $model->data_residency_region ? DataResidencyRegion::from($model->data_residency_region) : null,
         );
     }
 }

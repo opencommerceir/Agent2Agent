@@ -75,6 +75,11 @@ Route::middleware('web')->group(function () {
             Route::get('/dashboard', [BusinessDashboardController::class, 'index'])->name('dashboard');
             Route::post('/dashboard/appeal', [BusinessDashboardController::class, 'submitSuspensionAppeal'])->name('dashboard.appeal');
 
+            // Data Residency preference (Phase 7/M10) — see
+            // DataResidencyRegion's own docblock for what "declaring" a
+            // region actually means on a single-region platform.
+            Route::post('/dashboard/data-residency', [BusinessDashboardController::class, 'updateDataResidency'])->name('dashboard.data-residency');
+
             // Phase 7/M3 — forced password change for a freshly-invited
             // team member (InviteTeamMemberAction's temporary password).
             Route::get('/password/force-change', [BusinessPasswordController::class, 'edit'])->name('password.force-change');
