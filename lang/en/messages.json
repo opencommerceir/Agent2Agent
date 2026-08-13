@@ -378,6 +378,48 @@
         "recommended": "Recommended (2 hops away)"
       }
     },
+    "holding": {
+      "title": "Holding",
+      "no_holding": "You are not part of any Holding yet.",
+      "create_new": "Create Holding",
+      "your_holding": "Your Holding",
+      "view": "View",
+      "invitations": {
+        "title": "Holding Invitations",
+        "empty": "No new invitations.",
+        "invited_by": "Invited by",
+        "accept": "Accept",
+        "reject": "Reject"
+      },
+      "form": {
+        "name_fa": "Holding Name (Persian)",
+        "name_en": "Holding Name (English)",
+        "submit": "Create Holding"
+      },
+      "invite": {
+        "target_business_id": "Subsidiary Business ID",
+        "submit": "Invite to Holding"
+      },
+      "subsidiaries": {
+        "title": "Subsidiaries",
+        "empty": "No subsidiaries added yet.",
+        "parent_badge": "Parent Company",
+        "remove": "Remove",
+        "leave": "Leave Holding",
+        "status": {
+          "invited": "Invited",
+          "active": "Active",
+          "removed": "Removed"
+        }
+      },
+      "dashboard": {
+        "title": "Consolidated Report",
+        "business": "Business",
+        "credit_balance": "Credit Balance",
+        "active_negotiations": "Active Negotiations",
+        "total_credit_balance": "Total Holding Credit Balance"
+      }
+    },
     "negotiation": {
       "index": {
         "title": "Negotiations",

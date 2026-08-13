@@ -9,6 +9,7 @@ use App\Domains\Nexus\Credit\Interfaces\Http\Controllers\CreditPurchaseControlle
 use App\Domains\Nexus\Growth\Interfaces\Http\Controllers\CoalitionController;
 use App\Domains\Nexus\Growth\Interfaces\Http\Controllers\InviteController;
 use App\Domains\Nexus\Growth\Interfaces\Http\Controllers\ReferralController;
+use App\Domains\Nexus\Holding\Interfaces\Http\Controllers\HoldingController;
 use App\Domains\Nexus\Marketplace\Interfaces\Http\Controllers\NetworkController;
 use App\Domains\Nexus\Negotiation\Interfaces\Http\Controllers\NegotiationViewerController;
 use Illuminate\Support\Facades\Route;
@@ -108,4 +109,19 @@ Route::middleware('web')->group(function () {
     // Network Visualization (Phase 5, M4) — Marketplace domain, same
     // 'business.auth' guard as the rest of the business-facing portal.
     Route::middleware('business.auth:business')->get('/nexus/network', [NetworkController::class, 'index'])->name('nexus.network.index');
+
+    // Multi-Business Accounts (Phase 7, M1) — Holding domain, portal-only
+    // (no MCP capability, same "human administrative structure" reasoning
+    // Admin/Margin/LLM Settings already follow).
+    Route::middleware('business.auth:business')->prefix('nexus/holding')->name('nexus.holding.')->group(function () {
+        Route::get('/', [HoldingController::class, 'index'])->name('index');
+        Route::get('/create', [HoldingController::class, 'create'])->name('create');
+        Route::post('/', [HoldingController::class, 'store'])->name('store');
+        Route::get('/{holding}', [HoldingController::class, 'show'])->name('show');
+        Route::post('/{holding}/invite', [HoldingController::class, 'invite'])->name('invite');
+        Route::post('/{holding}/subsidiaries/{subsidiary}/remove', [HoldingController::class, 'remove'])->name('subsidiaries.remove');
+        Route::post('/subsidiaries/{subsidiary}/accept', [HoldingController::class, 'accept'])->name('subsidiaries.accept');
+        Route::post('/subsidiaries/{subsidiary}/reject', [HoldingController::class, 'reject'])->name('subsidiaries.reject');
+        Route::post('/subsidiaries/{subsidiary}/leave', [HoldingController::class, 'leave'])->name('subsidiaries.leave');
+    });
 });

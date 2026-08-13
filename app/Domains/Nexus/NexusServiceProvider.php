@@ -61,6 +61,10 @@ use App\Domains\Nexus\Growth\Infrastructure\Repositories\EloquentCoalitionReposi
 use App\Domains\Nexus\Growth\Infrastructure\Repositories\EloquentInviteRepository;
 use App\Domains\Nexus\Growth\Infrastructure\Repositories\EloquentReferralCodeRepository;
 use App\Domains\Nexus\Growth\Infrastructure\Repositories\EloquentReferralSignupRepository;
+use App\Domains\Nexus\Holding\Domain\Repositories\HoldingRepositoryInterface;
+use App\Domains\Nexus\Holding\Domain\Repositories\HoldingSubsidiaryRepositoryInterface;
+use App\Domains\Nexus\Holding\Infrastructure\Repositories\EloquentHoldingRepository;
+use App\Domains\Nexus\Holding\Infrastructure\Repositories\EloquentHoldingSubsidiaryRepository;
 use App\Domains\Nexus\Llm\Application\Services\LLMProviderRegistry;
 use App\Domains\Nexus\Llm\Domain\Repositories\LLMUsageLogRepositoryInterface;
 use App\Domains\Nexus\Llm\Infrastructure\Providers\AnthropicLLMProvider;
@@ -131,6 +135,8 @@ class NexusServiceProvider extends ServiceProvider
         $this->app->bind(CoalitionRepositoryInterface::class, EloquentCoalitionRepository::class);
         $this->app->bind(CoalitionMemberRepositoryInterface::class, EloquentCoalitionMemberRepository::class);
         $this->app->bind(ReviewRepositoryInterface::class, EloquentReviewRepository::class);
+        $this->app->bind(HoldingRepositoryInterface::class, EloquentHoldingRepository::class);
+        $this->app->bind(HoldingSubsidiaryRepositoryInterface::class, EloquentHoldingSubsidiaryRepository::class);
 
         // Nexus's own PaymentGatewayRegistry singleton — CommerceServiceProvider
         // (where these adapter classes originally live) is disabled since

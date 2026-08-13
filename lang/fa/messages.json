@@ -378,6 +378,48 @@
         "recommended": "پیشنهادی (دو گام فاصله)"
       }
     },
+    "holding": {
+      "title": "هلدینگ",
+      "no_holding": "شما هنوز عضو هیچ هلدینگی نیستید.",
+      "create_new": "ایجاد هلدینگ",
+      "your_holding": "هلدینگ شما",
+      "view": "مشاهده",
+      "invitations": {
+        "title": "دعوت‌های هلدینگ",
+        "empty": "دعوت جدیدی وجود ندارد.",
+        "invited_by": "دعوت‌شده توسط",
+        "accept": "پذیرفتن",
+        "reject": "رد کردن"
+      },
+      "form": {
+        "name_fa": "نام هلدینگ (فارسی)",
+        "name_en": "نام هلدینگ (انگلیسی)",
+        "submit": "ایجاد هلدینگ"
+      },
+      "invite": {
+        "target_business_id": "شناسه کسب‌وکار زیرمجموعه",
+        "submit": "دعوت به هلدینگ"
+      },
+      "subsidiaries": {
+        "title": "زیرمجموعه‌ها",
+        "empty": "هنوز زیرمجموعه‌ای اضافه نشده است.",
+        "parent_badge": "شرکت مادر",
+        "remove": "حذف",
+        "leave": "خروج از هلدینگ",
+        "status": {
+          "invited": "دعوت شده",
+          "active": "فعال",
+          "removed": "حذف شده"
+        }
+      },
+      "dashboard": {
+        "title": "گزارش تلفیقی",
+        "business": "کسب‌وکار",
+        "credit_balance": "موجودی کردیت",
+        "active_negotiations": "مذاکرات فعال",
+        "total_credit_balance": "مجموع موجودی کردیت هلدینگ"
+      }
+    },
     "negotiation": {
       "index": {
         "title": "مذاکرات",
