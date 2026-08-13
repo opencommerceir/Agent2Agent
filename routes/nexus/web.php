@@ -11,6 +11,7 @@ use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessSessionContro
 use App\Domains\Nexus\Analytics\Interfaces\Http\Controllers\BusinessAnalyticsController;
 use App\Domains\Nexus\Analytics\Interfaces\Http\Controllers\MarketIntelligenceController;
 use App\Domains\Nexus\Approval\Interfaces\Http\Controllers\ApprovalPolicyController;
+use App\Domains\Nexus\Automation\Interfaces\Http\Controllers\AutomationRuleController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessTeamController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\RegisterBusinessController;
 use App\Domains\Nexus\Credit\Interfaces\Http\Controllers\CreditPurchaseCallbackController;
@@ -187,6 +188,18 @@ Route::middleware('web')->group(function () {
     // AI Recommendations (Phase 8, M3) — Marketplace domain, same
     // 'business.auth' guard as the rest of the business-facing portal.
     Route::middleware('business.auth:business')->get('/nexus/recommendations', [RecommendationsController::class, 'index'])->name('nexus.recommendations.index');
+
+    // Automation Workflows (Phase 8, M4) — recurring orders, inventory/
+    // price alerts, same 'business.auth' guard as the rest of the
+    // business-facing portal.
+    Route::middleware('business.auth:business')->prefix('nexus/automation')->name('nexus.automation.')->group(function () {
+        Route::get('/', [AutomationRuleController::class, 'index'])->name('index');
+        Route::get('/create', [AutomationRuleController::class, 'create'])->name('create');
+        Route::post('/', [AutomationRuleController::class, 'store'])->name('store');
+        Route::post('/{rule}/pause', [AutomationRuleController::class, 'pause'])->name('pause');
+        Route::post('/{rule}/resume', [AutomationRuleController::class, 'resume'])->name('resume');
+        Route::delete('/{rule}', [AutomationRuleController::class, 'destroy'])->name('destroy');
+    });
 
     // Multi-Business Accounts (Phase 7, M1) — Holding domain, portal-only
     // (no MCP capability, same "human administrative structure" reasoning

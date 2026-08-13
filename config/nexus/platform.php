@@ -180,6 +180,13 @@ return [
             'nexus.marketplace.recommendations' => (int) env('NEXUS_COST_MARKETPLACE_RECOMMENDATIONS', 5),
             'nexus.marketplace.alternatives' => (int) env('NEXUS_COST_MARKETPLACE_ALTERNATIVES', 5),
             'nexus.marketplace.negotiation_timing' => (int) env('NEXUS_COST_MARKETPLACE_NEGOTIATION_TIMING', 3),
+            // Phase 8/M4 — Automation Workflows. One flat fee for creating
+            // any rule shape (recurring order/inventory alert/price alert),
+            // anti-spam only, same reasoning nexus.coalition.create/
+            // nexus.invite.send are priced — the real recurring cost of a
+            // triggered recurring-order rule is its own existing
+            // nexus.negotiation.propose charge each time it fires.
+            'nexus.automation.rule.create' => (int) env('NEXUS_COST_AUTOMATION_RULE_CREATE', 10),
         ],
     ],
 
@@ -334,6 +341,22 @@ return [
     'analytics' => [
         'min_benchmark_sample_size' => (int) env('NEXUS_ANALYTICS_MIN_BENCHMARK_SAMPLE', 3),
         'min_market_intelligence_sample_size' => (int) env('NEXUS_ANALYTICS_MIN_MARKET_SAMPLE', 3),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Automation Workflows (Phase 8/M4 — Intelligence & Automation)
+    |--------------------------------------------------------------------------
+    |
+    | Read once per call (not hot-reloadable — no dedicated admin settings
+    | page exists for this, same as reputation/analytics settings above).
+    | Applies to inventory_alert/price_alert rules only — recurring_order has its
+    | own per-rule intervalDays instead of one global cooldown, since "every
+    | N days" is exactly what the rule itself already configures.
+    |
+    */
+    'automation' => [
+        'alert_cooldown_hours' => (int) env('NEXUS_AUTOMATION_ALERT_COOLDOWN_HOURS', 24),
     ],
 
     'sso' => [

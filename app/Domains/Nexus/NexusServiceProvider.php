@@ -9,6 +9,18 @@ use App\Domains\Nexus\Analytics\Application\Actions\GetBusinessAnalyticsAction;
 use App\Domains\Nexus\Analytics\Application\Actions\GetMarketIntelligenceAction;
 use App\Domains\Nexus\Admin\Infrastructure\Repositories\EloquentPlatformSettingRepository;
 use App\Domains\Nexus\Agent\Application\Actions\ResolveActingBusinessAction;
+use App\Domains\Nexus\Automation\Application\Actions\CreateInventoryAlertRuleAction;
+use App\Domains\Nexus\Automation\Application\Actions\CreatePriceAlertRuleAction;
+use App\Domains\Nexus\Automation\Application\Actions\CreateRecurringOrderRuleAction;
+use App\Domains\Nexus\Automation\Application\Actions\DeleteAutomationRuleAction;
+use App\Domains\Nexus\Automation\Application\Actions\ListAutomationRulesAction;
+use App\Domains\Nexus\Automation\Application\Actions\PauseAutomationRuleAction;
+use App\Domains\Nexus\Automation\Application\Actions\ResumeAutomationRuleAction;
+use App\Domains\Nexus\Automation\Domain\Repositories\AutomationRuleRepositoryInterface;
+use App\Domains\Nexus\Automation\Domain\Repositories\AutomationRunLogRepositoryInterface;
+use App\Domains\Nexus\Automation\Domain\ValueObjects\PriceAlertDirection;
+use App\Domains\Nexus\Automation\Infrastructure\Repositories\EloquentAutomationRuleRepository;
+use App\Domains\Nexus\Automation\Infrastructure\Repositories\EloquentAutomationRunLogRepository;
 use App\Domains\Nexus\Approval\Domain\Repositories\ApprovalDecisionRepositoryInterface;
 use App\Domains\Nexus\Approval\Domain\Repositories\ApprovalPolicyRepositoryInterface;
 use App\Domains\Nexus\Approval\Domain\Repositories\ApprovalRequestRepositoryInterface;
@@ -177,6 +189,8 @@ class NexusServiceProvider extends ServiceProvider
         $this->app->bind(PrivateMarketplaceMemberRepositoryInterface::class, EloquentPrivateMarketplaceMemberRepository::class);
         $this->app->bind(PrivateMarketplaceListingRepositoryInterface::class, EloquentPrivateMarketplaceListingRepository::class);
         $this->app->bind(AuditLogEntryRepositoryInterface::class, EloquentAuditLogEntryRepository::class);
+        $this->app->bind(AutomationRuleRepositoryInterface::class, EloquentAutomationRuleRepository::class);
+        $this->app->bind(AutomationRunLogRepositoryInterface::class, EloquentAutomationRunLogRepository::class);
 
         // Nexus's own PaymentGatewayRegistry singleton — CommerceServiceProvider
         // (where these adapter classes originally live) is disabled since
@@ -387,6 +401,85 @@ class NexusServiceProvider extends ServiceProvider
         $this->registerNegotiationCapabilityHandlers($handlers);
         $this->registerReputationCapabilityHandlers($handlers);
         $this->registerPrivateMarketplaceCapabilityHandlers($handlers);
+        $this->registerAutomationCapabilityHandlers($handlers);
+    }
+
+    private function registerAutomationCapabilityHandlers(AuditingCapabilityHandlerRegistry $handlers): void
+    {
+        $handlers->register('nexus.automation.create_recurring_order', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            $rule = $this->app->make(CreateRecurringOrderRuleAction::class)->execute(
+                businessId: $callingBusinessId,
+                counterpartyBusinessId: (int) $input['counterparty_business_id'],
+                catalogItemType: CatalogItemType::from($input['catalog_item_type']),
+                catalogItemId: (int) $input['catalog_item_id'],
+                priceAmount: (int) $input['price_amount'],
+                priceCurrency: $input['price_currency'],
+                quantity: (int) $input['quantity'],
+                intervalDays: (int) $input['interval_days'],
+            );
+
+            return ['rule' => $rule->toArray()];
+        });
+
+        $handlers->register('nexus.automation.create_inventory_alert', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            $rule = $this->app->make(CreateInventoryAlertRuleAction::class)->execute(
+                $callingBusinessId,
+                (int) $input['product_id'],
+                (int) $input['threshold_quantity'],
+            );
+
+            return ['rule' => $rule->toArray()];
+        });
+
+        $handlers->register('nexus.automation.create_price_alert', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            $rule = $this->app->make(CreatePriceAlertRuleAction::class)->execute(
+                businessId: $callingBusinessId,
+                catalogItemType: CatalogItemType::from($input['catalog_item_type']),
+                catalogItemId: (int) $input['catalog_item_id'],
+                targetPriceAmount: (int) $input['target_price_amount'],
+                direction: PriceAlertDirection::from($input['direction']),
+            );
+
+            return ['rule' => $rule->toArray()];
+        });
+
+        $handlers->register('nexus.automation.list', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            $rules = $this->app->make(ListAutomationRulesAction::class)->execute($callingBusinessId);
+
+            return ['rules' => array_map(fn ($r) => $r->toArray(), $rules)];
+        });
+
+        $handlers->register('nexus.automation.pause', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            $rule = $this->app->make(PauseAutomationRuleAction::class)->execute((int) $input['rule_id'], $callingBusinessId);
+
+            return ['rule' => $rule->toArray()];
+        });
+
+        $handlers->register('nexus.automation.resume', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            $rule = $this->app->make(ResumeAutomationRuleAction::class)->execute((int) $input['rule_id'], $callingBusinessId);
+
+            return ['rule' => $rule->toArray()];
+        });
+
+        $handlers->register('nexus.automation.delete', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            $this->app->make(DeleteAutomationRuleAction::class)->execute((int) $input['rule_id'], $callingBusinessId);
+
+            return [];
+        });
     }
 
     private function registerPrivateMarketplaceCapabilityHandlers(AuditingCapabilityHandlerRegistry $handlers): void

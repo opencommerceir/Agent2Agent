@@ -498,6 +498,44 @@
         }
       }
     },
+    "automation": {
+      "title": "اتوماسیون فرآیندها",
+      "how_it_works": "قوانینی تنظیم کنید که به‌طور خودکار اجرا می‌شوند: سفارش تکرارشونده، هشدار کمبود موجودی (با جست‌وجوی خودکار)، و هشدار قیمت.",
+      "create_new": "قانون جدید",
+      "empty": "هنوز قانون اتوماسیونی وجود ندارد.",
+      "rule_type": "نوع قانون",
+      "last_triggered": "آخرین اجرا",
+      "never": "هرگز",
+      "pause": "توقف",
+      "resume": "از سرگیری",
+      "delete": "حذف",
+      "type": {
+        "recurring_order": "سفارش تکرارشونده",
+        "inventory_alert": "هشدار موجودی",
+        "price_alert": "هشدار قیمت"
+      },
+      "status": {
+        "active": "فعال",
+        "paused": "متوقف‌شده"
+      },
+      "direction": {
+        "at_or_below": "کمتر یا مساوی هدف",
+        "at_or_above": "بیشتر یا مساوی هدف"
+      },
+      "fields": {
+        "counterparty_business_id": "شناسه کسب‌وکار تأمین‌کننده",
+        "catalog_item_type": "نوع آیتم کاتالوگ",
+        "catalog_item_id": "شناسه آیتم کاتالوگ",
+        "price_amount": "قیمت (واحد فرعی)",
+        "price_currency": "واحد پول",
+        "quantity": "تعداد",
+        "interval_days": "تکرار هر (روز)",
+        "product_id": "شناسه محصول",
+        "threshold_quantity": "آستانه موجودی",
+        "target_price_amount": "قیمت هدف (واحد فرعی)",
+        "direction": "جهت"
+      }
+    },
     "holding": {
       "title": "هلدینگ",
       "no_holding": "شما هنوز عضو هیچ هلدینگی نیستید.",

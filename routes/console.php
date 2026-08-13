@@ -4,6 +4,7 @@ use App\Console\Commands\DetectFraudSignalsCommand;
 use App\Console\Commands\ExpireLoyaltyPointsCommand;
 use App\Console\Commands\GenerateAnalyticsSnapshotCommand;
 use App\Console\Commands\MarkAbandonedCartsCommand;
+use App\Console\Commands\ProcessAutomationRulesCommand;
 use App\Console\Commands\ProcessDueSubscriptionsCommand;
 use App\Console\Commands\WarmCacheCommand;
 use Illuminate\Foundation\Inspiring;
@@ -52,3 +53,9 @@ Schedule::command(ProcessDueSubscriptionsCommand::class)->daily()->at('00:00')->
 // that a Business crossing the dispute-loss threshold is caught soon
 // after an arbiter's ruling, without re-scanning constantly.
 Schedule::command(DetectFraudSignalsCommand::class)->hourly()->withoutOverlapping();
+
+// Nexus Phase 8/M4 — Automation Workflows engine (recurring orders,
+// inventory alerts, price alerts); hourly matches DetectFraudSignalsCommand's
+// own cadence reasoning above — frequent enough that a due rule fires soon
+// after its condition becomes true, without re-scanning constantly.
+Schedule::command(ProcessAutomationRulesCommand::class)->hourly()->withoutOverlapping();

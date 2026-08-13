@@ -498,6 +498,44 @@
         }
       }
     },
+    "automation": {
+      "title": "Automation Workflows",
+      "how_it_works": "Configure rules that run automatically: recurring orders, low-inventory alerts (with auto-search), and price alerts.",
+      "create_new": "New Rule",
+      "empty": "No automation rules yet.",
+      "rule_type": "Rule type",
+      "last_triggered": "Last triggered",
+      "never": "Never",
+      "pause": "Pause",
+      "resume": "Resume",
+      "delete": "Delete",
+      "type": {
+        "recurring_order": "Recurring order",
+        "inventory_alert": "Inventory alert",
+        "price_alert": "Price alert"
+      },
+      "status": {
+        "active": "Active",
+        "paused": "Paused"
+      },
+      "direction": {
+        "at_or_below": "At or below target",
+        "at_or_above": "At or above target"
+      },
+      "fields": {
+        "counterparty_business_id": "Supplier Business ID",
+        "catalog_item_type": "Catalog item type",
+        "catalog_item_id": "Catalog item ID",
+        "price_amount": "Price (minor unit)",
+        "price_currency": "Currency",
+        "quantity": "Quantity",
+        "interval_days": "Repeat every (days)",
+        "product_id": "Product ID",
+        "threshold_quantity": "Stock threshold",
+        "target_price_amount": "Target price (minor unit)",
+        "direction": "Direction"
+      }
+    },
     "holding": {
       "title": "Holding",
       "no_holding": "You are not part of any Holding yet.",

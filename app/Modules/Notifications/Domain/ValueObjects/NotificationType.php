@@ -42,4 +42,15 @@ enum NotificationType: string
     // "here's your temporary password" email, same caller-supplied-recipient
     // shape AgentInvite already established. No Listener of its own.
     case TeamMemberInvited = 'team_member_invited';
+
+    // Nexus Phase 8/M4 (Automation Workflows) — ProcessAutomationRulesAction's
+    // own three trigger outcomes, sent synchronously to the rule-owning
+    // Business's own registered owner email the moment each rule fires (not
+    // event-driven, same "no Listener of its own" shape AgentInvite/
+    // TeamMemberInvited already established for a caller-supplied-recipient
+    // send — here the recipient is looked up from BusinessOwner instead of
+    // being caller-supplied, but the dispatch shape is identical).
+    case RecurringOrderPlaced = 'recurring_order_placed';
+    case InventoryAlertTriggered = 'inventory_alert_triggered';
+    case PriceAlertTriggered = 'price_alert_triggered';
 }
