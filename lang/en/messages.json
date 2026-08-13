@@ -418,6 +418,16 @@
         "credit_balance": "Credit Balance",
         "active_negotiations": "Active Negotiations",
         "total_credit_balance": "Total Holding Credit Balance"
+      },
+      "pool": {
+        "title": "Shared Credit Pool",
+        "balance": "Pool Balance",
+        "enable": "Enable Shared Pool",
+        "disable": "Disable Shared Pool",
+        "enabled_hint": "Each member's action costs are deducted from the shared pool.",
+        "disabled_hint": "Each member pays for its own actions from its personal credit balance.",
+        "contribute_amount": "Contribution Amount (from your own balance)",
+        "contribute": "Contribute to Pool"
       }
     },
     "negotiation": {

@@ -20,6 +20,7 @@ final class HoldingData
         public readonly string $status,
         public readonly array $subsidiaries,
         public readonly string $createdAt,
+        public readonly bool $creditPoolingEnabled,
     ) {
     }
 
@@ -45,6 +46,7 @@ final class HoldingData
                 'respondedAt' => $s->respondedAt()?->format(DATE_ATOM),
             ], $subsidiaries),
             createdAt: $holding->createdAt()->format(DATE_ATOM),
+            creditPoolingEnabled: $holding->creditPoolingEnabled(),
         );
     }
 
@@ -59,6 +61,7 @@ final class HoldingData
             'status' => $this->status,
             'subsidiaries' => $this->subsidiaries,
             'createdAt' => $this->createdAt,
+            'creditPoolingEnabled' => $this->creditPoolingEnabled,
         ];
     }
 }

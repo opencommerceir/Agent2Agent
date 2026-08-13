@@ -119,6 +119,8 @@ Route::middleware('web')->group(function () {
         Route::post('/', [HoldingController::class, 'store'])->name('store');
         Route::get('/{holding}', [HoldingController::class, 'show'])->name('show');
         Route::post('/{holding}/invite', [HoldingController::class, 'invite'])->name('invite');
+        Route::post('/{holding}/pooling', [HoldingController::class, 'togglePooling'])->name('pooling.toggle');
+        Route::post('/{holding}/pool/contribute', [HoldingController::class, 'contribute'])->name('pool.contribute');
         Route::post('/{holding}/subsidiaries/{subsidiary}/remove', [HoldingController::class, 'remove'])->name('subsidiaries.remove');
         Route::post('/subsidiaries/{subsidiary}/accept', [HoldingController::class, 'accept'])->name('subsidiaries.accept');
         Route::post('/subsidiaries/{subsidiary}/reject', [HoldingController::class, 'reject'])->name('subsidiaries.reject');

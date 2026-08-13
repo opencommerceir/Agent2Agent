@@ -61,6 +61,30 @@ class HoldingControllerTest extends TestCase
         $response->assertRedirect(route('nexus.business.login'));
     }
 
+    public function test_show_byNonMember_isForbidden(): void
+    {
+        $parent = $this->verifiedBusinessWithOwner('Parent Co');
+        $outsider = $this->verifiedBusinessWithOwner('Outsider Co');
+        $holding = app(CreateHoldingAction::class)->execute($parent['business']->id, 'الف', 'Alpha');
+
+        $response = $this->actingAs($outsider['owner'], 'business')->get(route('nexus.holding.show', $holding->id));
+
+        $response->assertForbidden();
+    }
+
+    public function test_togglePooling_byParent_succeeds(): void
+    {
+        $parent = $this->verifiedBusinessWithOwner('Parent Co');
+        $holding = app(CreateHoldingAction::class)->execute($parent['business']->id, 'الف', 'Alpha');
+
+        $response = $this->actingAs($parent['owner'], 'business')->post(route('nexus.holding.pooling.toggle', $holding->id), [
+            'enabled' => '1',
+        ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('nexus_holdings', ['id' => $holding->id, 'credit_pooling_enabled' => true]);
+    }
+
     private function verifiedBusiness(string $nameEn, int $credits = 0): BusinessData
     {
         $business = app(RegisterBusinessAction::class)->execute("نام {$nameEn}", $nameEn, BusinessType::Company, Industry::Technology);

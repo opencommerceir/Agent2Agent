@@ -39,7 +39,11 @@ use App\Domains\Nexus\Credit\Domain\Repositories\CreditPurchaseSessionRepository
 use App\Domains\Nexus\Credit\Domain\Repositories\CreditTransactionRepositoryInterface;
 use App\Domains\Nexus\Credit\Infrastructure\Repositories\EloquentCreditBalanceRepository;
 use App\Domains\Nexus\Credit\Infrastructure\Repositories\EloquentCreditPurchaseSessionRepository;
+use App\Domains\Nexus\Credit\Domain\Repositories\HoldingCreditPoolRepositoryInterface;
+use App\Domains\Nexus\Credit\Domain\Repositories\HoldingCreditPoolTransactionRepositoryInterface;
 use App\Domains\Nexus\Credit\Infrastructure\Repositories\EloquentCreditTransactionRepository;
+use App\Domains\Nexus\Credit\Infrastructure\Repositories\EloquentHoldingCreditPoolRepository;
+use App\Domains\Nexus\Credit\Infrastructure\Repositories\EloquentHoldingCreditPoolTransactionRepository;
 use App\Domains\Nexus\Growth\Application\Actions\CancelCoalitionAction;
 use App\Domains\Nexus\Growth\Application\Actions\CloseCoalitionAction;
 use App\Domains\Nexus\Growth\Application\Actions\CreateCoalitionAction;
@@ -137,6 +141,8 @@ class NexusServiceProvider extends ServiceProvider
         $this->app->bind(ReviewRepositoryInterface::class, EloquentReviewRepository::class);
         $this->app->bind(HoldingRepositoryInterface::class, EloquentHoldingRepository::class);
         $this->app->bind(HoldingSubsidiaryRepositoryInterface::class, EloquentHoldingSubsidiaryRepository::class);
+        $this->app->bind(HoldingCreditPoolRepositoryInterface::class, EloquentHoldingCreditPoolRepository::class);
+        $this->app->bind(HoldingCreditPoolTransactionRepositoryInterface::class, EloquentHoldingCreditPoolTransactionRepository::class);
 
         // Nexus's own PaymentGatewayRegistry singleton — CommerceServiceProvider
         // (where these adapter classes originally live) is disabled since

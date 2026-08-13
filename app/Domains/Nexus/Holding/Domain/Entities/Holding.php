@@ -23,6 +23,7 @@ final class Holding
         private string $nameEn,
         private HoldingStatus $status,
         private readonly DateTimeImmutable $createdAt,
+        private bool $creditPoolingEnabled = false,
     ) {
     }
 
@@ -35,7 +36,29 @@ final class Holding
             nameEn: $nameEn,
             status: HoldingStatus::Active,
             createdAt: new DateTimeImmutable(),
+            creditPoolingEnabled: false,
         );
+    }
+
+    /**
+     * Phase 7/M2 — the parent Business's own toggle; SpendCreditsForActionAction
+     * reads this (via HoldingRepositoryInterface) to decide whether a
+     * gated capability call debits the pool instead of the acting
+     * Business's own balance.
+     */
+    public function enableCreditPooling(): void
+    {
+        $this->creditPoolingEnabled = true;
+    }
+
+    public function disableCreditPooling(): void
+    {
+        $this->creditPoolingEnabled = false;
+    }
+
+    public function creditPoolingEnabled(): bool
+    {
+        return $this->creditPoolingEnabled;
     }
 
     public function id(): ?int

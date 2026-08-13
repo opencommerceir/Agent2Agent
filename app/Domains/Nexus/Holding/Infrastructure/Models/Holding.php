@@ -13,5 +13,10 @@ class Holding extends Model
         'name_fa',
         'name_en',
         'status',
+        'credit_pooling_enabled',
+    ];
+
+    protected $casts = [
+        'credit_pooling_enabled' => 'boolean',
     ];
 }

@@ -34,6 +34,7 @@ class EloquentHoldingRepository implements HoldingRepositoryInterface
         $model->name_fa = $holding->nameFa();
         $model->name_en = $holding->nameEn();
         $model->status = $holding->status()->value;
+        $model->credit_pooling_enabled = $holding->creditPoolingEnabled();
         $model->save();
 
         return $this->toEntity($model);
@@ -48,6 +49,7 @@ class EloquentHoldingRepository implements HoldingRepositoryInterface
             nameEn: $model->name_en,
             status: HoldingStatus::from($model->status),
             createdAt: DateTimeImmutable::createFromInterface($model->created_at),
+            creditPoolingEnabled: (bool) $model->credit_pooling_enabled,
         );
     }
 }

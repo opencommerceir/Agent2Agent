@@ -16,6 +16,37 @@
             </div>
         </x-nexus-panel>
 
+        <x-nexus-panel :title="t('messages.nexus.holding.pool.title')">
+            <div class="flex items-center justify-between">
+                <x-metric-card :label="t('messages.nexus.holding.pool.balance')" :value="$pool->balance" />
+                @if ($isParent)
+                    <form method="POST" action="{{ route('nexus.holding.pooling.toggle', $holding->id) }}">
+                        @csrf
+                        <input type="hidden" name="enabled" value="{{ $holding->creditPoolingEnabled ? '0' : '1' }}">
+                        <button type="submit" class="rounded-md border border-nexus-cyan/40 px-3 py-1.5 text-sm text-nexus-cyan hover:bg-nexus-cyan/10">
+                            {{ $holding->creditPoolingEnabled ? t('messages.nexus.holding.pool.disable') : t('messages.nexus.holding.pool.enable') }}
+                        </button>
+                    </form>
+                @endif
+            </div>
+            @if ($holding->creditPoolingEnabled)
+                <p class="mt-2 text-xs text-nexus-success">{{ t('messages.nexus.holding.pool.enabled_hint') }}</p>
+            @else
+                <p class="mt-2 text-xs text-nexus-text-muted">{{ t('messages.nexus.holding.pool.disabled_hint') }}</p>
+            @endif
+
+            <form method="POST" action="{{ route('nexus.holding.pool.contribute', $holding->id) }}" class="mt-4 flex items-end gap-3">
+                @csrf
+                <div class="flex-1">
+                    <label class="mb-1 block text-sm text-nexus-text">{{ t('messages.nexus.holding.pool.contribute_amount') }}</label>
+                    <input type="number" name="amount" min="1" required class="w-full rounded-md border border-nexus-border bg-nexus-surface-1 px-3 py-2 text-sm text-nexus-text focus:border-nexus-cyan focus:outline-none">
+                </div>
+                <button type="submit" class="rounded-md bg-nexus-cyan/20 px-4 py-2 text-sm font-semibold text-nexus-cyan hover:bg-nexus-cyan/30">
+                    {{ t('messages.nexus.holding.pool.contribute') }}
+                </button>
+            </form>
+        </x-nexus-panel>
+
         @if ($isParent)
             <x-nexus-panel :title="t('messages.nexus.holding.invite.submit')">
                 <form method="POST" action="{{ route('nexus.holding.invite', $holding->id) }}" class="flex items-end gap-3">
