@@ -16,6 +16,7 @@ final class UpdateServiceAction
 
     public function execute(
         int $serviceId,
+        int $businessId,
         string $nameFa,
         string $nameEn,
         int $priceAmount,
@@ -27,6 +28,10 @@ final class UpdateServiceAction
 
         if (! $service) {
             throw new InvalidArgumentException("Service [{$serviceId}] does not exist.");
+        }
+
+        if ($service->businessId() !== $businessId) {
+            throw new InvalidArgumentException("Service [{$serviceId}] does not belong to this Business.");
         }
 
         $service->update($nameFa, $nameEn, Money::fromAmount($priceAmount, $priceCurrency), $durationMinutes, $attributes);

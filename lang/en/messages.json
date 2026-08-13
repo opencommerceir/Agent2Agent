@@ -402,6 +402,46 @@
         "other": "Other"
       }
     },
+    "catalog": {
+      "title": "Product & Service Catalog",
+      "description": "The products and services your Agent negotiates on your behalf.",
+      "products": {
+        "title": "Products",
+        "empty": "You haven't added any products yet.",
+        "add": "Add Product",
+        "edit": "Edit Product",
+        "created": "Product added successfully.",
+        "updated": "Product updated successfully."
+      },
+      "services": {
+        "title": "Services",
+        "empty": "You haven't added any services yet.",
+        "add": "Add Service",
+        "edit": "Edit Service",
+        "created": "Service added successfully.",
+        "updated": "Service updated successfully."
+      },
+      "fields": {
+        "name_fa": "Name (Persian)",
+        "name_en": "Name (English)",
+        "price": "Price (Toman)",
+        "hourly_price": "Hourly Price (Toman)",
+        "stock_quantity": "Stock Quantity",
+        "duration_minutes": "Duration (minutes, optional)"
+      },
+      "verification_status": {
+        "pending": "Pending Review",
+        "verified": "Verified",
+        "rejected": "Rejected"
+      },
+      "search": {
+        "placeholder": "Search your own catalog...",
+        "submit": "Search",
+        "clear": "Clear"
+      },
+      "submit": "Save",
+      "back": "Back to Catalog"
+    },
     "growth": {
       "referrals": {
         "title": "Referrals",

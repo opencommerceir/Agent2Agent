@@ -15,6 +15,7 @@ use App\Domains\Nexus\Approval\Interfaces\Http\Controllers\ApprovalPolicyControl
 use App\Domains\Nexus\Automation\Interfaces\Http\Controllers\AutomationRuleController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessTeamController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\RegisterBusinessController;
+use App\Domains\Nexus\Catalog\Interfaces\Http\Controllers\CatalogController;
 use App\Domains\Nexus\Credit\Interfaces\Http\Controllers\CreditPurchaseCallbackController;
 use App\Domains\Nexus\Credit\Interfaces\Http\Controllers\CreditPurchaseController;
 use App\Domains\Nexus\Developer\Interfaces\Http\Controllers\AgentMarketplaceController;
@@ -172,6 +173,29 @@ Route::middleware('web')->group(function () {
         // Reviews & Ratings (Phase 6, M1) — only reachable once Escrow is
         // Released (a genuinely completed deal), enforced in SubmitReviewAction.
         Route::post('/{negotiation}/review', [NegotiationViewerController::class, 'submitReview'])->name('review.submit');
+    });
+
+    // Catalog self-service portal (Phase 1/M4 Actions, wired to a real
+    // form here) — AddProduct/AddService/UpdateProduct/UpdateService/
+    // SearchCatalog existed since the very first phase but were only ever
+    // reachable through tinker/tests, not a form. Same 'business.auth'
+    // guard as the rest of the business-facing portal.
+    Route::middleware('business.auth:business')->prefix('nexus/catalog')->name('nexus.catalog.')->group(function () {
+        Route::get('/', [CatalogController::class, 'index'])->name('index');
+
+        Route::prefix('products')->name('products.')->group(function () {
+            Route::get('/create', [CatalogController::class, 'createProduct'])->name('create');
+            Route::post('/', [CatalogController::class, 'storeProduct'])->name('store');
+            Route::get('/{product}/edit', [CatalogController::class, 'editProduct'])->name('edit');
+            Route::put('/{product}', [CatalogController::class, 'updateProduct'])->name('update');
+        });
+
+        Route::prefix('services')->name('services.')->group(function () {
+            Route::get('/create', [CatalogController::class, 'createService'])->name('create');
+            Route::post('/', [CatalogController::class, 'storeService'])->name('store');
+            Route::get('/{service}/edit', [CatalogController::class, 'editService'])->name('edit');
+            Route::put('/{service}', [CatalogController::class, 'updateService'])->name('update');
+        });
     });
 
     // Viral Growth Engine (Phase 5) — its own prefix/name, same

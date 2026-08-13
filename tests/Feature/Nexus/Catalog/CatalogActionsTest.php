@@ -52,7 +52,7 @@ class CatalogActionsTest extends TestCase
         $businessId = $this->makeBusinessId();
         $product = app(AddProductAction::class)->execute($businessId, 'محصول آزمایشی', 'Test Product', 50000, 'IRT', 10);
 
-        $result = app(UpdateProductAction::class)->execute($product->id, 'محصول جدید', 'New Product', 75000, 'IRT', 5, ['color' => 'red']);
+        $result = app(UpdateProductAction::class)->execute($product->id, $businessId, 'محصول جدید', 'New Product', 75000, 'IRT', 5, ['color' => 'red']);
 
         $this->assertSame('New Product', $result->nameEn);
         $this->assertSame(75000, $result->priceAmount);
@@ -63,7 +63,18 @@ class CatalogActionsTest extends TestCase
     {
         $this->expectException(InvalidArgumentException::class);
 
-        app(UpdateProductAction::class)->execute(9999, 'x', 'y', 1, 'IRT', 0, null);
+        app(UpdateProductAction::class)->execute(9999, 1, 'x', 'y', 1, 'IRT', 0, null);
+    }
+
+    public function test_updateProduct_belongingToAnotherBusiness_throwsInvalidArgumentException(): void
+    {
+        $businessId = $this->makeBusinessId();
+        $otherBusinessId = app(RegisterBusinessAction::class)->execute('شرکت دیگر', 'Other Company', BusinessType::Company, Industry::Retail)->id;
+        $product = app(AddProductAction::class)->execute($businessId, 'محصول آزمایشی', 'Test Product', 50000, 'IRT', 10);
+
+        $this->expectException(InvalidArgumentException::class);
+
+        app(UpdateProductAction::class)->execute($product->id, $otherBusinessId, 'x', 'y', 1, 'IRT', 0, null);
     }
 
     public function test_updateService_withValidData_updatesService(): void
@@ -71,10 +82,21 @@ class CatalogActionsTest extends TestCase
         $businessId = $this->makeBusinessId();
         $service = app(AddServiceAction::class)->execute($businessId, 'خدمت آزمایشی', 'Test Service', 200000, 'IRT', 60);
 
-        $result = app(UpdateServiceAction::class)->execute($service->id, 'خدمت جدید', 'New Service', 300000, 'IRT', 90, null);
+        $result = app(UpdateServiceAction::class)->execute($service->id, $businessId, 'خدمت جدید', 'New Service', 300000, 'IRT', 90, null);
 
         $this->assertSame('New Service', $result->nameEn);
         $this->assertSame(90, $result->durationMinutes);
+    }
+
+    public function test_updateService_belongingToAnotherBusiness_throwsInvalidArgumentException(): void
+    {
+        $businessId = $this->makeBusinessId();
+        $otherBusinessId = app(RegisterBusinessAction::class)->execute('شرکت دیگر', 'Other Company', BusinessType::Company, Industry::Retail)->id;
+        $service = app(AddServiceAction::class)->execute($businessId, 'خدمت آزمایشی', 'Test Service', 200000, 'IRT', 60);
+
+        $this->expectException(InvalidArgumentException::class);
+
+        app(UpdateServiceAction::class)->execute($service->id, $otherBusinessId, 'x', 'y', 1, 'IRT', null, null);
     }
 
     public function test_searchCatalog_findsProductsAndServicesByBusinessAndQuery(): void

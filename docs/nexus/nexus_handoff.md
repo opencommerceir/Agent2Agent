@@ -1367,3 +1367,19 @@
 **آماده برای Phase 10 (Global Expansion)** طبق `docs/nexus-roadmap.md`.
 
 ---
+
+## رفع شکاف: فرم خودسرویس کاتالوگ (بعد از Phase 9، قبل از شروع Phase 10)
+
+**دستور:** «کاتالوگ رو به یک فرم خودسرویس واقعی در پرتال کسب‌وکار وصل کن» — رفع همان محدودیت مستندشدهٔ Phase 1/M4 که تا این لحظه فقط از طریق تینکر/تست/API قابل دسترس بود، نه یک UI واقعی.
+
+**تصمیم کلیدی:** چک مالکیت مستقیماً داخل `UpdateProductAction`/`UpdateServiceAction` اضافه شد (پارامتر تازهٔ `businessId`، مقایسه با `product->businessId()`/`service->businessId()`)، نه فقط در کنترلر — همان انضباط «Action خودش authorization خودش را enforce می‌کند» که کل پروژه (از `ListMyNegotiationsAction` در Phase 2/M7 تا هر Action دیگر) از قبل رعایت می‌کرد. `CatalogController` جدید (`Catalog/Interfaces/Http/Controllers`) فقط یک لایهٔ نازک روی همان چهار Action موجود فاز اول (`AddProduct`, `AddService`, `UpdateProduct`, `UpdateService`, `SearchCatalog`) است — هیچ منطق تجاری تازه‌ای نوشته نشد.
+
+**فایل‌های اصلی:** `CatalogController`، ویوهای `resources/views/nexus/catalog/{index,products/{create,edit},services/{create,edit}}.blade.php`، روت‌های جدید زیر `nexus/catalog` (گارد `business.auth:business`، همان الگوی هر بخش دیگر پرتال)، کلیدهای ترجمهٔ `nexus.catalog.*` در `lang/{fa,en}/messages.json`، لینک ناوبری در داشبورد کسب‌وکار.
+
+**تست:** ۲ تست جدید در `CatalogActionsTest` (مالکیت رد شود اگر آیتم متعلق به کسب‌وکار دیگری باشد) + ۱۰ تست جدید در `CatalogControllerTest` (بدون لاگین ریدایرکت، فهرست فقط آیتم‌های خودش، هرگز کاتالوگ کسب‌وکار دیگر را نشان نمی‌دهد، افزودن/ویرایش محصول و خدمت، ویرایش آیتم کسب‌وکار دیگر ۴۰۳). کل سوییت: **۱۶۵۱ pass / ۲۸۳ fail** — بدون رگرسیون (baseline ۱۶۳۹ + ۱۲ تست جدید؛ همان ۲۸۳ شکست ثابت ماژول‌های غیرفعال).
+
+**اسناد به‌روزشده:** محدودیت مستندشده در `tutorials/base/02-customer-journey/03-catalog-and-discovery.md` و `tutorials/base/01-introduction/05-roadmap-and-future-vision.md` حذف شد (دیگر واقعیت ندارد).
+
+**کامیت:** `feat(nexus): add self-service Catalog portal (product/service create/edit forms, ownership checks)`.
+
+---

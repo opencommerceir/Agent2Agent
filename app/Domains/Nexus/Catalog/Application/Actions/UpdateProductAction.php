@@ -25,6 +25,7 @@ final class UpdateProductAction
 
     public function execute(
         int $productId,
+        int $businessId,
         string $nameFa,
         string $nameEn,
         int $priceAmount,
@@ -36,6 +37,10 @@ final class UpdateProductAction
 
         if (! $product) {
             throw new InvalidArgumentException("Product [{$productId}] does not exist.");
+        }
+
+        if ($product->businessId() !== $businessId) {
+            throw new InvalidArgumentException("Product [{$productId}] does not belong to this Business.");
         }
 
         $product->update($nameFa, $nameEn, Money::fromAmount($priceAmount, $priceCurrency), $stockQuantity, $attributes);
