@@ -889,3 +889,191 @@
 **آماده برای Phase 7 (Enterprise Features)** طبق `docs/nexus-roadmap.md`.
 
 ---
+
+# Phase 7 — Enterprise Features
+
+**دستور:** «برو سراغ فاز 7» (بعد از تأیید Phase 6). طبق روال هر فاز، قبل از کدنویسی چند Explore agent موازی روی الگوهای موجود اجرا شد. پلن ۱۱ مرحله‌ای (M1–M11) روی پنج بخش roadmap منطبق شد: Multi-Business Accounts (M1–M2)، Approval Workflows (M3–M4)، Private Marketplaces (M5)، SSO & Identity (M6–M8)، Compliance (M9–M10)، به‌علاوه یک مرحلهٔ تأیید نهایی (M11).
+
+## Phase 7 / M1 — دامنهٔ Holding (Multi-Business Accounts)
+
+دامنهٔ جدید `Holding` یک ساختار مادر/زیرمجموعه روی Businessهای موجود می‌سازد (invite/accept/reject/remove/leave)، به‌علاوه یک read-model گزارش‌گیری متمرکز (`GetHoldingDashboardAction`) که وضعیت هر subsidiary را کنار هم نشان می‌دهد. Portal-only است — هیچ MCP capability ندارد، دقیقاً همان توجیهی که Admin/Margin/LLM Settings قبلاً داشتند (این یک نگرانی مدیریتی سطح Business است، نه چیزی که یک Agent صدا بزند).
+
+**فایل‌های اصلی:** `app/Domains/Nexus/Holding/{Domain,Application,Infrastructure}/**`، `HoldingController`، دو migration (`nexus_holdings`, `nexus_holding_subsidiaries`).
+
+**تست:** ۲۶ تست جدید — همه پاس.
+
+**کامیت:** `feat(nexus): add Holding domain core (Multi-Business Accounts)`.
+
+---
+
+## Phase 7 / M2 — Shared Credit Pool روی Holding (مسیریابی CostGate)
+
+یک Holding می‌تواند pooling کردیت مشترک را فعال کند؛ Businessهای عضو با یک اقدام صریح (`ContributeToPoolAction`) از موجودی خودشان به pool کمک می‌کنند — چیزی خودکار یا ضمنی نیست. `SpendCreditsForActionAction` (خودِ CostGate از Phase 3/M2) حالا اول چک می‌کند آیا Business عضو یک Holding با pooling فعال است؛ اگر نه، دقیقاً همان رفتار قبلی (کسر از موجودی خودِ Business) بدون هیچ تغییری اجرا می‌شود — یک تغییر رفتار صفر برای هر Businessی که عضو هیچ Holdingی نیست.
+
+**باگ واقعی پیدا و رفع شد:** `HoldingController::show()` هیچ چک عضویتی نداشت، برخلاف تمام Actionهای جهش‌دهندهٔ (mutating) دیگر Holding — یک Business بیرونی می‌توانست جزئیات یک Holding دیگر را ببیند. همراه با ساخت این مرحله رفع شد.
+
+**فایل‌های اصلی:** `HoldingCreditPool`/`HoldingCreditPoolTransaction` (Entity/Repo/Model)، `ContributeToPoolAction`/`DeductFromHoldingPoolAction`/`GetHoldingPoolBalanceAction`/`SetCreditPoolingEnabledAction`، سه migration جدید.
+
+**تست:** ۱۱ تست جدید — همه پاس.
+
+**کامیت:** `feat(nexus): add Holding shared credit pool (CostGate routing)`.
+
+---
+
+## Phase 7 / M3 — Business Team Members & Roles
+
+یک Business دیگر محدود به یک لاگین Owner نیست — چند عضو نام‌دار با نقش (`Owner`/`Manager`/`Cfo`/`Staff`) می‌توانند لاگین جدا داشته باشند. این مرحله پیش‌نیاز مستقیم Approval Workflows واقعی (M4) است: یک Manager و یک CFO باید افراد واقعاً جدایی باشند که هرکدام بتوانند سطح خودشان را تأیید کنند. `InviteTeamMemberAction` از ماژول *فعال* `Notifications` برای ایمیل رمز موقت استفاده می‌کند (بدون پایپ‌لاین ایمیل دوم)؛ یک مرحلهٔ اجباری «تغییر رمز عبور» قبل از رسیدن عضو تازه‌دعوت‌شده به داشبورد اجرا می‌شود.
+
+**باگ واقعی Laravel پیدا و رفع شد:** یک session gotcha واقعی مربوط به گارد پیش‌فرض حین این مرحله کشف و مستند شد (زمینه‌ساز باگ بزرگ‌تری که در M6 کامل رفع شد).
+
+**فایل‌های اصلی:** `ChangeTeamMemberRoleAction`/`CompleteForcedPasswordChangeAction`/`InviteTeamMemberAction`/`ListTeamMembersAction`/`RemoveTeamMemberAction`، `TeamMemberRole` enum، `BusinessTeamController`، `BusinessPasswordController`.
+
+**تست:** ۱۳ تست جدید — همه پاس.
+
+**کامیت:** `feat(nexus): add Business Team Members & Roles`.
+
+---
+
+## Phase 7 / M4 — Multi-Level Approval Workflows (Agent → Manager → CFO)
+
+دامنهٔ جدید `Approval` مکانیزم موجود Phase 2 (یک آستانهٔ واحد `pending_approval`) را به یک زنجیرهٔ قابل‌تنظیم از سطوح role+threshold تعمیم می‌دهد، بدون دست زدن به خودِ `Negotiation` entity. لحظه‌ای که چک `authority_limits` موجود در `AcceptDealAction` یک معامله را متوقف می‌کند، یک `ApprovalRequest` با snapshot سطوح همان لحظه باز می‌شود (تغییر بعدی policy روی درخواست‌های در حال انجام اثر نمی‌گذارد). گام پایانی تأیید/رد دقیقاً همان `ApprovePendingNegotiationAction`/`RejectPendingNegotiationAction` موجود Phase 2 را بدون تغییر دوباره‌استفاده می‌کند. یک Business بدون policy تعریف‌شده دقیقاً همان رفتار پایهٔ Phase 2 را حفظ می‌کند — صفر رگرسیون رفتاری.
+
+**فایل‌های اصلی:** `app/Domains/Nexus/Approval/{Domain,Application,Infrastructure}/**` (`ApprovalPolicy`, `ApprovalRequest`, `ApprovalDecision`)، `ApprovalPolicyController`، به‌روزرسانی یک‌خطی `AcceptDealAction`.
+
+**تست:** ۱۷ تست جدید — همه پاس.
+
+**کامیت:** `feat(nexus): add Multi-Level Approval Workflows (Agent -> Manager -> CFO)`.
+
+---
+
+## Phase 7 / M5 — Private Marketplaces (Invite-only، قیمت‌گذاری محرمانه)
+
+دامنهٔ جدید `PrivateMarketplace`: یک گروه invite-only از Businessها که صاحبش اداره می‌کند، با فهرست‌های قیمت‌گذاری‌شدهٔ محرمانهٔ خودشان — همان الگوی «parent aggregate + child membership table»ی که Coalition (Phase 5) و Holding (M1) قبلاً تثبیت کرده بودند. یک `PrivateMarketplaceSearchQuery` مجزا (نه تغییر در `BusinessSearchQuery` خودِ Marketplace) برای غیرعضو همیشه خالی برمی‌گردد — محرمانگی قیمت با همین گیت عضویت اجرا می‌شود، نه رمزنگاری. دو MCP capability واقعی (`nexus.private_marketplace.{search,list_listing}`) به‌علاوه پورتال کسب‌وکار.
+
+**فایل‌های اصلی:** `app/Domains/Nexus/PrivateMarketplace/{Domain,Application,Infrastructure,Interfaces}/**`، سه migration، سیم‌کشی در `NexusServiceProvider`.
+
+**تست:** ۱۴ تست جدید — همه پاس.
+
+**کامیت:** `feat(nexus): add Private Marketplaces (invite-only, confidential pricing)`.
+
+---
+
+## Phase 7 / M6 — SSO OAuth Login (Google)، Connector Registry، رفع باگ Session
+
+اولین لاگین OAuth واقعی برای پرتال Business (Google، از طریق `laravel/socialite`، تنها وابستگی تازهٔ این فاز) — هرگز یک Business تازه نمی‌سازد؛ یک حساب موجود که با ایمیل تطبیق پیدا کند، برای لینک‌شدن به وارد کردن دوبارهٔ رمز عبور نیاز دارد (نه فقط یک کلیک تأیید). `SsoProviderRegistry` ششمین کاربرد الگوی Connector این کدبیس است (بعد از ConnectorRegistry/ShippingProviderRegistry/ChannelSenderRegistry/PaymentGatewayRegistry/LLMProviderRegistry).
+
+**باگ واقعی و جدی Laravel پیدا و رفع شد:** `Illuminate\Session\DatabaseSessionHandler` یک `Guard::class` را از یک singleton محدودشده به request حل می‌کند که همان اولین‌بار که هرکسی آن را بخواهد، روی گارد پیش‌فرض `web` قفل می‌شود — یعنی هر لاگین با گارد business بی‌صدا `sessions.user_id = null` ذخیره می‌کرد (یک UPDATE وسط request از نوشتن نهایی session خودِ فریم‌ورک در پایان request جان سالم به در نمی‌برد). راه‌حل واقعی: rebind همان singleton به گارد business بلافاصله بعد از لاگین. صفحهٔ فهرست/لغو Sessionهای فعال حالا مستقیماً `sessions.user_id` را می‌خواند چون بالاخره درست پر می‌شود.
+
+**فایل‌های اصلی:** `FindBusinessOwnerByOauthIdentityAction`/`LinkOauthIdentityToOwnerAction`/`ListMyActiveSessionsAction`/`RevokeSessionAction`، `BusinessOauthController`، `FinishesBusinessLogin` (concern مشترک لاگین)، `SsoProviderRegistry`/`SsoProviderInterface`، `GoogleSsoProvider`.
+
+**تست:** ۹ تست جدید — همه پاس.
+
+**کامیت:** `feat(nexus): add SSO OAuth login (Google), connector registry, session fix`.
+
+---
+
+## Phase 7 / M7 — MFA (TOTP) برای پرتال Business
+
+پیاده‌سازی دستی RFC 6238 TOTP (در برابر بردارهای تست رسمی RFC خودش با SHA1 صحت‌سنجی شد)، کدهای بازیابی یک‌بارمصرف، و یک چالش زمان‌ورود مشترک بین دو مسیر لاگین (رمز عبور و OAuth) از طریق دو helper تازه روی همان `FinishesBusinessLogin` که M6 ساخت. وضعیت راه‌اندازی روی خودِ ردیف owner نگه داشته می‌شود (`mfa_secret` ست شده ولی `mfa_enabled_at` هنوز null یعنی «در حال انجام») نه در session flash یک ویزارد — یعنی رفرش وسط راه‌اندازی هرگز چیزی که قبلاً اسکن شده را باطل نمی‌کند. غیرفعال‌کردن به رمز عبور فعلی نیاز دارد، همان وزنی که لینک‌کردن حساب OAuth (M6) داشت.
+
+**فایل‌های اصلی:** `EnableMfaAction`/`ConfirmMfaSetupAction`/`DisableMfaAction`/`VerifyMfaChallengeAction`، `TotpService` (framework-free)، `BusinessOwnerRecoveryCode`، `BusinessMfaController`/`BusinessMfaChallengeController`.
+
+**تست:** ۱۵ تست جدید (شامل تست واحد کامل `TotpService` روی بردارهای RFC) — همه پاس.
+
+**کامیت:** `feat(nexus): add MFA (TOTP) for the Business portal`.
+
+---
+
+## Phase 7 / M8 — استاب‌های کانکتور SAML/LDAP + داشبورد ادمین SSO
+
+`SamlSsoProvider`/`LdapSsoProvider` کلاس‌های واقعی‌اند که زیر همان `SsoProviderRegistry`ی که Google استفاده می‌کند ثبت می‌شوند (constructor واقعی به‌شکل config، `nexus.platform.sso.{saml,ldap}.*`)، ولی صادقانه از `redirectUrl()`/`handleCallback()` یک `SsoProviderNotConfiguredException` پرتاب می‌کنند — هیچ پکیج SAML/LDAP نصب نیست، هیچ Identity Provider واقعی در این محیط در دسترس نیست. همان ردهٔ محدودیت مستندشدهٔ Stripe-blocked-for-Toman (Phase 3/M3) و endpointهای LLM محلی غیرقابل‌دسترس (Phase 4/M2). یک صفحهٔ ادمین تازه (`/dashboard/nexus/sso-providers`) وضعیت هر سه provider (زنده/استاب) را نشان می‌دهد.
+
+**فایل‌های اصلی:** `SsoProviderNotConfiguredException`، `SamlSsoProvider`/`LdapSsoProvider`، `NexusSsoProvidersController`، بخش `sso` جدید در `config/nexus/platform.php`.
+
+**تست:** ۱۳ تست جدید — همه پاس.
+
+**کامیت:** `feat(nexus): add SAML/LDAP connector stubs + SSO admin dashboard`.
+
+---
+
+## Phase 7 / M9 — مسیر ممیزی زنجیره‌ای هش (Hash-Chained Compliance Audit Trail)
+
+اولین ledger سرتاسری و بین‌دامنه‌ای این کدبیس — یک بازگشت آگاهانه و مستندشده از قاعدهٔ «بدون AuditLog عمومی، آن scope creep است» که هر ledger مخصوص دامنه (از `CreditTransaction`، Phase 3/M1 به بعد) رعایت کرده بود؛ توجیه این‌بار صریح است چون roadmap خودِ Phase 7 برای اولین بار یک ledger hash-chained را الزام کرده. هر ردیف (`AuditLogEntry`) هش خودش را روی فیلدهای خودش به‌علاوه هش ردیف قبلی محاسبه می‌کند (sha256) — یعنی تغییر یا حذف هر ردیف قدیمی، هش هر ردیف بعد از آن را می‌شکند. `VerifyAuditChainIntegrityAction` کل زنجیره را از داده‌های پایدارشده (persisted) دوباره محاسبه و مقایسه می‌کند.
+
+**تصمیم معماری کلیدی (سیم‌کشی بدون دست‌زدن به Core):** به‌جای افزودن audit logging به `CapabilityExecutionService`/`AbstractMCPGatewayController` خودِ Core (که طبق Decision 007 نباید هیچ منطق تجاری داشته باشند)، یک دکوریتور (`AuditingCapabilityHandlerRegistry`) دقیقاً همان‌جایی که `NexusServiceProvider` هر ~۲۰ هندلر MCP را ثبت می‌کند جایگزین `CapabilityHandlerRegistry` واقعی Core می‌شود — یک نقطهٔ تمرکز واحد، نه ویرایش تک‌تک محل‌های `$handlers->register(...)`. همان درسِ «یک نقطهٔ مرکزی بهتر از N نقطهٔ پراکنده است»ی که چک تعلیق Phase 6/M4 قبلاً با `ResolveActingBusinessAction` تثبیت کرده بود.
+
+**جزئیات صحت‌سنجی‌شده حین ساخت:** یک باگ واقعی همان لحظه‌ای که سشن قبلی وسط کار متوقف شد پیدا و رفع شد — ثابت `GENESIS_HASH` (نشانگر «هیچ‌چیز قبل از این نبود» برای اولین ردیف زنجیره) به‌جای ۶۴ کاراکتر صفر (طول دقیق یک هش هگزادسیمال sha256، طبق کامنت خودِ کد)، ۱۰۶ کاراکتر داشت — با `php -r` دقیقاً ۶۴ کاراکتر تولید و جایگزین شد، و یک تست واحد رگرسیون (`test_genesisHash_isExactly64Characters`) اضافه شد تا هرگز دوباره کشف نشود. یک بهبود طراحی دوم هم حین ساخت اضافه شد: `RecordAuditEntryAction` عمداً Business تماس‌گیرنده را مستقل از چک تعلیق حل می‌کند (نه از طریق آن) تا حتی یک تماس رد‌شده (Business معلق) هم *کدام* Business واقعاً بوده را در ledger ثبت کند، نه `businessId=null` — یک audit trail که نتواند بگوید «چه کسی» رد شده بی‌فایده است.
+
+**فایل‌های اصلی:** `app/Domains/Nexus/Audit/{Domain,Application,Infrastructure}/**` (`AuditLogEntry`, `AuditOutcome`, `RecordAuditEntryAction`, `VerifyAuditChainIntegrityAction`, `AuditingCapabilityHandlerRegistry`)، migration `nexus_audit_log_entries`، `NexusAuditController` (`/dashboard/nexus/audit`، با دکمهٔ «بررسی صحت زنجیره»).
+
+**تست:** ۱۶ تست جدید (۷ Unit روی خودِ زنجیره/هش + تشخیص دستکاری، ۵ Feature end-to-end واقعی روی `/mcp/v1/execute` شامل سناریوی تعلیق→رد→ثبت صحیح businessId، ۴ روی کنترلر ادمین) — همه پاس.
+
+**کامیت:** `feat(nexus): add hash-chained Compliance Audit Trail`.
+
+---
+
+## Phase 7 / M10 — اعلام محل نگهداری داده (Data Residency) + داشبورد Compliance
+
+بخش دوم و پایانی همان خط roadmap که M9 شروع کرد («SOC 2 / ISO 27001 آمادگی و Data residency options»).
+
+**Data Residency:** یک Business می‌تواند از داشبورد خودش یک منطقهٔ ترجیحی (ایران/اتحادیهٔ اروپا/آمریکا/GCC/سایر) اعلام کند. این ستون همیشه nullable است و هرگز مقدار پیش‌فرض نمی‌گیرد — این پلتفرم امروز روی یک پایگاه‌دادهٔ تک‌منطقه‌ای اجرا می‌شود، پس داکبلاک خودِ `DataResidencyRegion` صریح است که این فقط یک ترجیح برای گزارش‌دهی انطباق را ثبت می‌کند، نه جای فیزیکی واقعی داده (زیرساخت منطقه‌ای واقعی، قلمرو «Regional Compliance» در Phase 10 است). همان ردهٔ محدودیت مستندشده‌ی Escrow (Phase 3/M4) و استاب‌های SAML/LDAP (M8).
+
+**داشبورد Compliance (`/dashboard/nexus/compliance`):** یک نمای خودارزیابی، صریحاً برچسب‌گذاری‌شده به همین عنوان نه ادعای گواهی‌نامه. `GetComplianceOverviewAction` زنده از چهار دامنه می‌خواند: Audit (صحت زنجیرهٔ M9)، Business (تعلیق + منطقهٔ اعلام‌شده)، Sso (provider زنده در برابر استاب)، Contract (اختلافات باز) — هر آیتم چک‌لیست دقیقاً با صداکردن همان Action/Query ای که خودِ آن قابلیت استفاده می‌کند تأیید می‌شود، نه یک تیک دستی، پس صفحه هیچ‌وقت نمی‌تواند از واقعیت کدبیس عقب بیفتد.
+
+**فایل‌های اصلی:** `DataResidencyRegion`، `SetDataResidencyRegionAction`، ستون تازهٔ `businesses.data_residency_region`، `ComplianceQuery`/`GetComplianceOverviewAction` (دامنهٔ Analytics)، `NexusComplianceController`.
+
+**تست:** ۱۲ تست جدید (۴ روی Data Residency، ۶ روی `GetComplianceOverviewAction`، ۲ روی کنترلر ادمین) — همه پاس.
+
+**کامیت:** `feat(nexus): add Data Residency declaration + Compliance Dashboard`.
+
+---
+
+## Phase 7 / M11 — تأیید نهایی
+
+- `php artisan migrate --force` روی دیتابیس dev: تمام migrationهای Phase 7 (M1 تا M10 — از `nexus_holdings` تا `businesses.data_residency_region`) قبلاً به‌صورت تدریجی هرکدام در نوبت خودشان تمیز اجرا شده بودند؛ این اجرای نهایی «Nothing to migrate» گزارش داد، یعنی هیچ migration جاافتاده‌ای وجود ندارد.
+- `php artisan test` کامل: **۱۴۷۱ pass / ۲۸۳ fail** — بدون رگرشن (همان ۲۸۳ شکست ثابت ماژول‌های غیرفعال، بدون تغییر در هیچ‌کدام از M9/M10). سوییت فیلترشدهٔ `--filter=Nexus`: **۵۹۸ پاس**.
+- **چک صریح یکپارچگی قبل از هر چیز:** این مرحله دقیقاً از همان‌جایی ادامه یافت که سشن قبلی وسط M9 متوقف شده بود (در حال تولید ثابت `GENESIS_HASH`). قبل از نوشتن هر کد تازه، فایل‌های نیمه‌کاره بازبینی و باگ طول ثابت (۱۰۶ به‌جای ۶۴ کاراکتر) پیدا و رفع شد (جزئیات در M9 بالا) — دقیقاً همان درخواست صریح «خودت یه چک بکن چیزی خراب نشه».
+- تست End-to-End دستی کامل روی دیتابیس dev واقعی (`php artisan tinker` روی یک اسکریپت PHP، همان جایگزین مستندشدهٔ کلیک مرورگری از Phase 2 به‌خاطر مشکل شناخته‌شدهٔ رزرو پورت ویندوز)، زنجیرهٔ واقعی سرتاسر تمام ۱۰ میلستون Phase 7 روی هم:
+  1. سه Business واقعی ثبت‌نام و تأیید شدند (Parent Co، Sub Co، Outsider Co).
+  2. Holding واقعی ساخته شد، Sub Co دعوت و پیوست، credit pooling فعال شد، Parent Co واقعاً ۵۰۰۰ کردیت به pool کمک کرد.
+  3. عضو تیم واقعی (نقش Manager) به Parent Co دعوت شد.
+  4. **زنجیرهٔ تأیید چندسطحی واقعی:** سقف اختیار Agent روی ۱۰۰۰ تنظیم شد، یک مذاکرهٔ واقعی بالاتر از آن Accept شد → وضعیت واقعاً `pending_approval` شد (نه `accepted`) → Manager واقعی سطح را تأیید کرد → وضعیت واقعاً به `accepted` برگشت.
+  5. Private Marketplace واقعی ساخته شد با یک لیستینگ محرمانه؛ جستجوی Outsider Co (غیرعضو) واقعاً ۰ نتیجه برگرداند، جستجوی مالک واقعاً ۱ نتیجه برگرداند — محرمانگی مبتنی بر عضویت تأیید شد. (یک باگ در خودِ اسکریپت تست — نه در پلتفرم — حین این مرحله پیدا شد: `count()` روی shape بازگشتی اشتباه زده بود؛ رفع و دوباره اجرا شد.)
+  6. هر سه SSO provider (`google`, `saml`, `ldap`) واقعاً در رجیستری ثبت‌شده بودند.
+  7. یک اجرای واقعی Capability (`nexus.credit.balance`) از طریق همان `CapabilityExecutionService`ی که `/mcp/v1/execute` صدا می‌زند اجرا شد → یک ردیف audit واقعی با `businessId` درست ساخته شد، زنجیره از seq=1 به seq=2 رشد کرد.
+  8. Outsider Co معلق شد → همان capability call واقعاً با `PermissionDeniedException` رد شد → ردیف audit جدید `status=denied` **و `businessId` واقعی Outsider Co را ثبت کرد، نه null** — دقیقاً رفتار طراحی‌شدهٔ M9. سپس reactivate واقعی انجام شد.
+  9. دو Business منطقهٔ محل داده اعلام کردند (Iran، EU) → `GetComplianceOverviewAction` واقعی روی همین داده‌های واقعی: `dataResidencyBreakdown={"eu":1,"ir":1,"undeclared":16}`، `auditChain.intact=true`، تمام آیتم‌های چک‌لیست `YES` بودند به‌جز `sso_identity_federation` (`no`، صادقانه چون هیچ credential واقعی Google در این محیط dev تنظیم نشده — همان صداقت Zibal-only Phase 3/M3، نه باگ).
+  10. `VerifyAuditChainIntegrityAction` نهایی: `intact=true`، بدون هیچ شکستگی.
+- `git log --oneline`: هر ۱۰ مرحلهٔ Phase 7 (M1 تا M10) کامیت شده‌اند.
+
+**کامیت:** `docs(nexus): Phase 7 complete — final handoff summary`.
+
+---
+
+## 🎯 خلاصه Phase 7 (Enterprise Features) — تکمیل شد
+
+| میلستون | دامنه/ویژگی اصلی | تست |
+|---|---|---|
+| M1 | Holding (Multi-Business Accounts) | ۲۶ |
+| M2 | Holding Shared Credit Pool | ۱۱ |
+| M3 | Business Team Members & Roles | ۱۳ |
+| M4 | Multi-Level Approval Workflows | ۱۷ |
+| M5 | Private Marketplaces | ۱۴ |
+| M6 | SSO OAuth (Google) + Connector Registry | ۹ |
+| M7 | MFA (TOTP) | ۱۵ |
+| M8 | SAML/LDAP Stubs + SSO Admin Dashboard | ۱۳ |
+| M9 | Hash-Chained Compliance Audit Trail | ۱۶ |
+| M10 | Data Residency + Compliance Dashboard | ۱۲ |
+| **مجموع** | | **۱۴۶ تست تازه** |
+
+تصمیمات معماری ماندگار برای فازهای بعدی:
+1. **حتی داخل یک فاز، یک ledger سرتاسری (Audit) می‌تواند آگاهانه از قاعدهٔ «هر ledger مخصوص دامنهٔ خودش» عبور کند** — وقتی روادمپ صریحاً آن را بخواهد (M9)؛ توجیه باید همیشه صریح و مستند باشد، نه پیش‌فرض.
+2. **دکوریتور دور یک رجیستری موجود، ارزان‌ترین راه برای یک نگرانی cross-cutting سرتاسری است** — `AuditingCapabilityHandlerRegistry` تمام ~۲۰ محل ثبت handler را بدون تغییر یک‌خط از آن‌ها پوشش داد؛ فازهای بعدی که نیاز به یک نگرانی سرتاسری MCP دارند (rate limiting سفارشی، metrics) باید همین الگو را دنبال کنند، نه ویرایش پراکنده.
+3. **وقتی یک Action هم برای authorization و هم برای attribution لازم است، این‌دو ممکن است نیاز به resolve مجزا داشته باشند** — `RecordAuditEntryAction` عمداً Business را جدا از چک تعلیق حل می‌کند تا یک رویداد رد‌شده هنوز بداند «چه کسی» رد شده.
+4. **صداقت اسکوپ همچنان الگوی تکرارشوندهٔ این پروژه است** — SAML/LDAP (M8) و Data Residency (M10) هر دو دقیقاً همان ردهٔ محدودیت مستندشدهٔ Escrow/Stripe-blocked را دنبال کردند: یک قابلیت واقعی که صادقانه اعلام می‌کند چه چیزی *نیست*.
+5. **جدا نگه‌داشتن authorization از attribution یک الگوی عمومی‌تر است** که فازهای بعدی (خصوصاً هر چیزی شبیه فارنزیک/forensics) باید دوباره از آن استفاده کنند: منابعی که برای امنیت resolve می‌شوند، لزوماً بهترین منبع برای گزارش‌دهی نیستند.
+6. **محدودیت شناخته‌شدهٔ باقی‌مانده:** `sso_identity_federation` در چک‌لیست Compliance فقط وقتی «YES» می‌شود که حداقل یک credential واقعی provider تنظیم شده باشد — در این محیط dev هنوز هیچ‌کدام تنظیم نشده (صادقانه، نه باگ)؛ تنظیم واقعی این credentialها یک اقدام عملیاتی است، نه کد.
+
+**آماده برای Phase 8 (Intelligence & Automation)** طبق `docs/nexus-roadmap.md`.
+
+---
