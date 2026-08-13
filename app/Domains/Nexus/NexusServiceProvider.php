@@ -5,6 +5,7 @@ namespace App\Domains\Nexus;
 use App\Core\Application\DTOs\AuthContext;
 use App\Core\Application\Services\CapabilityHandlerRegistry;
 use App\Domains\Nexus\Admin\Domain\Repositories\PlatformSettingRepositoryInterface;
+use App\Domains\Nexus\Analytics\Application\Actions\GetBusinessAnalyticsAction;
 use App\Domains\Nexus\Admin\Infrastructure\Repositories\EloquentPlatformSettingRepository;
 use App\Domains\Nexus\Agent\Application\Actions\ResolveActingBusinessAction;
 use App\Domains\Nexus\Approval\Domain\Repositories\ApprovalDecisionRepositoryInterface;
@@ -339,6 +340,12 @@ class NexusServiceProvider extends ServiceProvider
             );
 
             return $invite->toArray();
+        });
+
+        $handlers->register('nexus.analytics.business', function (array $input, AuthContext $context) {
+            $callingBusinessId = $this->resolveActingBusiness($context);
+
+            return $this->app->make(GetBusinessAnalyticsAction::class)->execute($callingBusinessId);
         });
 
         $this->registerCoalitionCapabilityHandlers($handlers);

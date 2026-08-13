@@ -40,5 +40,6 @@ class DatabaseSeeder extends Seeder
         $this->call(NexusGrowthCapabilitiesSeeder::class);
         $this->call(NexusReputationCapabilitiesSeeder::class);
         $this->call(NexusPrivateMarketplaceCapabilitiesSeeder::class);
+        $this->call(NexusAnalyticsCapabilitiesSeeder::class);
     }
 }

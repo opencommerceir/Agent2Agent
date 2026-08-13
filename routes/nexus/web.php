@@ -8,6 +8,7 @@ use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessMfaController
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessOauthController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessPasswordController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessSessionController;
+use App\Domains\Nexus\Analytics\Interfaces\Http\Controllers\BusinessAnalyticsController;
 use App\Domains\Nexus\Approval\Interfaces\Http\Controllers\ApprovalPolicyController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\BusinessTeamController;
 use App\Domains\Nexus\Business\Interfaces\Http\Controllers\RegisterBusinessController;
@@ -196,6 +197,14 @@ Route::middleware('web')->group(function () {
         Route::post('/subsidiaries/{subsidiary}/accept', [HoldingController::class, 'accept'])->name('subsidiaries.accept');
         Route::post('/subsidiaries/{subsidiary}/reject', [HoldingController::class, 'reject'])->name('subsidiaries.reject');
         Route::post('/subsidiaries/{subsidiary}/leave', [HoldingController::class, 'leave'])->name('subsidiaries.leave');
+    });
+
+    // Business Analytics (Phase 8, M1) — success rate, savings, price
+    // benchmark, CSV export. Same 'business.auth' guard as the rest of the
+    // business-facing portal.
+    Route::middleware('business.auth:business')->prefix('nexus/analytics')->name('nexus.analytics.')->group(function () {
+        Route::get('/', [BusinessAnalyticsController::class, 'index'])->name('index');
+        Route::get('/export', [BusinessAnalyticsController::class, 'export'])->name('export');
     });
 
     // Private Marketplaces (Phase 7, M5) — invite-only groups with

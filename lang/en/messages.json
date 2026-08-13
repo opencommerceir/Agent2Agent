@@ -839,6 +839,32 @@
           "data_residency_declared": "Data residency preference collection in use"
         }
       }
+    },
+    "analytics": {
+      "title": "Business Analytics",
+      "success_rate": "Deal success rate",
+      "completed_deals": "Completed deals",
+      "deal_counts": {
+        "accepted": "Accepted",
+        "rejected": "Rejected",
+        "expired": "Expired",
+        "open": "Open"
+      },
+      "savings": {
+        "title": "Savings from negotiating",
+        "empty": "No accepted deals with a comparable listed price yet.",
+        "total": "Total saved",
+        "deal_count": ":count deal(s) compared"
+      },
+      "price_benchmark": {
+        "title": "Industry price benchmark",
+        "product": "Products",
+        "service": "Services",
+        "your_average": "Your average price",
+        "industry_average": "Industry average",
+        "insufficient_data": "Not enough competing businesses yet"
+      },
+      "export": "Export CSV"
     }
   }
 }

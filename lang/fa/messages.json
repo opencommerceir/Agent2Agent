@@ -839,6 +839,32 @@
           "data_residency_declared": "استفاده از قابلیت اعلام محل نگهداری داده"
         }
       }
+    },
+    "analytics": {
+      "title": "تحلیل کسب‌وکار",
+      "success_rate": "نرخ موفقیت معاملات",
+      "completed_deals": "معاملات تکمیل‌شده",
+      "deal_counts": {
+        "accepted": "پذیرفته‌شده",
+        "rejected": "ردشده",
+        "expired": "منقضی‌شده",
+        "open": "در جریان"
+      },
+      "savings": {
+        "title": "صرفه‌جویی از مذاکره",
+        "empty": "هنوز معامله پذیرفته‌شده‌ای با قیمت لیست قابل‌مقایسه وجود ندارد.",
+        "total": "مجموع صرفه‌جویی",
+        "deal_count": ":count معامله مقایسه شد"
+      },
+      "price_benchmark": {
+        "title": "بنچمارک قیمت صنعت",
+        "product": "محصولات",
+        "service": "خدمات",
+        "your_average": "میانگین قیمت شما",
+        "industry_average": "میانگین صنعت",
+        "insufficient_data": "هنوز کسب‌وکار رقیب کافی وجود ندارد"
+      },
+      "export": "خروجی CSV"
     }
   }
 }

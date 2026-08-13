@@ -303,6 +303,25 @@ return [
     | once real wiring happens.
     |
     */
+    /*
+    |--------------------------------------------------------------------------
+    | Analytics & Market Intelligence (Phase 8 — Intelligence & Automation)
+    |--------------------------------------------------------------------------
+    |
+    | Read once per call (not hot-reloadable — no dedicated admin settings
+    | page exists for these, same as reputation.* above). The sample-size
+    | floors exist purely for k-anonymity: an aggregate built from too few
+    | distinct competing Businesses would let a Business reverse-engineer a
+    | single named competitor's exact price, so both benchmark and market
+    | intelligence queries suppress (return null) any aggregate whose
+    | contributing-business count is below these thresholds.
+    |
+    */
+    'analytics' => [
+        'min_benchmark_sample_size' => (int) env('NEXUS_ANALYTICS_MIN_BENCHMARK_SAMPLE', 3),
+        'min_market_intelligence_sample_size' => (int) env('NEXUS_ANALYTICS_MIN_MARKET_SAMPLE', 3),
+    ],
+
     'sso' => [
         'saml' => [
             'entity_id' => env('NEXUS_SAML_ENTITY_ID'),
