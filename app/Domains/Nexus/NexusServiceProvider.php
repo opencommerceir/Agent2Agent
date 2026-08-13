@@ -64,9 +64,11 @@ use App\Domains\Nexus\Developer\Application\Listeners\DispatchWebhookOnContractG
 use App\Domains\Nexus\Developer\Application\Listeners\DispatchWebhookOnEscrowReleasedListener;
 use App\Domains\Nexus\Developer\Application\Listeners\DispatchWebhookOnNegotiationAcceptedListener;
 use App\Domains\Nexus\Developer\Domain\Repositories\ApiKeyRepositoryInterface;
+use App\Domains\Nexus\Developer\Domain\Repositories\IntegrationConnectionRepositoryInterface;
 use App\Domains\Nexus\Developer\Domain\Repositories\WebhookDeliveryLogRepositoryInterface;
 use App\Domains\Nexus\Developer\Domain\Repositories\WebhookSubscriptionRepositoryInterface;
 use App\Domains\Nexus\Developer\Infrastructure\Repositories\EloquentApiKeyRepository;
+use App\Domains\Nexus\Developer\Infrastructure\Repositories\EloquentIntegrationConnectionRepository;
 use App\Domains\Nexus\Developer\Infrastructure\Repositories\EloquentWebhookDeliveryLogRepository;
 use App\Domains\Nexus\Developer\Infrastructure\Repositories\EloquentWebhookSubscriptionRepository;
 use App\Domains\Nexus\Credit\Application\Listeners\GrantStartingCreditsOnBusinessVerifiedListener;
@@ -210,6 +212,7 @@ class NexusServiceProvider extends ServiceProvider
         $this->app->bind(ApiKeyRepositoryInterface::class, EloquentApiKeyRepository::class);
         $this->app->bind(WebhookSubscriptionRepositoryInterface::class, EloquentWebhookSubscriptionRepository::class);
         $this->app->bind(WebhookDeliveryLogRepositoryInterface::class, EloquentWebhookDeliveryLogRepository::class);
+        $this->app->bind(IntegrationConnectionRepositoryInterface::class, EloquentIntegrationConnectionRepository::class);
 
         // Nexus's own PaymentGatewayRegistry singleton — CommerceServiceProvider
         // (where these adapter classes originally live) is disabled since

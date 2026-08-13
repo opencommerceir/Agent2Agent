@@ -19,6 +19,7 @@ use App\Domains\Nexus\Credit\Interfaces\Http\Controllers\CreditPurchaseCallbackC
 use App\Domains\Nexus\Credit\Interfaces\Http\Controllers\CreditPurchaseController;
 use App\Domains\Nexus\Developer\Interfaces\Http\Controllers\ApiDocsController;
 use App\Domains\Nexus\Developer\Interfaces\Http\Controllers\ApiKeyController;
+use App\Domains\Nexus\Developer\Interfaces\Http\Controllers\IntegrationConnectionController;
 use App\Domains\Nexus\Developer\Interfaces\Http\Controllers\WebhookSubscriptionController;
 use App\Domains\Nexus\Growth\Interfaces\Http\Controllers\CoalitionController;
 use App\Domains\Nexus\Growth\Interfaces\Http\Controllers\InviteController;
@@ -279,5 +280,14 @@ Route::middleware('web')->group(function () {
         Route::get('/', [WebhookSubscriptionController::class, 'index'])->name('index');
         Route::post('/', [WebhookSubscriptionController::class, 'store'])->name('store');
         Route::post('/{subscription}/revoke', [WebhookSubscriptionController::class, 'revoke'])->name('revoke');
+    });
+
+    // Integration Marketplace (Phase 9, M6) — portal-only, same
+    // 'business.auth' guard as the rest of the Developer domain's portal.
+    Route::middleware('business.auth:business')->prefix('nexus/developer/integrations')->name('nexus.developer.integrations.')->group(function () {
+        Route::get('/', [IntegrationConnectionController::class, 'index'])->name('index');
+        Route::post('/', [IntegrationConnectionController::class, 'store'])->name('store');
+        Route::post('/{connection}/sync', [IntegrationConnectionController::class, 'sync'])->name('sync');
+        Route::post('/{connection}/revoke', [IntegrationConnectionController::class, 'revoke'])->name('revoke');
     });
 });

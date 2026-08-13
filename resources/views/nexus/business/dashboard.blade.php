@@ -65,6 +65,9 @@
                     <a href="{{ route('nexus.developer.docs.index') }}" class="rounded-md border border-nexus-purple/40 px-3 py-1.5 text-sm text-nexus-purple hover:bg-nexus-purple/10">
                         {{ t('messages.nexus.developer.docs.title') }}
                     </a>
+                    <a href="{{ route('nexus.developer.integrations.index') }}" class="rounded-md border border-nexus-purple/40 px-3 py-1.5 text-sm text-nexus-purple hover:bg-nexus-purple/10">
+                        {{ t('messages.nexus.developer.integrations.title') }}
+                    </a>
                     <form method="POST" action="{{ route('nexus.business.logout') }}">
                         @csrf
                         <button type="submit" class="rounded-md border border-nexus-border px-3 py-1.5 text-sm text-nexus-text hover:bg-nexus-surface-1">

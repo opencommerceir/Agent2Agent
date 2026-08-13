@@ -585,6 +585,29 @@
         "deliveries_empty": "No events delivered yet.",
         "delivery_failed": "Failed"
       },
+      "integrations": {
+        "title": "Integration Marketplace",
+        "description": "Push your catalog to your own ERP, CRM, accounting, or logistics system with a field mapping you control. (For Zapier/Make.com, use a Webhook subscription above instead — both platforms' \"custom webhook\" trigger accepts a plain URL.)",
+        "category": "Category",
+        "category_option": {
+          "erp": "ERP",
+          "crm": "CRM",
+          "accounting": "Accounting",
+          "logistics": "Logistics"
+        },
+        "name": "Connection name",
+        "target_url": "Target URL",
+        "auth_token": "Auth token (optional, sent as Bearer)",
+        "field_mapping": "Field mapping",
+        "field_mapping_hint": "Only mapped fields are sent. Leave blank to send every field as-is.",
+        "mapping_source_placeholder": "Nexus field (e.g. nameEn)",
+        "mapping_target_placeholder": "Your field (e.g. product_name)",
+        "create": "Create connection",
+        "empty": "No integrations configured yet.",
+        "sync_now": "Sync now",
+        "sync_success": "Synced :count item(s).",
+        "revoke": "Revoke"
+      },
       "docs": {
         "title": "API Documentation",
         "intro": "Reference for the Nexus Public REST API and outbound Webhooks — for third-party developers building against a Business's own account.",
