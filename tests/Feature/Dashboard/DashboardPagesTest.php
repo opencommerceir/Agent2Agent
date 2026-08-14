@@ -8,21 +8,17 @@ use App\Core\Application\Actions\CreateUserAction;
 use App\Core\Application\Actions\RegisterAgentAction;
 use App\Core\Domain\Repositories\AgentRepositoryInterface;
 use App\Core\Infrastructure\Models\User;
-use App\Modules\Commerce\Application\Actions\AddToCartAction;
-use App\Modules\Commerce\Application\Actions\CreateCustomerAction;
-use App\Modules\Commerce\Application\Actions\CreateProductAction;
-use App\Modules\Commerce\Application\Actions\PlaceOrderAction;
-use App\Modules\Commerce\Domain\Entities\Inventory;
-use App\Modules\Commerce\Domain\Repositories\InventoryRepositoryInterface;
-use App\Core\Domain\ValueObjects\MemberType;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Smoke-tests every one of the 8 Dashboard pages against real data created
+ * Smoke-tests the surviving Dashboard pages against real data created
  * through the same Actions the MCP layer itself uses — the literal
  * end-to-end scenario from Phase 4 Stage 5's own request (steps 4-13:
- * language/RTL, Tenants, Agents, Products, Orders, Notifications).
+ * language/RTL, Tenants, Agents, Notifications). Products/Orders/Analytics
+ * were Commerce-module pages; Commerce has been disabled since Nexus
+ * Phase 0 and those routes/controllers/views were removed for good along
+ * with these tests, rather than left to crash on every request.
  */
 class DashboardPagesTest extends TestCase
 {
@@ -155,43 +151,6 @@ class DashboardPagesTest extends TestCase
         $this->assertSame('active', app(AgentRepositoryInterface::class)->findById($agent->id)->status()->value);
     }
 
-    public function test_productsIndex_showsProductForSelectedTenant(): void
-    {
-        $this->withoutVite();
-        $admin = $this->createAdmin();
-        [$tenant] = $this->createTenantWithOrganization('Acme Inc');
-        app(CreateProductAction::class)->execute($tenant->id, 'Widget', 'SKU-DASH-1', 1999, 'USD', status: 'active');
-
-        $response = $this->actingAs($admin)->get("/dashboard/products?tenant_id={$tenant->id}");
-
-        $response->assertStatus(200);
-        $response->assertSee('Widget');
-    }
-
-    public function test_ordersIndex_filteredByStatus_showsPlacedOrder(): void
-    {
-        $this->withoutVite();
-        $admin = $this->createAdmin();
-        $order = $this->placeARealOrder();
-
-        $response = $this->actingAs($admin)->get("/dashboard/orders?tenant_id={$order->tenantId}&status=confirmed");
-
-        $response->assertStatus(200);
-        $response->assertSee($order->orderNumber);
-    }
-
-    public function test_orderCancel_cancelsAConfirmedOrder(): void
-    {
-        $this->withoutVite();
-        $admin = $this->createAdmin();
-        $order = $this->placeARealOrder();
-
-        $response = $this->actingAs($admin)->post("/dashboard/orders/{$order->id}/cancel?tenant_id={$order->tenantId}");
-
-        $response->assertRedirect();
-        $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => 'cancelled']);
-    }
-
     public function test_settingsUpdate_changesTenantDefaultLanguage(): void
     {
         $this->withoutVite();
@@ -223,21 +182,5 @@ class DashboardPagesTest extends TestCase
         $organization = app(CreateOrganizationAction::class)->execute($tenant->id, $name.' Org', \Illuminate\Support\Str::slug($name).'-org-'.uniqid());
 
         return [$tenant, $organization];
-    }
-
-    private function placeARealOrder(): \App\Modules\Commerce\Application\DTOs\OrderData
-    {
-        [$tenant, $organization] = $this->createTenantWithOrganization('Acme Inc');
-        $agent = app(RegisterAgentAction::class)->execute($tenant->id, $organization->id, 'Shop Bot', 'shopping');
-
-        $product = app(CreateProductAction::class)->execute($tenant->id, 'Widget', 'SKU-DASH-ORDER', 1999, 'USD', status: 'active');
-        app(InventoryRepositoryInterface::class)->save(Inventory::stock($tenant->id, $product->id, 10));
-
-        $customer = app(CreateCustomerAction::class)->execute($tenant->id, 'Ada', 'Lovelace', 'ada-'.uniqid().'@example.com');
-        $cart = app(AddToCartAction::class)->execute($tenant->id, MemberType::Agent, $agent->id, $product->id, 1);
-
-        return app(PlaceOrderAction::class)->execute(
-            tenantId: $tenant->id, agentId: $agent->id, cartId: $cart->id, customerId: $customer->id,
-        );
     }
 }

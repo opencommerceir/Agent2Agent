@@ -3,7 +3,6 @@
 use App\Core\Interfaces\HTTP\Controllers\Auth\LoginController;
 use App\Core\Interfaces\HTTP\Controllers\Auth\LogoutController;
 use App\Http\Controllers\Dashboard\AgentController;
-use App\Http\Controllers\Dashboard\AnalyticsController;
 use App\Http\Controllers\Dashboard\DashboardController;
 use App\Http\Controllers\Dashboard\NexusAuditController;
 use App\Http\Controllers\Dashboard\NexusComplianceController;
@@ -17,9 +16,7 @@ use App\Http\Controllers\Dashboard\NexusMarginSettingsController;
 use App\Http\Controllers\Dashboard\NexusRevenueController;
 use App\Http\Controllers\Dashboard\NexusSsoProvidersController;
 use App\Http\Controllers\Dashboard\NotificationController;
-use App\Http\Controllers\Dashboard\OrderController;
 use App\Http\Controllers\Dashboard\PerformanceController;
-use App\Http\Controllers\Dashboard\ProductController;
 use App\Http\Controllers\Dashboard\SettingsController;
 use App\Http\Controllers\Dashboard\TenantController;
 use App\Http\Controllers\LanguageController;
@@ -92,18 +89,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/agents/{agentId}/suspend', [AgentController::class, 'suspend'])->name('agents.suspend');
         Route::post('/agents/{agentId}/activate', [AgentController::class, 'activate'])->name('agents.activate');
 
-        Route::get('/products', [ProductController::class, 'index'])->name('products.index');
-        Route::get('/products/{productId}', [ProductController::class, 'show'])->name('products.show');
-
-        Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
-        Route::get('/orders/{orderId}', [OrderController::class, 'show'])->name('orders.show');
-        Route::post('/orders/{orderId}/cancel', [OrderController::class, 'cancel'])->name('orders.cancel');
-
         Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
-
-        Route::get('/analytics', [AnalyticsController::class, 'index'])->name('analytics.index');
-        Route::get('/analytics/export/csv', [AnalyticsController::class, 'exportCsv'])->name('analytics.export.csv');
-        Route::get('/analytics/export/pdf', [AnalyticsController::class, 'exportPdf'])->name('analytics.export.pdf');
 
         Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
         Route::put('/settings', [SettingsController::class, 'update'])->name('settings.update');
