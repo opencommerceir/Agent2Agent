@@ -1403,3 +1403,63 @@
 **کامیت:** `feat(dashboard): add Live Negotiation Monitor, real admin home, grouped nav`.
 
 ---
+
+## ابزار کمکی: `nexus:demo-negotiation`
+
+بعد از ساخت Live Negotiation Monitor، کاربر می‌خواست واقعاً یک مذاکره‌ی زنده ببینه. بررسی شد که **هیچ مسیر UI یا خودکاری برای شروع مذاکره وجود نداره** — تنها مسیر واقعی، فراخوانی `nexus.negotiation.propose` روی MCP با Bearer Token یک Agent واقعیه (یعنی یک کلاینت هوش‌مصنوعی بیرونی). تنها استثنای خودکار موجود، قانون Automation از نوع `RecurringOrder` بود (فقط با هدف/طرف‌مقابل از‌پیش‌پیکربندی‌شده، نه matching باز).
+
+دستور `nexus:demo-negotiation {supplier}` ساخته شد که همون Actionهایی رو که یک MCP caller واقعی صدا می‌زنه به‌ترتیب صدا می‌زنه (propose → counter → accept)، با `sleep(4)` بین مراحل (غیرفعال زیر تست) تا در صفحه‌ی Monitor با polling سه‌ثانیه‌ای قابل مشاهده باشه. تست شد روی کسب‌وکار واقعی کاربر (business #23، «پایپ گستر») — مذاکره #12 با موفقیت accepted شد و Contract/Escrow واقعی ساخته شد.
+
+**فایل‌ها:** `app/Console/Commands/DemoNegotiationCommand.php`، `tests/Feature/Console/DemoNegotiationCommandTest.php` (۳ تست).
+
+**کامیت:** `feat(nexus): add nexus:demo-negotiation command`.
+
+⚠️ **این دستور با فاز بعدی (Agent Runtime، زیر) ممکنه رفتارش عوض بشه** — چون بعد از پیاده‌سازی auto-respond، وقتی این دستور مرحله‌ی propose رو می‌زنه، خودِ تأمین‌کننده احتمالاً بلافاصله (به‌صورت خودکار و واقعی) counter/accept/reject می‌کنه، قبل از اینکه دستور برسه مرحله‌ی دستی `SendCounterOfferAction` خودش رو صدا بزنه — که باعث Exception می‌شه (چون negotiation دیگه در وضعیت proposed/countered نیست). این دستور باید به‌روزرسانی بشه (فقط propose کنه و صبر/گزارش بده، دیگه خودش counter/accept رو شبیه‌سازی نکنه) — این کار به‌عنوان بخشی از «Phase D» زیر مستند شده.
+
+---
+
+## در حال ساخت: Autonomous Agent Runtime (شروع‌شده، ادامه لازم دارد)
+
+**دستور کاربر (عیناً):** «باید اتوماتیک پیدا کنند مذاکره کنند... یه وقت هست تو ۳۰ ثانیه باید با هم مذاکره کنند... خودت هر مدل که میدونی حرفه‌ای و جذاب و کاملاً حرفه‌ایه پیاده‌اش کن.»
+
+**زمینه‌ی سوال:** کاربر پرسید چرا Agentهایی که کاملاً داخل خودِ Nexus ساخته می‌شن (نه با SDK بیرونی) خودشون کاری نمی‌کنن. بررسی دقیق (`routes/console.php`، هر ۷ پردازش زمان‌بندی‌شده‌ی کل پلتفرم) تأیید کرد: **هیچ فرآیندی که خودِ پلتفرم اجرا کنه و به‌جای یک Business تصمیم بگیره وجود نداره.** `Agent` فقط یک هویت آماده‌به‌کاره (شخصیت، Token واقعی)، نه یک فرآیند در حال اجرا. این یک خلأ واقعی و مستنده، نه سهل‌انگاری قبلی.
+
+### طراحی نهایی (تصمیم‌گرفته‌شده، قبل از پیاده‌سازی)
+
+**مدل ترکیبی دو‌لایه — دقیقاً برای رفع نگرانی «۳۰ ثانیه در برابر ۱۰-۱۵ دقیقه»:**
+
+**لایه ۱ — پاسخ واکنشی (همزمان/Synchronous، واقعاً آنی، نه صف‌محور):**
+- یافته‌ی کلیدی تحقیق: `QUEUE_CONNECTION=database` (نه `sync`) — یعنی اگر از Laravel Queue استفاده می‌شد، بدون یک `php artisan queue:work` واقعاً در حال اجرا، هیچ‌چیز کار نمی‌کرد (خطر بی‌صدا خراب‌بودن). تصمیم: به‌جای صف، از یک Event Listener **همزمان** (بدون `ShouldQueue`) استفاده می‌شه — چون منطق تصمیم‌گیری rule-based و ارزونه (چند کوئری DB + محاسبه‌ی ساده، نه یک فراخوانی LLM شبکه‌ای)، اجرای همزمان درون همون request/command اصلی، در حد میلی‌ثانیه تمام می‌شه — سریع‌تر از هر مدل صف‌محور، بدون نیاز به زیرساخت اضافه.
+- رویداد جدید: `NegotiationMessageWasRecorded` — در `InitiateNegotiationAction` و `SendCounterOfferAction` بعد از ذخیره‌ی پیام dispatch می‌شه (نه در Accept/Reject، چون اونا پایانی‌ان).
+- Listener جدید: `AutoRespondToNegotiationListener` — طرف *گیرنده*‌ی پیام (`negotiation->otherParty(senderBusinessId)`) رو پیدا می‌کنه، اگه Agentش auto-respond فعال داشته باشه (پیش‌فرض: فعال — پایین ببین)، `AutonomousNegotiationStrategy` رو صدا می‌زنه و بر اساس نتیجه `AcceptDealAction`/`SendCounterOfferAction`/`RejectDealAction` رو به نمایندگی از همون Business صدا می‌زنه.
+- **بازگشت طبیعی و محدود:** وقتی Listener خودش `SendCounterOfferAction` صدا می‌زنه، همون Action دوباره رویداد رو dispatch می‌کنه → این‌بار طرف مقابل (اگه اونم auto-respond داشته باشه) واکنش نشون می‌ده. این زنجیره توسط `maxRounds` (پیش‌فرض ۵، از `NEXUS_NEGOTIATION_MAX_ROUNDS`) طبیعتاً محدوده — یعنی یک مذاکره‌ی کامل بین دو Agent خودکار می‌تونه در همون یک فراخوانی اولیه (چه MCP، چه اسکریپت، چه AutoDiscover لایه‌ی ۲) به نتیجه برسه، در حد میلی‌ثانیه تا چند صدم ثانیه.
+- **حیاتی:** Listener باید `try/catch` کامل داشته باشه (`InvalidNegotiationStateException`/`NegotiationRoundLimitExceededException`/هرچیز دیگه) و هرگز نباید اجازه بده یک خطا به caller اصلی برسه — چون این کد الان به‌صورت همزمان درون هر request/command ای که یک پیام مذاکره می‌سازه اجرا می‌شه.
+- **تنظیم auto-respond per-agent:** به‌جای migration/ستون جدید، از فیلد **از‌قبل‌موجود و کاملاً بلااستفاده‌ی** `Agent::$strategies` (JSON، `setStrategies()`) استفاده می‌شه — دقیقاً همون الگوی escape-hatch که `authorityLimits`/`Product.attributes`/`AutomationRule.config` از قبل دارن. کلید `strategies['auto_respond'] ?? true` (پیش‌فرض فعال — چون کل هدف اینه که از روز اول کار کنه، بدون نیاز کسب‌وکار به تنظیم چیزی) و `strategies['tolerance_percent'] ?? 15` (چقدر از قیمت لیست حاضره کوتاه بیاد).
+
+**منطق تصمیم‌گیری (`AutonomousNegotiationStrategy`, سرویس جدید در Application layer دامنه‌ی Negotiation):**
+- کاملاً rule-based (بدون فراخوانی LLM — مطابق پیش‌فرض «۸۰٪ Rule Engine» خودِ CLAUDE.md؛ `NegotiationReasoningService` موجود فقط *توضیح* تولید می‌کنه، نه قیمت — این سرویس باید از صفر منطق «چه قیمتی پیشنهاد بدم» رو بنویسه).
+- تشخیص نقش: اگه `catalogItemId` متعلق به همین Business باشه (از `Product`/`Service::businessId()`) → فروشنده (می‌خواد قیمت بالاتر)، وگرنه → خریدار (می‌خواد قیمت پایین‌تر). قیمت لیست به‌عنوان لنگر.
+- محدوده‌ی قابل‌قبول: `listPrice ± tolerance_percent`. اگه پیشنهاد رسیده داخل این محدوده‌ست → Accept. اگه دور ولی round باقی مونده → Counter در نقطه‌ی میانی بین پیشنهاد رسیده و لنگر خودی (با یک حداقل گام، برای جلوگیری از چرخه‌ی بی‌پایان). اگه round تموم شده یا خیلی دوره (بیش از ۲ برابر tolerance) → Reject.
+
+**لایه ۲ — کشف پیش‌کنشی (Automation Rule تازه، هر ۵ دقیقه):**
+- `AutomationRuleType` یک case چهارم می‌گیره: `AutoDiscover`. برخلاف `RecurringOrder` (طرف‌مقابل/آیتم از‌پیش‌مشخص)، این نوع طرف‌مقابل رو خودش پیدا می‌کنه.
+- Config: `industry?`, `catalogItemType`, `maxPriceAmount`, `priceCurrency`, `quantity`.
+- الگوریتم در `ProcessAutomationRulesAction::processAutoDiscover()`: از `GetRecommendationsAction` (موجود، هم‌صنعتی‌های رتبه‌بندی‌شده بر اساس شهرت) کاندیدها رو می‌گیره؛ برای اولین کاندیدی که (الف) آیتم منطبق با `catalogItemType` در کاتالوگش داره و (ب) مذاکره‌ی باز (proposed/countered/pending_approval) از قبل با این Business نداره، با قیمت `min(maxPriceAmount, listPrice) × ۰.۹` (برای فضای چانه‌زنی) پیشنهاد می‌ده — یعنی مستقیم `InitiateNegotiationAction` رو صدا می‌زنه، دقیقاً مثل `processRecurringOrder` موجود.
+- زمان‌بندی: `ProcessAutomationRulesCommand` از `->hourly()` به `->everyFiveMinutes()` تغییر می‌کنه (برای هر سه نوع rule، بی‌خطر چون هرکدوم cooldown خودشون رو دارن — `canRetriggerAt` که از قبل روی entity هست). AutoDiscover پیش‌فرض cooldown ۱۰ دقیقه‌ای می‌گیره (پارامتر داخلی Action، نه فیلد جدید روی entity).
+
+### چک‌لیست باقی‌مانده (اگر این سشن قطع شد، از اینجا ادامه بده)
+
+- [ ] `NegotiationMessageWasRecorded` event + dispatch در `InitiateNegotiationAction`/`SendCounterOfferAction`
+- [ ] `AutonomousNegotiationStrategy` سرویس (تصمیم‌گیری قیمت، rule-based)
+- [ ] `AutoRespondToNegotiationListener` + ثبت در `NexusServiceProvider::boot()`
+- [ ] `Agent::autoRespondEnabled()`/`negotiationTolerancePercent()` (خواندن از `strategies` موجود، بدون migration)
+- [ ] تست‌های Feature: دو Business با auto-respond فعال، یک `InitiateNegotiationAction` صدا زده می‌شه، انتظار می‌ره negotiation خودش به accepted/rejected برسه بدون فراخوانی دستی بعدی
+- [ ] `AutomationRuleType::AutoDiscover` + `AutomationRule::forAutoDiscover()` + `CreateAutoDiscoverRuleAction`
+- [ ] `ProcessAutomationRulesAction::processAutoDiscover()`
+- [ ] `ProcessAutomationRulesCommand` زمان‌بندی → `everyFiveMinutes()`
+- [ ] به‌روزرسانی `nexus:demo-negotiation` (فقط propose کنه، دیگه دستی counter/accept نزنه — چون واقعی خودکار انجام می‌شه)
+- [ ] UI: تاگل ساده‌ی auto-respond در داشبورد کسب‌وکار (اختیاری اگه زمان کم اومد — پیش‌فرض true یعنی حتی بدون UI هم کار می‌کنه)
+- [ ] ترجمه‌های fa/en مربوطه
+- [ ] اجرای کامل تست‌ها، commit، push، و به‌روزرسانی همین بخش با نتیجه‌ی نهایی
+
+---
