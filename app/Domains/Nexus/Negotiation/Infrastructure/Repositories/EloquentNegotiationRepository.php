@@ -30,6 +30,15 @@ class EloquentNegotiationRepository implements NegotiationRepositoryInterface
             ->all();
     }
 
+    public function findAll(): array
+    {
+        return NegotiationModel::query()
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (NegotiationModel $model) => $this->toEntity($model))
+            ->all();
+    }
+
     public function save(NegotiationEntity $negotiation): NegotiationEntity
     {
         $model = $negotiation->id()

@@ -18,6 +18,6 @@ class DashboardController extends Controller
 {
     public function index(): RedirectResponse
     {
-        return redirect()->route('dashboard.nexus.revenue.index');
+        return redirect()->route('dashboard.nexus.overview.index');
     }
 }

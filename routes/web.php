@@ -13,6 +13,8 @@ use App\Http\Controllers\Dashboard\NexusVerificationController;
 use App\Http\Controllers\Dashboard\NexusGrowthController;
 use App\Http\Controllers\Dashboard\NexusLlmSettingsController;
 use App\Http\Controllers\Dashboard\NexusMarginSettingsController;
+use App\Http\Controllers\Dashboard\NexusNegotiationsController;
+use App\Http\Controllers\Dashboard\NexusOverviewController;
 use App\Http\Controllers\Dashboard\NexusRevenueController;
 use App\Http\Controllers\Dashboard\NexusSsoProvidersController;
 use App\Http\Controllers\Dashboard\NotificationController;
@@ -98,6 +100,15 @@ Route::middleware('auth')->group(function () {
 
         // Nexus (Phase 3) — admin-only Escrow dispute resolution.
         Route::prefix('nexus')->name('nexus.')->group(function () {
+            // The real admin home page (DashboardController::index() redirects here).
+            Route::get('/overview', [NexusOverviewController::class, 'index'])->name('overview.index');
+
+            // Live Negotiation Monitor (CLAUDE.md Admin Panel Must-Haves,
+            // #4) — platform-wide, unlike the business-facing viewer.
+            Route::get('/negotiations', [NexusNegotiationsController::class, 'index'])->name('negotiations.index');
+            Route::get('/negotiations/{negotiation}', [NexusNegotiationsController::class, 'show'])->name('negotiations.show');
+            Route::get('/negotiations/{negotiation}/messages', [NexusNegotiationsController::class, 'messages'])->name('negotiations.messages');
+
             Route::get('/escrows', [NexusEscrowController::class, 'index'])->name('escrows.index');
             Route::post('/escrows/{escrow}/refund', [NexusEscrowController::class, 'refund'])->name('escrows.refund');
 

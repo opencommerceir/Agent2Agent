@@ -17,26 +17,47 @@
                 OpenCommerce
             </div>
             <nav class="space-y-1 p-3 text-sm">
-                <a href="{{ route('dashboard.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.index') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nav.dashboard') }}</a>
-                <a href="{{ route('dashboard.tenants.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.tenants.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nav.tenants') }}</a>
-                <a href="{{ route('dashboard.agents.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.agents.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nav.agents') }}</a>
-                <a href="{{ route('dashboard.notifications.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.notifications.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nav.notifications') }}</a>
-                <a href="{{ route('dashboard.performance.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.performance.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nav.performance') }}</a>
-                <a href="{{ route('dashboard.settings.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.settings.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nav.settings') }}</a>
+                <a href="{{ route('dashboard.nexus.overview.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.index') || request()->routeIs('dashboard.nexus.overview.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nexus.admin.overview.title') }}</a>
+
+                <div class="mt-4">
+                    <div class="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">{{ t('messages.nav.group_operations') }}</div>
+                    <a href="{{ route('dashboard.nexus.verification.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.nexus.verification.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nexus.admin.verification.title') }}</a>
+                    <a href="{{ route('dashboard.nexus.fraud.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.nexus.fraud.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nexus.admin.fraud.title') }}</a>
+                    <a href="{{ route('dashboard.nexus.disputes.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.nexus.disputes.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nexus.admin.disputes.title') }}</a>
+                    <a href="{{ route('dashboard.nexus.negotiations.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.nexus.negotiations.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nexus.admin.negotiations.title') }}</a>
+                </div>
 
                 <div class="mt-4 border-t border-gray-200 pt-4">
-                    <div class="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">{{ t('messages.nav.nexus_section') }}</div>
-                    <a href="{{ route('dashboard.nexus.verification.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.nexus.verification.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nexus.admin.verification.title') }}</a>
+                    <div class="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">{{ t('messages.nav.group_financial') }}</div>
                     <a href="{{ route('dashboard.nexus.revenue.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.nexus.revenue.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nexus.admin.revenue.title') }}</a>
-                    <a href="{{ route('dashboard.nexus.growth.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.nexus.growth.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nexus.admin.growth.title') }}</a>
-                    <a href="{{ route('dashboard.nexus.fraud.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.nexus.fraud.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nexus.admin.fraud.title') }}</a>
                     <a href="{{ route('dashboard.nexus.escrows.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.nexus.escrows.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nexus.admin.escrows.title') }}</a>
-                    <a href="{{ route('dashboard.nexus.disputes.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.nexus.disputes.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nexus.admin.disputes.title') }}</a>
                     <a href="{{ route('dashboard.nexus.margin-settings.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.nexus.margin-settings.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nexus.admin.margin_settings.title') }}</a>
+                </div>
+
+                <div class="mt-4 border-t border-gray-200 pt-4">
+                    <div class="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">{{ t('messages.nav.group_growth') }}</div>
+                    <a href="{{ route('dashboard.nexus.growth.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.nexus.growth.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nexus.admin.growth.title') }}</a>
+                </div>
+
+                <div class="mt-4 border-t border-gray-200 pt-4">
+                    <div class="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">{{ t('messages.nav.group_platform') }}</div>
+                    <a href="{{ route('dashboard.tenants.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.tenants.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nav.tenants') }}</a>
+                    <a href="{{ route('dashboard.agents.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.agents.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nav.agents') }}</a>
                     <a href="{{ route('dashboard.nexus.llm-settings.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.nexus.llm-settings.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nexus.admin.llm_settings.title') }}</a>
                     <a href="{{ route('dashboard.nexus.sso-providers.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.nexus.sso-providers.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nexus.admin.sso_providers.title') }}</a>
+                </div>
+
+                <div class="mt-4 border-t border-gray-200 pt-4">
+                    <div class="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">{{ t('messages.nav.group_compliance') }}</div>
                     <a href="{{ route('dashboard.nexus.audit.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.nexus.audit.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nexus.admin.audit.title') }}</a>
                     <a href="{{ route('dashboard.nexus.compliance.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.nexus.compliance.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nexus.admin.compliance.title') }}</a>
+                </div>
+
+                <div class="mt-4 border-t border-gray-200 pt-4">
+                    <div class="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">{{ t('messages.nav.group_system') }}</div>
+                    <a href="{{ route('dashboard.notifications.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.notifications.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nav.notifications') }}</a>
+                    <a href="{{ route('dashboard.performance.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.performance.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nav.performance') }}</a>
+                    <a href="{{ route('dashboard.settings.index') }}" class="block rounded-md px-3 py-2 hover:bg-gray-100 {{ request()->routeIs('dashboard.settings.*') ? 'bg-gray-100 font-medium' : '' }}">{{ t('messages.nav.settings') }}</a>
                 </div>
             </nav>
         </aside>

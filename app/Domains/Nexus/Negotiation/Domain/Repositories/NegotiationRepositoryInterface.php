@@ -20,5 +20,14 @@ interface NegotiationRepositoryInterface
      */
     public function findVisibleTo(int $businessId): array;
 
+    /**
+     * Platform-wide, unscoped — the admin Negotiations Monitor's only
+     * caller (an admin isn't a party to any Negotiation, so
+     * findVisibleTo() doesn't apply here).
+     *
+     * @return list<Negotiation>
+     */
+    public function findAll(): array;
+
     public function save(Negotiation $negotiation): Negotiation;
 }

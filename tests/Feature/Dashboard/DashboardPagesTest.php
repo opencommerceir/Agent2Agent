@@ -31,18 +31,18 @@ class DashboardPagesTest extends TestCase
 
         $this->actingAs($admin)->get('/language/fa');
 
-        // '/dashboard' itself just redirects to the real Nexus Revenue
+        // '/dashboard' itself just redirects to the real Nexus Overview
         // page (Commerce's KPI home page it used to render has been
         // retired since Nexus Phase 0) — follow that redirect to verify
         // the language switch on a page that actually renders.
         $response = $this->actingAs($admin)->get('/dashboard');
-        $response->assertRedirect(route('dashboard.nexus.revenue.index'));
+        $response->assertRedirect(route('dashboard.nexus.overview.index'));
 
-        $response = $this->actingAs($admin)->get(route('dashboard.nexus.revenue.index'));
+        $response = $this->actingAs($admin)->get(route('dashboard.nexus.overview.index'));
 
         $response->assertStatus(200);
         $response->assertSee('dir="rtl"', false);
-        $response->assertSee('داشبورد درآمد');
+        $response->assertSee('نمای کلی پلتفرم');
     }
 
     public function test_languageSwitch_toEnglish_rendersLtrAndEnglishText(): void
@@ -53,13 +53,13 @@ class DashboardPagesTest extends TestCase
         $this->actingAs($admin)->get('/language/en');
 
         $response = $this->actingAs($admin)->get('/dashboard');
-        $response->assertRedirect(route('dashboard.nexus.revenue.index'));
+        $response->assertRedirect(route('dashboard.nexus.overview.index'));
 
-        $response = $this->actingAs($admin)->get(route('dashboard.nexus.revenue.index'));
+        $response = $this->actingAs($admin)->get(route('dashboard.nexus.overview.index'));
 
         $response->assertStatus(200);
         $response->assertSee('dir="ltr"', false);
-        $response->assertSee('Revenue Dashboard');
+        $response->assertSee('Platform Overview');
     }
 
     public function test_tenantsIndex_listsCreatedTenants(): void

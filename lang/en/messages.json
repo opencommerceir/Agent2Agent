@@ -1,12 +1,7 @@
 {
   "dashboard": {
     "title": "OpenCommerce Dashboard",
-    "welcome": "Welcome, :name",
-    "total_tenants": "Total Tenants",
-    "total_agents": "Total Agents",
-    "total_orders": "Total Orders",
-    "total_notifications": "Total Notifications",
-    "quick_actions": "Quick Actions"
+    "welcome": "Welcome, :name"
   },
   "tenants": {
     "create": "Create Tenant",
@@ -84,14 +79,18 @@
     "saved": "Settings saved."
   },
   "nav": {
-    "dashboard": "Dashboard",
     "tenants": "Tenants",
     "agents": "Agents",
     "notifications": "Notifications",
     "performance": "Performance",
     "settings": "Settings",
     "logout": "Logout",
-    "nexus_section": "Nexus"
+    "group_operations": "Daily Operations",
+    "group_financial": "Financial",
+    "group_growth": "Growth",
+    "group_platform": "Platform",
+    "group_compliance": "Compliance",
+    "group_system": "System"
   },
   "auth": {
     "login_title": "Sign in to OpenCommerce",
@@ -841,6 +840,41 @@
       }
     },
     "admin": {
+      "overview": {
+        "title": "Platform Overview",
+        "subtitle": "What needs your attention right now.",
+        "pending_business_verifications": "Pending Business Verifications",
+        "pending_listing_verifications": "Pending Listing Verifications",
+        "suspended_businesses": "Suspended Businesses",
+        "pending_appeals": "Pending Appeals",
+        "open_disputes": "Open Disputes",
+        "disputed_escrows": "Disputed Escrows",
+        "active_negotiations": "Active Negotiations",
+        "gross_revenue": "Gross Revenue",
+        "view": "View"
+      },
+      "negotiations": {
+        "title": "Live Negotiation Monitor",
+        "subtitle": "Every negotiation Agents have opened across the platform.",
+        "empty": "No negotiations on the platform yet.",
+        "initiator": "Initiator",
+        "counterparty": "Counterparty",
+        "item": "Item",
+        "item_product": "Product",
+        "item_service": "Service",
+        "terms": "Terms",
+        "view": "View",
+        "back": "Back to negotiations",
+        "conversation": "Conversation",
+        "contract": {
+          "title": "Contract",
+          "none": "No contract generated yet — the deal hasn't been accepted.",
+          "hash": "Content hash",
+          "signed_at": "Signed at",
+          "pdf_generated": "PDF generated",
+          "pdf_none": "PDF not generated yet."
+        }
+      },
       "revenue": {
         "title": "Revenue Dashboard",
         "from": "From",

@@ -1,12 +1,7 @@
 {
   "dashboard": {
     "title": "داشبورد OpenCommerce",
-    "welcome": "خوش آمدید، :name",
-    "total_tenants": "تعداد مستأجران",
-    "total_agents": "تعداد Agentها",
-    "total_orders": "تعداد سفارشات",
-    "total_notifications": "تعداد اعلان‌ها",
-    "quick_actions": "دسترسی سریع"
+    "welcome": "خوش آمدید، :name"
   },
   "tenants": {
     "create": "ایجاد مستأجر",
@@ -84,14 +79,18 @@
     "saved": "تنظیمات ذخیره شد."
   },
   "nav": {
-    "dashboard": "داشبورد",
     "tenants": "مستأجران",
     "agents": "Agentها",
     "notifications": "اعلان‌ها",
     "performance": "عملکرد",
     "settings": "تنظیمات",
     "logout": "خروج",
-    "nexus_section": "Nexus"
+    "group_operations": "عملیات روزانه",
+    "group_financial": "مالی",
+    "group_growth": "رشد",
+    "group_platform": "پلتفرم",
+    "group_compliance": "انطباق",
+    "group_system": "سیستم"
   },
   "auth": {
     "login_title": "ورود به OpenCommerce",
@@ -841,6 +840,41 @@
       }
     },
     "admin": {
+      "overview": {
+        "title": "نمای کلی پلتفرم",
+        "subtitle": "کاری که همین الان به توجه شما نیاز دارد.",
+        "pending_business_verifications": "تأییدهای کسب‌وکار در انتظار",
+        "pending_listing_verifications": "تأییدهای آیتم کاتالوگ در انتظار",
+        "suspended_businesses": "کسب‌وکارهای معلق",
+        "pending_appeals": "درخواست‌های تجدیدنظر در انتظار",
+        "open_disputes": "اختلافات باز",
+        "disputed_escrows": "امانی‌های معترض‌شده",
+        "active_negotiations": "مذاکرات فعال",
+        "gross_revenue": "درآمد ناخالص",
+        "view": "مشاهده"
+      },
+      "negotiations": {
+        "title": "نظارت زنده بر مذاکرات",
+        "subtitle": "همه‌ی مذاکراتی که ایجنت‌ها در کل پلتفرم باز کرده‌اند.",
+        "empty": "هنوز هیچ مذاکره‌ای در پلتفرم ثبت نشده.",
+        "initiator": "آغازکننده",
+        "counterparty": "طرف مقابل",
+        "item": "آیتم",
+        "item_product": "محصول",
+        "item_service": "خدمت",
+        "terms": "شرایط",
+        "view": "مشاهده",
+        "back": "بازگشت به مذاکرات",
+        "conversation": "گفت‌وگو",
+        "contract": {
+          "title": "قرارداد",
+          "none": "هنوز قراردادی ساخته نشده — معامله هنوز پذیرفته نشده است.",
+          "hash": "هش محتوا",
+          "signed_at": "زمان امضا",
+          "pdf_generated": "PDF ساخته شده",
+          "pdf_none": "هنوز PDF ساخته نشده."
+        }
+      },
       "revenue": {
         "title": "داشبورد درآمد",
         "from": "از",
