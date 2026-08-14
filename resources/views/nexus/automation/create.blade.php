@@ -8,7 +8,7 @@
             <form method="GET" class="mb-4">
                 <label class="mb-1 block text-xs text-nexus-text-muted">{{ t('messages.nexus.automation.rule_type') }}</label>
                 <select name="type" class="w-full rounded-md border border-nexus-border bg-nexus-surface-1 px-3 py-1.5 text-sm text-nexus-text" onchange="this.form.submit()">
-                    @foreach (['recurring_order', 'inventory_alert', 'price_alert'] as $option)
+                    @foreach (['recurring_order', 'inventory_alert', 'price_alert', 'auto_discover'] as $option)
                         <option value="{{ $option }}" @selected($type === $option)>{{ t('messages.nexus.automation.type.'.$option) }}</option>
                     @endforeach
                 </select>
@@ -88,6 +88,30 @@
                                 <option value="{{ $case->value }}">{{ t('messages.nexus.automation.direction.'.$case->value) }}</option>
                             @endforeach
                         </select>
+                    </div>
+                @elseif ($type === 'auto_discover')
+                    <p class="text-xs text-nexus-text-muted">{{ t('messages.nexus.automation.auto_discover_hint') }}</p>
+                    <div>
+                        <label class="mb-1 block text-xs text-nexus-text-muted">{{ t('messages.nexus.automation.fields.catalog_item_type') }}</label>
+                        <select name="catalog_item_type" class="w-full rounded-md border border-nexus-border bg-nexus-surface-1 px-3 py-1.5 text-sm text-nexus-text">
+                            @foreach ($catalogItemTypes as $case)
+                                <option value="{{ $case->value }}">{{ $case->value }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="mb-1 block text-xs text-nexus-text-muted">{{ t('messages.nexus.automation.fields.max_price_amount') }}</label>
+                            <input type="number" name="max_price_amount" required min="1" class="w-full rounded-md border border-nexus-border bg-nexus-surface-1 px-3 py-1.5 text-sm text-nexus-text">
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-xs text-nexus-text-muted">{{ t('messages.nexus.automation.fields.price_currency') }}</label>
+                            <input type="text" name="price_currency" required maxlength="3" value="IRT" class="w-full rounded-md border border-nexus-border bg-nexus-surface-1 px-3 py-1.5 text-sm text-nexus-text">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-xs text-nexus-text-muted">{{ t('messages.nexus.automation.fields.quantity') }}</label>
+                        <input type="number" name="quantity" required min="1" value="1" class="w-full rounded-md border border-nexus-border bg-nexus-surface-1 px-3 py-1.5 text-sm text-nexus-text">
                     </div>
                 @endif
 

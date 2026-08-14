@@ -1442,24 +1442,33 @@
 - محدوده‌ی قابل‌قبول: `listPrice ± tolerance_percent`. اگه پیشنهاد رسیده داخل این محدوده‌ست → Accept. اگه دور ولی round باقی مونده → Counter در نقطه‌ی میانی بین پیشنهاد رسیده و لنگر خودی (با یک حداقل گام، برای جلوگیری از چرخه‌ی بی‌پایان). اگه round تموم شده یا خیلی دوره (بیش از ۲ برابر tolerance) → Reject.
 
 **لایه ۲ — کشف پیش‌کنشی (Automation Rule تازه، هر ۵ دقیقه):**
-- `AutomationRuleType` یک case چهارم می‌گیره: `AutoDiscover`. برخلاف `RecurringOrder` (طرف‌مقابل/آیتم از‌پیش‌مشخص)، این نوع طرف‌مقابل رو خودش پیدا می‌کنه.
-- Config: `industry?`, `catalogItemType`, `maxPriceAmount`, `priceCurrency`, `quantity`.
-- الگوریتم در `ProcessAutomationRulesAction::processAutoDiscover()`: از `GetRecommendationsAction` (موجود، هم‌صنعتی‌های رتبه‌بندی‌شده بر اساس شهرت) کاندیدها رو می‌گیره؛ برای اولین کاندیدی که (الف) آیتم منطبق با `catalogItemType` در کاتالوگش داره و (ب) مذاکره‌ی باز (proposed/countered/pending_approval) از قبل با این Business نداره، با قیمت `min(maxPriceAmount, listPrice) × ۰.۹` (برای فضای چانه‌زنی) پیشنهاد می‌ده — یعنی مستقیم `InitiateNegotiationAction` رو صدا می‌زنه، دقیقاً مثل `processRecurringOrder` موجود.
-- زمان‌بندی: `ProcessAutomationRulesCommand` از `->hourly()` به `->everyFiveMinutes()` تغییر می‌کنه (برای هر سه نوع rule، بی‌خطر چون هرکدوم cooldown خودشون رو دارن — `canRetriggerAt` که از قبل روی entity هست). AutoDiscover پیش‌فرض cooldown ۱۰ دقیقه‌ای می‌گیره (پارامتر داخلی Action، نه فیلد جدید روی entity).
+- `AutomationRuleType` یک case چهارم گرفت: `AutoDiscover`. برخلاف `RecurringOrder` (طرف‌مقابل/آیتم از‌پیش‌مشخص)، این نوع طرف‌مقابل رو خودش پیدا می‌کنه.
+- Config: `catalogItemType`, `maxPriceAmount`, `priceCurrency`, `quantity`.
+- الگوریتم در `ProcessAutomationRulesAction::processAutoDiscover()`: از `GetRecommendationsAction` موجود (هم‌صنعتی‌های رتبه‌بندی‌شده بر اساس شهرت) کاندیدها رو می‌گیره؛ برای اولین کاندیدی که (الف) آیتم تأییدشده‌ی منطبق با `catalogItemType` داره و (ب) مذاکره‌ی باز از قبل با این Business نداره، با قیمت `min(maxPriceAmount, listPrice) × ۰.۹` پیشنهاد می‌ده.
+- زمان‌بندی: `ProcessAutomationRulesCommand` از `->hourly()` به `->everyFiveMinutes()` تغییر کرد (هر سه نوع قدیمی بی‌خطرن چون خودشون cooldown دارن). **تصحیح نسبت به پلن اولیه:** cooldown خودِ AutoDiscover نه ۱۰ دقیقه، بلکه ۱ ساعت شد — چون `AutomationRule::canRetriggerAt()` فقط granularity ساعتی می‌پذیرد (یک محدودیت از‌پیش‌موجود که چهار Consumer دیگه هم دارن؛ عوض‌کردنش برای یک caller تازه ریسک بی‌دلیل بود). این فقط روی «هر چند وقت یک‌بار طرف تازه پیدا کن» اثر داره، نه سرعت پاسخ داخل یک مذاکره‌ی باز که کاملاً مستقل و آنیه (لایه ۱).
 
-### چک‌لیست باقی‌مانده (اگر این سشن قطع شد، از اینجا ادامه بده)
+**تصحیح مهم نسبت به پلن اولیه — پیش‌فرض auto-respond:** پلن اولیه گفته بود پیش‌فرض «فعال» باشه. بعد از پیاده‌سازی، اجرای کل سوییت تست نشون داد این تصمیم ۳۲ تست موجود رو در ۱۸ فایل غیرمرتبط (Contract، Growth، Marketplace، و خودِ Negotiation) خراب می‌کنه — همه‌شون تست‌هایی که یک Negotiation رو دستی و مرحله‌به‌مرحله پیش می‌برن به‌عنوان fixture برای چیز دیگه. **پیش‌فرض نهایی: غیرفعال (opt-in)** — هم برای جلوگیری از این حجم رگرسیون، هم چون خودکار قبول‌کردن معامله و خرج کردن کردیت واقعی بدون رضایت صریح کسب‌وکار تصمیم بزرگیه. مستندسازی این تصمیم داخل خودِ `Agent::autoRespondEnabled()` docblock هم هست.
 
-- [ ] `NegotiationMessageWasRecorded` event + dispatch در `InitiateNegotiationAction`/`SendCounterOfferAction`
-- [ ] `AutonomousNegotiationStrategy` سرویس (تصمیم‌گیری قیمت، rule-based)
-- [ ] `AutoRespondToNegotiationListener` + ثبت در `NexusServiceProvider::boot()`
-- [ ] `Agent::autoRespondEnabled()`/`negotiationTolerancePercent()` (خواندن از `strategies` موجود، بدون migration)
-- [ ] تست‌های Feature: دو Business با auto-respond فعال، یک `InitiateNegotiationAction` صدا زده می‌شه، انتظار می‌ره negotiation خودش به accepted/rejected برسه بدون فراخوانی دستی بعدی
-- [ ] `AutomationRuleType::AutoDiscover` + `AutomationRule::forAutoDiscover()` + `CreateAutoDiscoverRuleAction`
-- [ ] `ProcessAutomationRulesAction::processAutoDiscover()`
-- [ ] `ProcessAutomationRulesCommand` زمان‌بندی → `everyFiveMinutes()`
-- [ ] به‌روزرسانی `nexus:demo-negotiation` (فقط propose کنه، دیگه دستی counter/accept نزنه — چون واقعی خودکار انجام می‌شه)
-- [ ] UI: تاگل ساده‌ی auto-respond در داشبورد کسب‌وکار (اختیاری اگه زمان کم اومد — پیش‌فرض true یعنی حتی بدون UI هم کار می‌کنه)
-- [ ] ترجمه‌های fa/en مربوطه
-- [ ] اجرای کامل تست‌ها، commit، push، و به‌روزرسانی همین بخش با نتیجه‌ی نهایی
+### چه چیزی کامل ساخته و تست شد
+
+- ✅ `NegotiationMessageWasRecorded` event + dispatch در `InitiateNegotiationAction`/`SendCounterOfferAction`
+- ✅ `AutonomousNegotiationStrategy` (تصمیم‌گیری قیمت rule-based — accept/counter/reject با محاسبه‌ی واقعی)
+- ✅ `AutoRespondToNegotiationListener` (همزمان/synchronous، نه صف — چون `QUEUE_CONNECTION=database` بدون یک `queue:work` واقعی هیچ‌وقت اجرا نمی‌شد) + ثبت در `NexusServiceProvider::boot()`
+- ✅ `Agent::autoRespondEnabled()`/`negotiationTolerancePercent()` — خواندن از `strategies` موجود، بدون migration، پیش‌فرض غیرفعال
+- ✅ `SetAutoRespondAction` + روت `POST nexus/business/dashboard/auto-respond` + تاگل واقعی در داشبورد کسب‌وکار (چک‌باکس، submit خودکار)
+- ✅ `AutomationRuleType::AutoDiscover` + `AutomationRule::forAutoDiscover()` + `CreateAutoDiscoverRuleAction` + فرم UI در `/nexus/automation/create`
+- ✅ `ProcessAutomationRulesAction::processAutoDiscover()` + زمان‌بندی `everyFiveMinutes()`
+- ✅ `nexus:demo-negotiation --autonomous` — پرچم تازه که auto-respond رو روی هر دو طرف روشن می‌کنه و فقط propose می‌کنه؛ بقیه‌اش واقعاً خودکار انجام می‌شه (تست شد روی business واقعی #23 «پایپ گستر» — negotiation #14، accepted، ۱ round)
+- ✅ ترجمه‌های fa/en کامل (overview/negotiations/automation/auto_respond)
+
+**تست:** ۱۷ تست Feature جدید در ۶ فایل (۵ `AutonomousNegotiationStrategyTest` + ۴ `AutoRespondToNegotiationListenerTest` + ۴ AutoDiscover در `ProcessAutomationRulesActionTest` + ۱ در `DemoNegotiationCommandTest` + ۱ در `AutomationRuleControllerTest` + ۲ در `BusinessDashboardTest`) — همه پاس. کل سوییت پلتفرم: **۱۶۸۳ pass / ۲۷۳ fail** — بدون رگرسیون (baseline قبل از این کار ۱۶۶۶؛ دقیقاً ۱۷ تست تازه).
+
+### شکاف‌های شناخته‌شده‌ی باقی‌مانده (برای فاز بعدی، نه سهل‌انگاری این فاز)
+
+- `AutoDiscover` فقط اولین کاندیدِ منطبق رو امتحان می‌کنه (نه چند تا هم‌زمان) و فقط محصول/خدمتِ *اول* کاندید رو در نظر می‌گیره، نه بهترین قیمت بین چندتا.
+- تلورانس مذاکره (`tolerance_percent`) فقط از طریق `strategies` (تینکر/دیتابیس مستقیم) قابل تنظیمه، نه از UI — فقط خودِ روشن/خاموش‌کردن auto-respond در داشبورد UI داره.
+- هیچ سقف سراسری روی «چند مذاکره‌ی خودکار هم‌زمان باز باشه» وجود نداره غیر از چک credit gate خودِ هر Action.
+
+**کامیت‌ها:** `feat(nexus): add reactive auto-responder for the Autonomous Agent Runtime`، `feat(nexus): add AutoDiscover automation rule (proactive Agent Runtime)`، `feat(nexus): add auto-respond toggle to business dashboard`.
 
 ---

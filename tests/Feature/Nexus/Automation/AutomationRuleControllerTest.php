@@ -51,6 +51,22 @@ class AutomationRuleControllerTest extends TestCase
         $this->assertDatabaseHas('nexus_automation_rules', ['business_id' => $owner->business_id, 'type' => 'inventory_alert']);
     }
 
+    public function test_store_createsAutoDiscoverRule(): void
+    {
+        $owner = $this->verifiedBusinessWithOwner('Caller Co');
+
+        $response = $this->actingAs($owner, 'business')->post(route('nexus.automation.store'), [
+            'type' => 'auto_discover',
+            'catalog_item_type' => 'product',
+            'max_price_amount' => 500_000,
+            'price_currency' => 'IRT',
+            'quantity' => 3,
+        ]);
+
+        $response->assertRedirect(route('nexus.automation.index'));
+        $this->assertDatabaseHas('nexus_automation_rules', ['business_id' => $owner->business_id, 'type' => 'auto_discover']);
+    }
+
     public function test_pauseAndResume_toggleStatus(): void
     {
         $owner = $this->verifiedBusinessWithOwner('Caller Co');

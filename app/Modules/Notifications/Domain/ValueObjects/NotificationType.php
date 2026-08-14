@@ -53,4 +53,5 @@ enum NotificationType: string
     case RecurringOrderPlaced = 'recurring_order_placed';
     case InventoryAlertTriggered = 'inventory_alert_triggered';
     case PriceAlertTriggered = 'price_alert_triggered';
+    case AutoDiscoverMatched = 'auto_discover_matched';
 }

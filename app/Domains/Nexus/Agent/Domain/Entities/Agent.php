@@ -120,6 +120,39 @@ final class Agent
         return $this->strategies;
     }
 
+    /**
+     * Whether this Agent reacts on its own to an incoming proposal/counter
+     * (AutoRespondToNegotiationListener) instead of waiting for an external
+     * caller. Read from the existing free-form `$strategies` bag (same
+     * escape-hatch convention `authorityLimits`/`AutomationRule.config`
+     * already use) rather than a dedicated column.
+     *
+     * Defaults to **disabled**, opt-in — deliberately the opposite default
+     * of `authorityLimits`' own "permissive until configured" precedent.
+     * Confirmed empirically, not just by caution in the abstract: defaulting
+     * this to enabled broke 32 existing tests across 18 files spanning four
+     * unrelated domains (Contract, Growth, Marketplace, plus Negotiation's
+     * own), every one of them a test that manually drives a Negotiation
+     * through propose/counter/accept as fixture setup for something else
+     * entirely — proof that silently auto-resolving every Negotiation the
+     * moment it's proposed is too large and surprising a blast radius for
+     * an opt-out default, on top of it being real credit spend and real
+     * deal commitment happening without the Business's explicit consent.
+     */
+    public function autoRespondEnabled(): bool
+    {
+        return (bool) ($this->strategies['auto_respond'] ?? false);
+    }
+
+    /**
+     * How far (as a percent of the catalog item's list price) this Agent
+     * will move from the list price before it accepts a deal on its own.
+     */
+    public function negotiationTolerancePercent(): float
+    {
+        return (float) ($this->strategies['tolerance_percent'] ?? 15);
+    }
+
     public function createdAt(): DateTimeImmutable
     {
         return $this->createdAt;

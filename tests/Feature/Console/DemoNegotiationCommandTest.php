@@ -51,6 +51,23 @@ class DemoNegotiationCommandTest extends TestCase
         $this->assertSame('held', $escrow->status()->value);
     }
 
+    public function test_command_withAutonomousFlag_resolvesViaTheRealAutoResponderNotAScript(): void
+    {
+        $supplier = app(RegisterBusinessAction::class)->execute('شرکت تامین‌کننده', 'Supplier Co', BusinessType::Company, Industry::Manufacturing);
+        app(VerifyBusinessAction::class)->execute($supplier->id);
+        $product = app(AddProductAction::class)->execute($supplier->id, 'لوله', 'Pipe', 1_000_000, 'IRT', 10);
+
+        $this->artisan('nexus:demo-negotiation', ['supplier' => $supplier->id, '--autonomous' => true])
+            ->assertExitCode(0);
+
+        $negotiations = app(NegotiationRepositoryInterface::class)->findVisibleTo($supplier->id);
+        $this->assertCount(1, $negotiations);
+        $negotiation = $negotiations[0];
+
+        $this->assertSame('accepted', $negotiation->status()->value);
+        $this->assertSame($product->id, $negotiation->catalogItemId());
+    }
+
     public function test_command_withUnverifiedSupplier_fails(): void
     {
         $supplier = app(RegisterBusinessAction::class)->execute('شرکت تأییدنشده', 'Unverified Co', BusinessType::Company, Industry::Manufacturing);

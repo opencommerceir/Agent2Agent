@@ -92,6 +92,14 @@
                         <p class="text-xs text-nexus-text-muted">
                             {{ $agent->tone() ?? t('messages.nexus.business.dashboard.agent_no_personality') }}
                         </p>
+                        <form method="POST" action="{{ route('nexus.business.dashboard.auto-respond') }}" class="flex items-center justify-between border-t border-nexus-border pt-2">
+                            @csrf
+                            <label class="flex items-center gap-2 text-xs text-nexus-text-muted">
+                                <input type="checkbox" name="auto_respond" value="1" @checked($agent->autoRespondEnabled()) onchange="this.form.requestSubmit()">
+                                {{ t('messages.nexus.business.dashboard.auto_respond.label') }}
+                            </label>
+                        </form>
+                        <p class="text-xs text-nexus-text-muted">{{ t('messages.nexus.business.dashboard.auto_respond.hint') }}</p>
                     </div>
                 @else
                     <div class="space-y-2">

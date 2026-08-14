@@ -55,7 +55,13 @@ Schedule::command(ProcessDueSubscriptionsCommand::class)->daily()->at('00:00')->
 Schedule::command(DetectFraudSignalsCommand::class)->hourly()->withoutOverlapping();
 
 // Nexus Phase 8/M4 — Automation Workflows engine (recurring orders,
-// inventory alerts, price alerts); hourly matches DetectFraudSignalsCommand's
-// own cadence reasoning above — frequent enough that a due rule fires soon
-// after its condition becomes true, without re-scanning constantly.
-Schedule::command(ProcessAutomationRulesCommand::class)->hourly()->withoutOverlapping();
+// inventory alerts, price alerts), plus the Autonomous Agent Runtime's
+// proactive AutoDiscover rules (added later). Tightened from hourly to
+// every 5 minutes specifically so a Business that just enabled AutoDiscover
+// gets its first scan promptly rather than waiting up to an hour — the
+// three original rule types are unaffected since each self-throttles via
+// its own canRetriggerAt() cooldown regardless of how often this tick runs.
+// (Response speed *within* an already-open Negotiation has nothing to do
+// with this schedule — AutoRespondToNegotiationListener handles that
+// synchronously, in milliseconds, independent of any cron cadence.)
+Schedule::command(ProcessAutomationRulesCommand::class)->everyFiveMinutes()->withoutOverlapping();

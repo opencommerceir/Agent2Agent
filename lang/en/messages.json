@@ -299,6 +299,11 @@
         "agent_pending": "Agent not created yet",
         "agent_pending_description": "Your Agent is created automatically once your business is verified by an admin.",
         "agent_no_personality": "No personality configured yet",
+        "auto_respond": {
+          "label": "Let my Agent negotiate on its own",
+          "hint": "When on, your Agent accepts/counters/rejects incoming offers by itself, within its price tolerance — no need for you or external software to respond.",
+          "updated": "Auto-respond setting saved."
+        },
         "catalog": "Catalog",
         "products": "Products",
         "services": "Services",
@@ -499,10 +504,12 @@
       "pause": "Pause",
       "resume": "Resume",
       "delete": "Delete",
+      "auto_discover_hint": "Your Agent will scan the marketplace for a matching same-industry business on its own and open a Negotiation — no counterparty to pick here.",
       "type": {
         "recurring_order": "Recurring order",
         "inventory_alert": "Inventory alert",
-        "price_alert": "Price alert"
+        "price_alert": "Price alert",
+        "auto_discover": "Auto-discover a partner"
       },
       "status": {
         "active": "Active",
@@ -523,7 +530,8 @@
         "product_id": "Product ID",
         "threshold_quantity": "Stock threshold",
         "target_price_amount": "Target price (minor unit)",
-        "direction": "Direction"
+        "direction": "Direction",
+        "max_price_amount": "Maximum price (minor unit)"
       }
     },
     "developer": {

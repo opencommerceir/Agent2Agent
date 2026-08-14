@@ -126,6 +126,29 @@ final class AutomationRule
         ]);
     }
 
+    public static function forAutoDiscover(
+        int $businessId,
+        CatalogItemType $catalogItemType,
+        int $maxPriceAmount,
+        string $priceCurrency,
+        int $quantity,
+    ): self {
+        if ($maxPriceAmount < 1) {
+            throw new InvalidArgumentException("maxPriceAmount must be at least 1, got [{$maxPriceAmount}].");
+        }
+
+        if ($quantity < 1) {
+            throw new InvalidArgumentException("quantity must be at least 1, got [{$quantity}].");
+        }
+
+        return self::create($businessId, AutomationRuleType::AutoDiscover, [
+            'catalogItemType' => $catalogItemType->value,
+            'maxPriceAmount' => $maxPriceAmount,
+            'priceCurrency' => $priceCurrency,
+            'quantity' => $quantity,
+        ]);
+    }
+
     private static function create(int $businessId, AutomationRuleType $type, array $config): self
     {
         return new self(

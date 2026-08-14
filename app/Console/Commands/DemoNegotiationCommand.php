@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Domains\Nexus\Agent\Domain\Repositories\AgentRepositoryInterface;
 use App\Domains\Nexus\Business\Application\Actions\RegisterBusinessAction;
 use App\Domains\Nexus\Business\Application\Actions\VerifyBusinessAction;
 use App\Domains\Nexus\Business\Domain\Repositories\BusinessRepositoryInterface;
@@ -13,6 +14,7 @@ use App\Domains\Nexus\Credit\Domain\ValueObjects\CreditTransactionType;
 use App\Domains\Nexus\Negotiation\Application\Actions\AcceptDealAction;
 use App\Domains\Nexus\Negotiation\Application\Actions\InitiateNegotiationAction;
 use App\Domains\Nexus\Negotiation\Application\Actions\SendCounterOfferAction;
+use App\Domains\Nexus\Negotiation\Domain\Repositories\NegotiationRepositoryInterface;
 use App\Domains\Nexus\Negotiation\Domain\ValueObjects\CatalogItemType;
 use App\Domains\Nexus\Negotiation\Domain\ValueObjects\Money as NegotiationMoney;
 use App\Domains\Nexus\Negotiation\Domain\ValueObjects\NegotiationTerms;
@@ -39,6 +41,13 @@ use Illuminate\Console\Command;
  * monitor's 3-second poll shows messages arriving one at a time, the same
  * as a real Agent conversation would, rather than all three appearing
  * instantly on page load.
+ *
+ * `--autonomous` demonstrates the real thing instead of this simulation:
+ * it turns on `Agent::autoRespondEnabled()` (opt-in by default, see that
+ * method's own docblock) for both Businesses, then only calls
+ * InitiateNegotiationAction — AutoRespondToNegotiationListener does
+ * everything after that on its own, synchronously, before this command
+ * even reaches its next line.
  */
 class DemoNegotiationCommand extends Command
 {
@@ -47,13 +56,15 @@ class DemoNegotiationCommand extends Command
         {--buyer-name-fa= : Persian name for the auto-created buyer Business}
         {--buyer-name-en= : English name for the auto-created buyer Business}
         {--product= : Product ID to negotiate over (defaults to the supplier\'s first product)}
-        {--quantity=1 : Quantity to propose}';
+        {--quantity=1 : Quantity to propose}
+        {--autonomous : Enable auto-respond on both Agents and only propose — let the real Autonomous Agent Runtime take it from there instead of scripting counter/accept manually}';
 
     protected $description = 'Simulate a real Agent-to-Agent negotiation (propose -> counter -> accept) against a real supplier Business, for watching live in the admin Negotiation Monitor.';
 
     public function handle(
         BusinessRepositoryInterface $businesses,
         ProductRepositoryInterface $products,
+        AgentRepositoryInterface $agents,
         RegisterBusinessAction $registerBusiness,
         VerifyBusinessAction $verifyBusiness,
         GrantCreditsAction $grantCredits,
@@ -61,6 +72,7 @@ class DemoNegotiationCommand extends Command
         InitiateNegotiationAction $initiateNegotiation,
         SendCounterOfferAction $sendCounterOffer,
         AcceptDealAction $acceptDeal,
+        NegotiationRepositoryInterface $negotiations,
     ): int {
         $supplierId = (int) $this->argument('supplier');
         $supplier = $businesses->findById($supplierId);
@@ -103,6 +115,30 @@ class DemoNegotiationCommand extends Command
         $askPrice = $product->price()->amount();
         $offerPrice = (int) round($askPrice * 0.85);
 
+        if ($this->option('autonomous')) {
+            $this->enableAutoRespond($agents, $buyer->id);
+            $this->enableAutoRespond($agents, $supplierId);
+
+            $this->info("Buyer proposing {$offerPrice} {$currency} x {$quantity} for \"{$product->nameEn()}\" (list price {$askPrice} {$currency})...");
+            $this->line('  (both Agents have auto-respond ON — the rest happens on its own, synchronously, right now)');
+
+            $negotiation = $initiateNegotiation->execute(
+                $buyer->id,
+                $supplierId,
+                CatalogItemType::Product,
+                $product->id(),
+                new NegotiationTerms(NegotiationMoney::fromAmount($offerPrice, $currency), $quantity, 'Autonomous demo proposal'),
+            );
+
+            $final = $negotiations->findById($negotiation->id);
+
+            $this->newLine();
+            $this->info("Done. Negotiation #{$final->id()} resolved on its own to [{$final->status()->value}] after {$final->roundCount()} round(s) — no manual counter/accept call made.");
+            $this->line("View it: /dashboard/nexus/negotiations/{$final->id()}");
+
+            return self::SUCCESS;
+        }
+
         $this->info("Buyer proposing {$offerPrice} {$currency} x {$quantity} for \"{$product->nameEn()}\" (list price {$askPrice} {$currency})...");
         $negotiation = $initiateNegotiation->execute(
             $buyer->id,
@@ -132,6 +168,13 @@ class DemoNegotiationCommand extends Command
         $this->line("View it: /dashboard/nexus/negotiations/{$accepted->id}");
 
         return self::SUCCESS;
+    }
+
+    private function enableAutoRespond(AgentRepositoryInterface $agents, int $businessId): void
+    {
+        $agent = $agents->findByBusinessId($businessId);
+        $agent->setStrategies(['auto_respond' => true]);
+        $agents->save($agent);
     }
 
     private function pause(int $seconds): void

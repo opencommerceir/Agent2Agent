@@ -13,10 +13,13 @@ use App\Domains\Nexus\Business\Domain\Repositories\BusinessRepositoryInterface;
 use App\Domains\Nexus\Business\Infrastructure\Models\BusinessOwner;
 use App\Domains\Nexus\Catalog\Domain\Repositories\ProductRepositoryInterface;
 use App\Domains\Nexus\Catalog\Domain\Repositories\ServiceRepositoryInterface;
+use App\Domains\Nexus\Marketplace\Application\Actions\GetRecommendationsAction;
 use App\Domains\Nexus\Marketplace\Application\Actions\SearchMarketplaceAction;
 use App\Domains\Nexus\Negotiation\Application\Actions\InitiateNegotiationAction;
+use App\Domains\Nexus\Negotiation\Domain\Repositories\NegotiationRepositoryInterface;
 use App\Domains\Nexus\Negotiation\Domain\ValueObjects\CatalogItemType;
 use App\Domains\Nexus\Negotiation\Domain\ValueObjects\Money;
+use App\Domains\Nexus\Negotiation\Domain\ValueObjects\NegotiationStatus;
 use App\Domains\Nexus\Negotiation\Domain\ValueObjects\NegotiationTerms;
 use App\Modules\Notifications\Application\Actions\SendNotificationAction;
 use App\Modules\Notifications\Domain\ValueObjects\ChannelType;
@@ -48,6 +51,8 @@ final class ProcessAutomationRulesAction
         private readonly ServiceRepositoryInterface $services,
         private readonly InitiateNegotiationAction $initiateNegotiation,
         private readonly SearchMarketplaceAction $searchMarketplace,
+        private readonly GetRecommendationsAction $getRecommendations,
+        private readonly NegotiationRepositoryInterface $negotiations,
         private readonly SendNotificationAction $sendNotification,
     ) {
     }
@@ -81,6 +86,7 @@ final class ProcessAutomationRulesAction
             AutomationRuleType::RecurringOrder => $this->processRecurringOrder($rule, $now),
             AutomationRuleType::InventoryAlert => $this->processInventoryAlert($rule, $now),
             AutomationRuleType::PriceAlert => $this->processPriceAlert($rule, $now),
+            AutomationRuleType::AutoDiscover => $this->processAutoDiscover($rule, $now),
         };
     }
 
@@ -173,6 +179,95 @@ final class ProcessAutomationRulesAction
         );
 
         return true;
+    }
+
+    /**
+     * The proactive half of the Autonomous Agent Runtime — no
+     * pre-configured counterparty (unlike processRecurringOrder above):
+     * GetRecommendationsAction (existing, reputation-ranked, same-industry)
+     * finds candidates fresh each run. Opens at most one Negotiation per
+     * run, on the first candidate that (a) actually has a verified,
+     * matching-currency catalog item and (b) isn't already mid-negotiation
+     * with this Business — never spams every recommended candidate at once.
+     *
+     * Cooldown is a flat 1 hour (`canRetriggerAt` only supports whole-hour
+     * granularity — a pre-existing constraint on the entity shared with
+     * RecurringOrder/InventoryAlert/PriceAlert, not something worth
+     * widening just for this one caller). This governs how often a single
+     * Business's rule goes looking for a *new* counterparty — it has
+     * nothing to do with response speed once a conversation is already
+     * open, which AutoRespondToNegotiationListener handles synchronously,
+     * in milliseconds, completely independent of this schedule.
+     */
+    private function processAutoDiscover(AutomationRule $rule, DateTimeImmutable $now): bool
+    {
+        $config = $rule->config();
+        $cooldownHours = (int) config('nexus.platform.automation.auto_discover_cooldown_hours', 1);
+
+        if (! $rule->canRetriggerAt($now, $cooldownHours)) {
+            return false;
+        }
+
+        $itemType = CatalogItemType::from($config['catalogItemType']);
+        $recommendations = $this->getRecommendations->execute($rule->businessId(), 5);
+
+        // Consume the cooldown regardless of outcome — GetRecommendationsAction
+        // above already spent real credits this run; without this, a
+        // Business with no viable candidates would re-spend on every single
+        // scheduler tick instead of waiting out the same cooldown a match
+        // would have earned.
+        $rule->recordTrigger($now);
+        $this->rules->save($rule);
+
+        foreach ($recommendations['listings'] as $listing) {
+            $candidateId = $listing['businessId'];
+
+            if ($this->hasOpenNegotiationWith($rule->businessId(), $candidateId)) {
+                continue;
+            }
+
+            $item = $itemType === CatalogItemType::Product
+                ? ($this->products->findByBusinessId($candidateId)[0] ?? null)
+                : ($this->services->findByBusinessId($candidateId)[0] ?? null);
+
+            $itemPrice = $itemType === CatalogItemType::Product ? $item?->price() : $item?->hourlyPrice();
+
+            if (! $item || ! $item->isVerified() || ! $itemPrice || $itemPrice->currency() !== $config['priceCurrency']) {
+                continue;
+            }
+
+            // Open below both my own ceiling and their list price, leaving
+            // real room to negotiate rather than opening at my hard limit.
+            $offerPrice = (int) round(min($config['maxPriceAmount'], $itemPrice->amount()) * 0.9);
+
+            $negotiation = $this->initiateNegotiation->execute(
+                initiatorBusinessId: $rule->businessId(),
+                counterpartyBusinessId: $candidateId,
+                catalogItemType: $itemType,
+                catalogItemId: $item->id(),
+                terms: new NegotiationTerms(Money::fromAmount($offerPrice, $config['priceCurrency']), $config['quantity'], 'Nexus Automation: auto-discover'),
+            );
+
+            $this->runLogs->save(AutomationRunLog::record($rule->id(), $rule->businessId(), AutomationRunOutcome::Triggered, "Negotiation #{$negotiation->id} opened with discovered Business #{$candidateId}."));
+            $this->notify($rule->businessId(), NotificationType::AutoDiscoverMatched, 'Auto-discovered a negotiation partner', "Your Agent found a matching counterparty and opened Negotiation #{$negotiation->id}.");
+
+            return true;
+        }
+
+        return false;
+    }
+
+    private function hasOpenNegotiationWith(int $businessId, int $counterpartyId): bool
+    {
+        $openStatuses = [NegotiationStatus::Proposed, NegotiationStatus::Countered, NegotiationStatus::PendingApproval];
+
+        foreach ($this->negotiations->findVisibleTo($businessId) as $negotiation) {
+            if ($negotiation->otherParty($businessId) === $counterpartyId && in_array($negotiation->status(), $openStatuses, true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function markTriggered(AutomationRule $rule, DateTimeImmutable $now, string $detail): void

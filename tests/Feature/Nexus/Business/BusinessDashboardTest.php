@@ -5,6 +5,7 @@ namespace Tests\Feature\Nexus\Business;
 use App\Domains\Nexus\Business\Application\Actions\RegisterBusinessAction;
 use App\Domains\Nexus\Business\Application\Actions\SuspendBusinessAction;
 use App\Domains\Nexus\Business\Application\Actions\VerifyBusinessAction;
+use App\Domains\Nexus\Agent\Domain\Repositories\AgentRepositoryInterface;
 use App\Domains\Nexus\Business\Domain\Repositories\SuspensionAppealRepositoryInterface;
 use App\Domains\Nexus\Business\Domain\ValueObjects\BusinessType;
 use App\Domains\Nexus\Business\Domain\ValueObjects\Industry;
@@ -71,6 +72,35 @@ class BusinessDashboardTest extends TestCase
 
         $response->assertOk();
         $response->assertSee(t('messages.nexus.business.dashboard.suspended_banner'));
+    }
+
+    public function test_updateAutoRespond_defaultsOff_andCanBeToggledOn(): void
+    {
+        [$business, $owner] = $this->makeOwner();
+        app(VerifyBusinessAction::class)->execute($business->id);
+
+        $agent = app(AgentRepositoryInterface::class)->findByBusinessId($business->id);
+        $this->assertFalse($agent->autoRespondEnabled());
+
+        $response = $this->actingAs($owner, 'business')->post(route('nexus.business.dashboard.auto-respond'), [
+            'auto_respond' => '1',
+        ]);
+
+        $response->assertRedirect(route('nexus.business.dashboard'));
+        $reloaded = app(AgentRepositoryInterface::class)->findByBusinessId($business->id);
+        $this->assertTrue($reloaded->autoRespondEnabled());
+    }
+
+    public function test_updateAutoRespond_uncheckedBox_turnsItOff(): void
+    {
+        [$business, $owner] = $this->makeOwner();
+        app(VerifyBusinessAction::class)->execute($business->id);
+
+        $this->actingAs($owner, 'business')->post(route('nexus.business.dashboard.auto-respond'), ['auto_respond' => '1']);
+        $this->actingAs($owner, 'business')->post(route('nexus.business.dashboard.auto-respond'), []);
+
+        $agent = app(AgentRepositoryInterface::class)->findByBusinessId($business->id);
+        $this->assertFalse($agent->autoRespondEnabled());
     }
 
     public function test_submitSuspensionAppeal_createsAppeal(): void

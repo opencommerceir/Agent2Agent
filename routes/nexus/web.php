@@ -96,6 +96,7 @@ Route::middleware('web')->group(function () {
             // DataResidencyRegion's own docblock for what "declaring" a
             // region actually means on a single-region platform.
             Route::post('/dashboard/data-residency', [BusinessDashboardController::class, 'updateDataResidency'])->name('dashboard.data-residency');
+            Route::post('/dashboard/auto-respond', [BusinessDashboardController::class, 'updateAutoRespond'])->name('dashboard.auto-respond');
 
             // Phase 7/M3 — forced password change for a freshly-invited
             // team member (InviteTeamMemberAction's temporary password).

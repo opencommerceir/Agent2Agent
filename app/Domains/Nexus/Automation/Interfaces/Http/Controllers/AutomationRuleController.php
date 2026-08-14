@@ -2,6 +2,7 @@
 
 namespace App\Domains\Nexus\Automation\Interfaces\Http\Controllers;
 
+use App\Domains\Nexus\Automation\Application\Actions\CreateAutoDiscoverRuleAction;
 use App\Domains\Nexus\Automation\Application\Actions\CreateInventoryAlertRuleAction;
 use App\Domains\Nexus\Automation\Application\Actions\CreatePriceAlertRuleAction;
 use App\Domains\Nexus\Automation\Application\Actions\CreateRecurringOrderRuleAction;
@@ -35,6 +36,7 @@ class AutomationRuleController extends Controller
         private readonly CreateRecurringOrderRuleAction $createRecurringOrderRule,
         private readonly CreateInventoryAlertRuleAction $createInventoryAlertRule,
         private readonly CreatePriceAlertRuleAction $createPriceAlertRule,
+        private readonly CreateAutoDiscoverRuleAction $createAutoDiscoverRule,
         private readonly PauseAutomationRuleAction $pauseAutomationRule,
         private readonly ResumeAutomationRuleAction $resumeAutomationRule,
         private readonly DeleteAutomationRuleAction $deleteAutomationRule,
@@ -66,6 +68,7 @@ class AutomationRuleController extends Controller
             'recurring_order' => $this->storeRecurringOrder($request, $businessId),
             'inventory_alert' => $this->storeInventoryAlert($request, $businessId),
             'price_alert' => $this->storePriceAlert($request, $businessId),
+            'auto_discover' => $this->storeAutoDiscover($request, $businessId),
             default => abort(422, 'Unknown automation rule type.'),
         };
 
@@ -142,6 +145,24 @@ class AutomationRuleController extends Controller
             catalogItemId: (int) $validated['catalog_item_id'],
             targetPriceAmount: (int) $validated['target_price_amount'],
             direction: PriceAlertDirection::from($validated['direction']),
+        );
+    }
+
+    private function storeAutoDiscover(Request $request, int $businessId): void
+    {
+        $validated = $request->validate([
+            'catalog_item_type' => ['required', 'string'],
+            'max_price_amount' => ['required', 'integer', 'min:1'],
+            'price_currency' => ['required', 'string', 'size:3'],
+            'quantity' => ['required', 'integer', 'min:1'],
+        ]);
+
+        $this->createAutoDiscoverRule->execute(
+            businessId: $businessId,
+            catalogItemType: CatalogItemType::from($validated['catalog_item_type']),
+            maxPriceAmount: (int) $validated['max_price_amount'],
+            priceCurrency: $validated['price_currency'],
+            quantity: (int) $validated['quantity'],
         );
     }
 

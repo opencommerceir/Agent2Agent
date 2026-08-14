@@ -8,11 +8,13 @@ use App\Domains\Nexus\Negotiation\Application\DTOs\NegotiationData;
 use App\Domains\Nexus\Negotiation\Application\Services\NegotiationReasoningService;
 use App\Domains\Nexus\Negotiation\Domain\Entities\Negotiation;
 use App\Domains\Nexus\Negotiation\Domain\Entities\NegotiationMessage;
+use App\Domains\Nexus\Negotiation\Domain\Events\NegotiationMessageWasRecorded;
 use App\Domains\Nexus\Negotiation\Domain\Repositories\NegotiationMessageRepositoryInterface;
 use App\Domains\Nexus\Negotiation\Domain\Repositories\NegotiationRepositoryInterface;
 use App\Domains\Nexus\Negotiation\Domain\ValueObjects\CatalogItemType;
 use App\Domains\Nexus\Negotiation\Domain\ValueObjects\NegotiationMessageType;
 use App\Domains\Nexus\Negotiation\Domain\ValueObjects\NegotiationTerms;
+use Illuminate\Support\Facades\Event;
 use InvalidArgumentException;
 
 /**
@@ -67,13 +69,15 @@ final class InitiateNegotiationAction
         );
         $negotiation = $this->negotiations->save($negotiation);
 
-        $this->messages->save(NegotiationMessage::record(
+        $message = $this->messages->save(NegotiationMessage::record(
             negotiationId: $negotiation->id(),
             senderBusinessId: $initiatorBusinessId,
             type: NegotiationMessageType::Proposal,
             terms: $terms,
             reasoning: $this->reasoning->forProposal($terms),
         ));
+
+        Event::dispatch(new NegotiationMessageWasRecorded($negotiation, $message));
 
         return NegotiationData::fromEntity($negotiation);
     }

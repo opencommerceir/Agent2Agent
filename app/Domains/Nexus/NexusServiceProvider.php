@@ -136,6 +136,8 @@ use App\Domains\Nexus\Negotiation\Domain\Repositories\NegotiationRepositoryInter
 use App\Domains\Nexus\Negotiation\Domain\ValueObjects\CatalogItemType;
 use App\Domains\Nexus\Negotiation\Domain\ValueObjects\Money as NegotiationMoney;
 use App\Domains\Nexus\Negotiation\Domain\ValueObjects\NegotiationTerms;
+use App\Domains\Nexus\Negotiation\Application\Listeners\AutoRespondToNegotiationListener;
+use App\Domains\Nexus\Negotiation\Domain\Events\NegotiationMessageWasRecorded;
 use App\Domains\Nexus\Negotiation\Domain\Events\NegotiationWasAccepted;
 use App\Domains\Nexus\Negotiation\Infrastructure\Repositories\EloquentNegotiationMessageRepository;
 use App\Domains\Nexus\Negotiation\Infrastructure\Repositories\EloquentNegotiationRepository;
@@ -265,6 +267,7 @@ class NexusServiceProvider extends ServiceProvider
         Event::listen(BusinessWasVerified::class, GrantStartingCreditsOnBusinessVerifiedListener::class);
         Event::listen(BusinessWasVerified::class, IssueReferralCodeOnBusinessVerifiedListener::class);
         Event::listen(BusinessWasVerified::class, GrantReferralRewardOnBusinessVerifiedListener::class);
+        Event::listen(NegotiationMessageWasRecorded::class, AutoRespondToNegotiationListener::class);
         Event::listen(NegotiationWasAccepted::class, GenerateContractOnNegotiationAcceptedListener::class);
         Event::listen(NegotiationWasAccepted::class, CompleteCoalitionOnNegotiationAcceptedListener::class);
         Event::listen(ContractWasGenerated::class, HoldEscrowOnContractGeneratedListener::class);

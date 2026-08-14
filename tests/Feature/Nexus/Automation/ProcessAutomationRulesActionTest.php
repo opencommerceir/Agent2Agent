@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Nexus\Automation;
 
+use App\Domains\Nexus\Automation\Application\Actions\CreateAutoDiscoverRuleAction;
 use App\Domains\Nexus\Automation\Application\Actions\CreateInventoryAlertRuleAction;
 use App\Domains\Nexus\Automation\Application\Actions\CreatePriceAlertRuleAction;
 use App\Domains\Nexus\Automation\Application\Actions\CreateRecurringOrderRuleAction;
@@ -17,10 +18,14 @@ use App\Domains\Nexus\Business\Application\DTOs\BusinessData;
 use App\Domains\Nexus\Business\Domain\ValueObjects\BusinessType;
 use App\Domains\Nexus\Business\Domain\ValueObjects\Industry;
 use App\Domains\Nexus\Catalog\Application\Actions\AddProductAction;
+use App\Domains\Nexus\Catalog\Application\Actions\VerifyProductAction;
 use App\Domains\Nexus\Credit\Application\Actions\GetCreditBalanceAction;
 use App\Domains\Nexus\Credit\Application\Actions\GrantCreditsAction;
 use App\Domains\Nexus\Credit\Domain\ValueObjects\CreditTransactionType;
+use App\Domains\Nexus\Negotiation\Application\Actions\InitiateNegotiationAction;
 use App\Domains\Nexus\Negotiation\Domain\ValueObjects\CatalogItemType;
+use App\Domains\Nexus\Negotiation\Domain\ValueObjects\Money;
+use App\Domains\Nexus\Negotiation\Domain\ValueObjects\NegotiationTerms;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -155,6 +160,64 @@ class ProcessAutomationRulesActionTest extends TestCase
         $result = app(ProcessAutomationRulesAction::class)->execute();
 
         $this->assertSame(0, $result['triggered']);
+    }
+
+    public function test_execute_autoDiscover_findsVerifiedCandidateAndOpensNegotiation(): void
+    {
+        $buyer = $this->verifiedBusiness('Buyer Co');
+        $seller = $this->verifiedBusiness('Seller Co');
+        $product = app(AddProductAction::class)->execute($seller->id, 'محصول', 'Widget', 10_000, 'IRT', 20);
+        app(VerifyProductAction::class)->execute($product->id);
+        $rule = app(CreateAutoDiscoverRuleAction::class)->execute($buyer->id, CatalogItemType::Product, 12_000, 'IRT', 2);
+
+        $result = app(ProcessAutomationRulesAction::class)->execute();
+
+        $this->assertSame(1, $result['triggered']);
+        $logs = app(AutomationRunLogRepositoryInterface::class)->findByRuleId($rule->id);
+        $this->assertStringContainsString('opened with discovered Business', $logs[0]->detail());
+    }
+
+    public function test_execute_autoDiscover_skipsCandidateWithAlreadyOpenNegotiation(): void
+    {
+        $buyer = $this->verifiedBusiness('Buyer Co');
+        $seller = $this->verifiedBusiness('Seller Co');
+        $product = app(AddProductAction::class)->execute($seller->id, 'محصول', 'Widget', 10_000, 'IRT', 20);
+        app(InitiateNegotiationAction::class)->execute(
+            $buyer->id, $seller->id, CatalogItemType::Product, $product->id,
+            new NegotiationTerms(Money::fromAmount(9_000, 'IRT'), 1, null),
+        );
+        app(CreateAutoDiscoverRuleAction::class)->execute($buyer->id, CatalogItemType::Product, 12_000, 'IRT', 2);
+
+        $result = app(ProcessAutomationRulesAction::class)->execute();
+
+        // The only same-industry candidate already has an open Negotiation
+        // with the buyer — nothing new to discover this run.
+        $this->assertSame(0, $result['triggered']);
+    }
+
+    public function test_execute_autoDiscover_skipsCandidateWithUnverifiedProduct(): void
+    {
+        $buyer = $this->verifiedBusiness('Buyer Co');
+        $seller = $this->verifiedBusiness('Seller Co');
+        app(AddProductAction::class)->execute($seller->id, 'محصول', 'Widget', 10_000, 'IRT', 20); // starts Pending, never verified
+        app(CreateAutoDiscoverRuleAction::class)->execute($buyer->id, CatalogItemType::Product, 12_000, 'IRT', 2);
+
+        $result = app(ProcessAutomationRulesAction::class)->execute();
+
+        $this->assertSame(0, $result['triggered']);
+    }
+
+    public function test_execute_autoDiscover_respectsCooldown(): void
+    {
+        $buyer = $this->verifiedBusiness('Buyer Co');
+        $seller = $this->verifiedBusiness('Seller Co');
+        app(AddProductAction::class)->execute($seller->id, 'محصول', 'Widget', 10_000, 'IRT', 20);
+        app(CreateAutoDiscoverRuleAction::class)->execute($buyer->id, CatalogItemType::Product, 12_000, 'IRT', 2);
+
+        app(ProcessAutomationRulesAction::class)->execute();
+        $second = app(ProcessAutomationRulesAction::class)->execute();
+
+        $this->assertSame(0, $second['triggered']);
     }
 
     private function verifiedBusiness(string $nameEn): BusinessData

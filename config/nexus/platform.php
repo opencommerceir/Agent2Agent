@@ -365,6 +365,12 @@ return [
     */
     'automation' => [
         'alert_cooldown_hours' => (int) env('NEXUS_AUTOMATION_ALERT_COOLDOWN_HOURS', 24),
+        // How often a single AutoDiscover rule may open a *new* Negotiation
+        // with a freshly-found counterparty (GetRecommendationsAction spends
+        // real credits every run, so this bounds that spend) — unrelated to
+        // response speed inside an already-open Negotiation, which
+        // AutoRespondToNegotiationListener handles synchronously instead.
+        'auto_discover_cooldown_hours' => (int) env('NEXUS_AUTOMATION_AUTO_DISCOVER_COOLDOWN_HOURS', 1),
     ],
 
     /*

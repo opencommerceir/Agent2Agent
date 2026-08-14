@@ -2,6 +2,7 @@
 
 namespace App\Domains\Nexus\Business\Interfaces\Http\Controllers;
 
+use App\Domains\Nexus\Agent\Application\Actions\SetAutoRespondAction;
 use App\Domains\Nexus\Analytics\Application\Actions\GetBusinessDashboardAction;
 use App\Domains\Nexus\Business\Application\Actions\SetDataResidencyRegionAction;
 use App\Domains\Nexus\Business\Application\Actions\SubmitSuspensionAppealAction;
@@ -19,6 +20,7 @@ class BusinessDashboardController extends Controller
         private readonly GetBusinessDashboardAction $getBusinessDashboard,
         private readonly SubmitSuspensionAppealAction $submitSuspensionAppeal,
         private readonly SetDataResidencyRegionAction $setDataResidencyRegion,
+        private readonly SetAutoRespondAction $setAutoRespond,
     ) {
     }
 
@@ -52,5 +54,15 @@ class BusinessDashboardController extends Controller
         $this->setDataResidencyRegion->execute($owner->business_id, $region);
 
         return redirect()->route('nexus.business.dashboard')->with('status', t('messages.nexus.business.dashboard.data_residency.updated'));
+    }
+
+    public function updateAutoRespond(Request $request): RedirectResponse
+    {
+        /** @var BusinessOwner $owner */
+        $owner = Auth::guard('business')->user();
+
+        $this->setAutoRespond->execute($owner->business_id, $request->boolean('auto_respond'));
+
+        return redirect()->route('nexus.business.dashboard')->with('status', t('messages.nexus.business.dashboard.auto_respond.updated'));
     }
 }

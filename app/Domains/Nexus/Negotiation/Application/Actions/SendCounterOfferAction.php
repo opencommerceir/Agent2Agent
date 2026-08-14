@@ -6,10 +6,12 @@ use App\Domains\Nexus\Credit\Application\Actions\SpendCreditsForActionAction;
 use App\Domains\Nexus\Negotiation\Application\DTOs\NegotiationData;
 use App\Domains\Nexus\Negotiation\Application\Services\NegotiationReasoningService;
 use App\Domains\Nexus\Negotiation\Domain\Entities\NegotiationMessage;
+use App\Domains\Nexus\Negotiation\Domain\Events\NegotiationMessageWasRecorded;
 use App\Domains\Nexus\Negotiation\Domain\Repositories\NegotiationMessageRepositoryInterface;
 use App\Domains\Nexus\Negotiation\Domain\Repositories\NegotiationRepositoryInterface;
 use App\Domains\Nexus\Negotiation\Domain\ValueObjects\NegotiationMessageType;
 use App\Domains\Nexus\Negotiation\Domain\ValueObjects\NegotiationTerms;
+use Illuminate\Support\Facades\Event;
 use InvalidArgumentException;
 
 /**
@@ -50,13 +52,15 @@ final class SendCounterOfferAction
         $this->costGate->execute($actingBusinessId, 'nexus.negotiation.counter', $negotiationId);
         $negotiation = $this->negotiations->save($negotiation);
 
-        $this->messages->save(NegotiationMessage::record(
+        $message = $this->messages->save(NegotiationMessage::record(
             negotiationId: $negotiation->id(),
             senderBusinessId: $actingBusinessId,
             type: NegotiationMessageType::Counter,
             terms: $terms,
             reasoning: $this->reasoning->forCounter($previousTerms, $terms, $roundCountBeforeCounter, $negotiation->maxRounds()),
         ));
+
+        Event::dispatch(new NegotiationMessageWasRecorded($negotiation, $message));
 
         return NegotiationData::fromEntity($negotiation);
     }
