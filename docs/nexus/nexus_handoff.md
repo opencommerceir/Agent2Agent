@@ -1383,3 +1383,23 @@
 **کامیت:** `feat(nexus): add self-service Catalog portal (product/service create/edit forms, ownership checks)`.
 
 ---
+
+## رفع شکاف: پنل ادمین — Live Negotiation Monitor + صفحه‌ی خانه‌ی واقعی + بازچینی سایدبار
+
+**دستور:** «پنل مدیریت رو حرفه‌ای‌تر و کاراتر کن — از دید یک مدیر ارشد کسب‌وکار، باید بشه فهمید ایجنت‌ها الان چه مذاکراتی دارند، چی به هم می‌گویند، و چه قراردادهایی بسته‌اند.» دقیقاً همان قابلیت «Live Negotiation Monitor» که در `CLAUDE.md` («Admin Panel Must-Haves», مورد ۴) از ابتدا خواسته شده بود ولی هیچ‌وقت ساخته نشده بود — فقط نسخه‌ی business-scoped آن (Phase 2/M7) وجود داشت.
+
+**تصمیم کلیدی:** چون ادمین هرگز طرف هیچ Negotiation‌ای نیست، Actionهای موجود (`ListMyNegotiationsAction`/`GetNegotiationAction`/`PollNegotiationMessagesAction`) که همگی چک `isParty()` دارند قابل استفاده مستقیم نبودند. به‌جای دور زدن این چک با یک آرگومان مخفی، یک متد پلتفرم‌محور تازه (`NegotiationRepositoryInterface::findAll()`) اضافه شد و `NexusNegotiationsController` مستقیماً از روی ریپازیتوری‌ها کار می‌کند — دقیقاً همان الگوی نازک/بدون-Action که `NexusEscrowController`/`NexusDisputeController` از قبل برای صفحات فقط-خواندنی ادمین دارند، نه یک لایه‌ی Action موازی تازه.
+
+**نظارت زنده:** صفحه‌ی جزئیات مذاکره از همان الگوی polling هر ۳ ثانیه (Alpine + fetch) که ویوئر business-facing (Phase 2/M7) استفاده می‌کند بهره می‌برد — یک اندپوینت JSON تازه (`dashboard.nexus.negotiations.messages`) که بدون چک `isParty()` مستقیماً `NegotiationMessageRepositoryInterface::findAfter()` را صدا می‌زند.
+
+**صفحه‌ی خانه‌ی واقعی:** `DashboardController::index()` قبلاً به Revenue Dashboard ریدایرکت می‌شد (فیکس موقتی جلسه‌ی قبل) — حالا به یک صفحه‌ی واقعی (`GetPlatformOverviewAction` + `NexusOverviewController`) ریدایرکت می‌شود که ۸ عدد واقعی و کلیک‌پذیر نشان می‌دهد: تأییدهای کسب‌وکار/کاتالوگ در انتظار، اختلافات باز، امانی‌های معترض‌شده، کسب‌وکارهای معلق/درخواست تجدیدنظر، مذاکرات فعال، درآمد ناخالص — هرکدام مستقیم به صفحه‌ی جزئیات خودش لینک می‌شود.
+
+**بازچینی سایدبار:** سایدبار قبلی یک لیست تخت و بدون‌اولویت از ۱۷ لینک بود (تنظیمات LLM هم‌وزن با تأیید کسب‌وکار). به ۶ گروه کاری بازچینی شد: عملیات روزانه (تأیید، تقلب، اختلافات، مذاکرات)، مالی (درآمد، امانی، حاشیه سود)، رشد، پلتفرم (Tenants/Agents/LLM/SSO)، انطباق (Audit/Compliance)، سیستم (اعلان‌ها/عملکرد/تنظیمات). کلیدهای ترجمه‌ی مرده‌ی مربوط به صفحه‌ی KPI قدیمی Commerce (`messages.dashboard.total_*`) هم در همین گذر حذف شدند.
+
+**فایل‌های اصلی:** `NexusNegotiationsController`، `NexusOverviewController`، `GetPlatformOverviewAction`، `NegotiationRepositoryInterface::findAll()` + پیاده‌سازی Eloquent، ویوهای `dashboard/nexus/{negotiations,overview}/*.blade.php`، `layouts/dashboard.blade.php` بازنویسی‌شده.
+
+**تست:** ۱۰ تست Feature جدید (۶ روی Negotiations Monitor شامل چک ۴۰۴ برای مذاکره‌ی ناموجود و polling، ۴ روی Overview شامل شمارش واقعی و ریدایرکت `/dashboard`) — همه پاس. کل سوییت: **۱۶۶۳ pass / ۲۷۳ fail** — بدون رگرسیون (baseline ۱۶۵۳؛ دقیقاً ۱۰ تست تازه).
+
+**کامیت:** `feat(dashboard): add Live Negotiation Monitor, real admin home, grouped nav`.
+
+---
